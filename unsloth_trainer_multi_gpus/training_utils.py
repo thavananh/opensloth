@@ -18,14 +18,10 @@ from transformers import (
 from datasets import Dataset
 from loguru import logger
 
-from unsloth_trainer_multi_gpus.sync_lora_cb import WeightSyncCallback
+from unsloth_trainer_multi_gpus.sync_lora_cb_disk import WeightSyncCallback
 from unsloth_trainer_multi_gpus.think_chat_template_tokenier_fix import (
     fix_think_chat_template_tokenizer,
 )
-
-
-# from unsloth.chat_templates import train_on_responses_only
-# from speedy_utils.all import load_by_ext
 
 # Configuration constants
 WEIGHT_SYNC_INTERVAL = 1  # Steps between weight synchronization
@@ -53,13 +49,13 @@ def setup_model_and_training(
     from speedy_utils.all import load_by_ext
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
+        model_name="unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit",
         max_seq_length=16_000,
         dtype=None,
     )
 
     # Load and shard dataset for this GPU
-    dataset_raw = load_by_ext(file)
+    dataset_raw = load_by_ext(file)[:1000]
     gpu_index = all_gpu_ids.index(gpu_id)
     dataset_raw = dataset_raw
 

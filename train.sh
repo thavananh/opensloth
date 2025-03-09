@@ -3,6 +3,7 @@
 # Define the GPU IDs
 GPU_IDS=$1
 
+
 # Split the GPU IDs into an array
 IFS=',' read -r -a GPU_ARRAY <<< "$GPU_IDS"
 

@@ -6,6 +6,7 @@ import os
 import argparse
 from typing import List, Tuple
 from speedy_utils import setup_logger
+from fastcore.all import parallel, threaded
 
 def parse_arguments() -> Tuple[int, List[int]]:
     """
@@ -31,7 +32,7 @@ def main():
     
     # Configure environment for this GPU
     os.environ['CUDA_VISIBLE_DEVICES'] = str(current_gpu_id)
-    setup_logger('D' if current_gpu_id == all_gpu_ids[0] else 'I')
+    # setup_logger('D' if current_gpu_id == all_gpu_ids[0] else 'I')
     
     # Import here to ensure environment variables are set before importing
     from unsloth_trainer_multi_gpus.training_utils import setup_model_and_training
