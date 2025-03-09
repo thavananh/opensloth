@@ -199,3 +199,32 @@ class WeightSyncCallback(TrainerCallback):
             )
             wait_for_weights_and_load(state.model, merged_weights_path)
             logger.debug(f"GPU {self.gpu_id}: Loaded merged weights from {merged_weights_path}")
+            
+            # Clean up individual GPU weight files after all GPUs have loaded the merged weights
+            # Only GPU 0 needs to clean up to avoid race conditions
+            if self.gpu_id == self.all_gpu_ids[0]:
+                # Wait a bit to ensure all GPUs have loaded the merged weights
+                from fastcore.all import threaded
+                @threaded
+                def f_clean():
+                    logger.debug(f"Starting cleanup for step {current_step} sleep 30s for all GPUs to load merged weights safely")
+                    time.sleep(30)
+                    for gpu_id in self.all_gpu_ids:
+                        gpu_weight_path = os.path.join(
+                            output_dir, f"checkpoint-{current_step}.gpu.{gpu_id}.pt"
+                        )
+                        if os.path.exists(gpu_weight_path):
+                            try:
+                                os.remove(gpu_weight_path)
+                                logger.debug(f"Cleaned up {gpu_weight_path}")
+                            except Exception as e:
+                                logger.warning(f"Failed to clean up {gpu_weight_path}: {e}")
+                    # remove the merged weights file
+                    if os.path.exists(merged_weights_path):
+                        try:
+                            os.remove(merged_weights_path)
+                            logger.debug(f"Cleaned up {merged_weights_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to clean up {merged_weights_path}: {e}")
+                    logger.debug(f"Cleanup completed for step {current_step}")
+                f_clean()
