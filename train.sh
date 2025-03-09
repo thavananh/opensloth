@@ -8,7 +8,7 @@ IFS=',' read -r -a GPU_ARRAY <<< "$GPU_IDS"
 
 # Create a new tmux session
 SESSION_NAME="training_session"
-tmux new-session -d -s $SESSION_NAME
+tmux new-session -d -s $SESSION_NAME "watch -n0.1 nvidia-smi"
 
 # Loop through each GPU ID and start the training process in a new tmux window
 for GPU_ID in "${GPU_ARRAY[@]}"; do

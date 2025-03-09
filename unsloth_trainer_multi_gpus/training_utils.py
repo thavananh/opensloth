@@ -40,7 +40,7 @@ def setup_model_and_training(gpu_id: int, all_gpu_ids: List[int], file="./data/c
     from unsloth import FastLanguageModel, is_bfloat16_supported
     from speedy_utils.all import load_by_ext
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit",
+        model_name="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
         max_seq_length=16_000,
         dtype=None,
     )
@@ -129,7 +129,7 @@ def setup_model_and_training(gpu_id: int, all_gpu_ids: List[int], file="./data/c
             eval_strategy="steps" if do_eval else "no",
             eval_steps=0.2 if do_eval else 0,
             warmup_steps=5,
-            num_train_epochs=4,
+            num_train_epochs=1,
             learning_rate=1e-4,
             fp16=not is_bfloat16_supported(),
             bf16=is_bfloat16_supported(),
