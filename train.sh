@@ -1,0 +1,1 @@
+python train.py 0 & python train.py 1
