@@ -91,7 +91,7 @@ def wait_and_load(model, target_weights: str) -> None:
     logger.debug(f"Loaded {num_loaded} weights, {num_missing} missing")
 
 
-def prepare_input(gpu_id:str, all_gpus:str):
+def prepare_input(gpu_id:int, all_gpus:list[int]):
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name="unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit",
         # model_name="unsloth/Qwen2.5-0.5B-Instruct-bnb-4bit",
@@ -100,10 +100,9 @@ def prepare_input(gpu_id:str, all_gpus:str):
         # device_map={"": gpu_id},
     )
 
-    # Importing the dataset
     dataset_raw = load_by_ext("./data/cod_6k5.json")[:100]
     idx = all_gpus.index(gpu_id)
-    dataset_raw = dataset_raw[::len(all_gpus)]
+    dataset_raw = dataset_raw[idx::len(all_gpus)] # take a slice of the dataset for this GPU
 
     template_no_remove_think_tags = """{% if not add_generation_prompt is defined %}{% set add_generation_prompt =
     false %}{% endif %}{% set ns = namespace(is_first=false, is_tool=false,
@@ -211,10 +210,6 @@ def prepare_input(gpu_id:str, all_gpus:str):
         instruction_part=instruct_part,
         response_part=response_part,
     )
-    # trainer.state.gpu_id = gpu_id
-    # trainer.state.all_gpus = all_gpus
-    # logger.debug(f'SET GPU ID: {gpu_id}| ALL GPUS: {all_gpus} to trainer state')
-    # import ipdb; ipdb.set_trace()
     return model, tokenizer, dataset, trainer
 
 
@@ -255,7 +250,7 @@ class SaveEvery10Steps(TrainerCallback):
                     os.path.join(
                         output_dir, f"checkpoint-{state.global_step}.gpu.{i}.pt"
                     )
-                    for i in self.all_gpus.split(",")
+                    for i in self.all_gpus
                 ]
                 logger.debug(
                     f"GPU 0: Merging weights from all GPUs: {all_gpus_weights}"
