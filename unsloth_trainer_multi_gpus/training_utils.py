@@ -23,16 +23,15 @@ from unsloth_trainer_multi_gpus.think_chat_template_tokenier_fix import (
     fix_think_chat_template_tokenizer,
 )
 
-# Configuration constants
-WEIGHT_SYNC_INTERVAL = 1  # Steps between weight synchronization
-ACCUMULATION_STEPS = 16
-PACKING = False
-WEIGHT_FILE_WAIT_TIMEOUT = 1800  # 30 minutes in seconds
-LOCK_FILE_WAIT_TIMEOUT = 60  # 60 seconds
-
 
 def setup_model_and_training(
-    gpu_id: int, all_gpu_ids: List[int], file="./data/cod_6k5.json"
+    gpu_id: int,
+    all_gpu_ids: List[int],
+    file="./data/cod_6k5.json",
+    weight_sync_every_update_steps=1,  # Steps between weight synchronization,
+    packing=False,
+    model_name="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
+    args=None,
 ):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
@@ -45,17 +44,18 @@ def setup_model_and_training(
         Tuple containing (model, tokenizer, dataset, trainer)
     """
     # Initialize model and tokenizer
+    assert args is not None, "Training arguments must be provided"
     from unsloth import FastLanguageModel, is_bfloat16_supported
     from speedy_utils.all import load_by_ext
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="unsloth/DeepSeek-R1-Distill-Qwen-1.5B-unsloth-bnb-4bit",
+        model_name=model_name,
         max_seq_length=16_000,
         dtype=None,
     )
 
     # Load and shard dataset for this GPU
-    dataset_raw = load_by_ext(file)[:1000]
+    dataset_raw = load_by_ext(file)
     gpu_index = all_gpu_ids.index(gpu_id)
     dataset_raw = dataset_raw
 
@@ -139,29 +139,11 @@ def setup_model_and_training(
         max_seq_length=16_000,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         dataset_num_proc=2,
-        packing=PACKING,
+        packing=packing,
         callbacks=[
-            WeightSyncCallback(gpu_id, all_gpu_ids, sync_interval=WEIGHT_SYNC_INTERVAL)
+            WeightSyncCallback(gpu_id, all_gpu_ids, sync_interval=weight_sync_every_update_steps)
         ],
-        args=TrainingArguments(
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=ACCUMULATION_STEPS,
-            logging_steps=logging_steps,
-            eval_strategy="steps" if do_eval else "no",
-            eval_steps=0.2 if do_eval else 0,
-            warmup_steps=5,
-            do_eval=do_eval,
-            num_train_epochs=1,
-            learning_rate=1e-4,
-            fp16=not is_bfloat16_supported(),
-            bf16=is_bfloat16_supported(),
-            optim="adamw_8bit",
-            weight_decay=0.01,
-            lr_scheduler_type="linear",
-            seed=3407,
-            output_dir="model_training_outputs",
-            report_to="none",
-        ),
+        args=args,
     )
 
     # Configure to train on responses only
