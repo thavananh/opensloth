@@ -23,7 +23,7 @@ def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
 
     ds = Dataset.from_list(dataset_raw)
 
-    ds = ds.train_test_split(test_ratio=test_ratio, seed=42)
+    ds = ds.train_test_split(test_size=test_ratio, seed=42)
     return ds["train"], ds["test"]
 
 

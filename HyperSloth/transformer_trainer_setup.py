@@ -18,7 +18,7 @@ from speedy_utils.all import load_by_ext
 from unsloth import FastLanguageModel
 
 
-def setup_model_and_training(args, train_args):
+def setup_model_and_training(args, train_args, dataset_fn):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
 
@@ -36,9 +36,8 @@ def setup_model_and_training(args, train_args):
         dtype=None,
     )
     gpu_ith = args.visible_devices.index(args.gpu_index)
-    from .dataset_utils import get_alpaca
 
-    ds_train, ds_test = get_alpaca(tokenizer, test_ratio=0.1)
+    ds_train, ds_test = dataset_fn(tokenizer, test_ratio=0.1)
 
     # Configure PEFT model
     model = FastLanguageModel.get_peft_model(
@@ -101,7 +100,7 @@ def setup_model_and_training(args, train_args):
             response_part=response_part,
         )
 
-    # _debug_dataloader(trainer)
+    _debug_dataloader(trainer)
     #
     return trainer
 
