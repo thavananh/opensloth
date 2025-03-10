@@ -23,7 +23,7 @@ for GPU_ID in "${GPU_ARRAY[@]}"; do
     #   1) the positional GPU index
     #   2) the comma-separated GPU IDs as --gpus
     tmux send-keys -t "$SESSION_NAME:$WINDOW_NAME" \
-        "python train_mmap.py $GPU_ID -g $GPU_IDS" C-m
+        "python train_mmap.py --gpu_index $GPU_ID --visible_devices ${GPU_IDS//,/ }" C-m
 done
 
 # Attach to the tmux session

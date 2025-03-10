@@ -1,69 +1,92 @@
 import argparse
 import os
-import time
-from typing import List, Tuple
-import numpy as np
-import torch
-import filelock
+from functools import partial
+
 from loguru import logger
 
 # Hypothetical multi-threading utility from speedy
 from speedy_utils.all import multi_thread
-from functools import partial
 
 # Disable "report" and "verbose" in multi_thread calls
 multi_thread = partial(multi_thread, report=False, verbose=False)
 
 # Transformers / Trainer imports
-from transformers import TrainingArguments
-from unsloth_trainer_multi_gpus.training_utils import setup_model_and_training
-from unsloth_trainer_multi_gpus.mmap_gradient_sync import MmapGradientSync
+from transformers import (
+    TrainerCallback,
+    TrainerControl,
+    TrainerState,
+    TrainingArguments,
+)
 
 
-def parse_args():
-    """
-    Example usage:
-      python train_mmap.py 0 --gpus 0,1
-      => This process is for GPU index=0, all_gpus=[0,1]
-         => 'world_size' = 2 in that scenario
-    """
-    parser = argparse.ArgumentParser(
-        description="Train model with memmap gradient sync"
+class CustomCallback(TrainerCallback):
+    def __init__(self, model, grad_sync):
+        self.model = model
+        self.grad_sync = grad_sync
+
+    def on_pre_optimizer_step(
+        self, args, state: TrainerState, control: TrainerControl, **kwargs
+    ):
+        """
+        Event called before optimizer step.
+        """
+        logger.info("Before optimizer step")
+        self.grad_sync.accumulate_local_grad(self.model)
+        self.grad_sync.read_final_grad_into_model(self.model, average=True)
+
+    def on_optimizer_step(
+        self, args, state: TrainerState, control: TrainerControl, **kwargs
+    ):
+        """
+        Event called after optimizer step.
+        """
+        logger.info("After optimizer step")
+        self.grad_sync.zero_mmaps()
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Training script for multi-GPU setup.")
+    parser.add_argument(
+        "--gpu_index", type=int, default=0, help="Index of the GPU to use."
     )
     parser.add_argument(
-        "gpu_index",
+        "--visible_devices",
         type=int,
-        help="Index of current GPU in the GPU list (e.g. 0, 1, etc.)",
+        nargs="+",
+        default=[0],
+        help="List of visible GPU devices.",
     )
     parser.add_argument(
-        "--gpus",
-        "-g",
-        type=lambda s: [int(x) for x in s.split(",")],
-        default=[0],
-        help="Comma-separated list of all GPUs to use (default: 0). Example: 0,1,2",
+        "--file", type=str, default="./data/cod_6k5.json", help="Path to the data file."
+    )
+    parser.add_argument("--packing", action="store_true", help="Enable packing.")
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
+        help="Name of the model to use.",
+    )
+    parser.add_argument(
+        "--test_ratio", type=float, default=0.05, help="Ratio of the test set."
     )
     return parser.parse_args()
 
 
 def main():
+
     args = parse_args()
-    # This ensures we only see the single GPU with index = args.gpu_index
-    # (assuming you want each process to exclusively use one GPU)
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_index)
-
-    # For clarity: local GPU index among the job
-    gpu_id = args.gpu_index
-    all_gpus = args.gpus
-
-    # Whether this is the "main" GPU or not (may decide logging/eval)
-    is_main = gpu_id == all_gpus[0]
+    from notveryslow.mmap_gradient_sync import MmapGradientSync
+    from notveryslow.unsloth_trainer_setup import setup_model_and_training
+    all_gpus = args.visible_devices
+    args.num_gpus = len(all_gpus)  # Calculate the number of GPUs
+    args.is_main = args.gpu_index == args.visible_devices[0]
 
     train_args = TrainingArguments(
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
         logging_steps=1,
-        # E.g., only the first GPU does evaluation in a naive multi-process setup
-        eval_strategy="steps" if is_main else "no",
+        eval_strategy="steps" if args.is_main else "no",
         eval_steps=100,
         warmup_steps=5,
         do_eval=True,
@@ -83,21 +106,18 @@ def main():
 
     # Example: your custom trainer-setup function
     trainer = setup_model_and_training(
-        gpu_id=gpu_id,
-        all_gpu_ids=all_gpus,
-        file="./data/cod_6k5.json",
-        packing=True,
-        args=train_args,
-        model_name="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
+        args=args,
+        train_args=train_args,
     )
 
-    # Attach the MmapGradientSync to your trainer
-    trainer.grad_sync = MmapGradientSync(
+    grad_sync = MmapGradientSync(
         model=trainer.model,
         grad_dir="./grads",
-        gpu_id=gpu_id,
-        gpus=all_gpus,
+        gpu_index=args.gpu_index,
+        visible_devices=all_gpus,
     )
+    grad_sync_cb = CustomCallback(model=trainer.model, grad_sync=grad_sync)
+    trainer.add_callback(grad_sync_cb)
 
     # Then run training
     trainer.train()

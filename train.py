@@ -74,7 +74,7 @@ def main():
     current_gpu_id, all_gpu_ids, args = parse_arguments()
     os.environ["CUDA_VISIBLE_DEVICES"] = str(current_gpu_id)
     from unsloth import FastLanguageModel, is_bfloat16_supported
-    from unsloth_trainer_multi_gpus.training_utils import setup_model_and_training
+    from notveryslow.unsloth_trainer_setup import setup_model_and_training
 
     # Setup and start training
     do_eval = current_gpu_id == all_gpu_ids[0]
@@ -103,13 +103,10 @@ def main():
         all_gpu_ids,
         file="./data/cod_6k5.json",
         packing=args.packing,
-        args=train_args,
+        train_args=train_args,
         model_name=args.model_name,
         weight_sync_every_update_steps=args.weight_sync_every_update_steps,
     )
-    
-    trainer.train()
-
 
 if __name__ == "__main__":
     main()

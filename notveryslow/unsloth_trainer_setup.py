@@ -3,60 +3,25 @@ Utility functions for multi-GPU training with Unsloth models.
 Handles weight synchronization, model setup, and distributed training coordination.
 """
 
-import os
-import time
-from typing import Dict, List, Optional, Tuple, Any, Union
-from collections import defaultdict
-
-import torch
+from typing import Dict, List, Tuple, Any
+import random
 from transformers import (
-    TrainerCallback,
-    TrainerState,
     DataCollatorForSeq2Seq,
-    TrainingArguments,
 )
 from datasets import Dataset
 from loguru import logger
 
-from unsloth_trainer_multi_gpus.sync_lora_cb_disk import WeightSyncCallback
-from unsloth_trainer_multi_gpus.think_chat_template_tokenier_fix import (
+from notveryslow.think_chat_template_tokenier_fix import (
     fix_think_chat_template_tokenizer,
 )
+from speedy_utils.all import load_by_ext
+from unsloth import FastLanguageModel
 
 
-def setup_model_and_training(
-    gpu_id: int,
-    all_gpu_ids: List[int],
-    file="./data/cod_6k5.json",
-    weight_sync_every_update_steps=1,  # Steps between weight synchronization,
-    packing=False,
-    model_name="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
-    args=None,
-):
-    """
-    Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
-
-    Args:
-        gpu_id: Current GPU ID
-        all_gpu_ids: List of all GPU IDs participating in training
-
-    Returns:
-        Tuple containing (model, tokenizer, dataset, trainer)
-    """
-    # Initialize model and tokenizer
-    assert args is not None, "Training arguments must be provided"
-    from unsloth import FastLanguageModel, is_bfloat16_supported
-    from speedy_utils.all import load_by_ext
-
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=model_name,
-        max_seq_length=16_000,
-        dtype=None,
-    )
-
+def load_dataset(file, tokenizer, test_ratio=0.05, num_gpus=1):
     # Load and shard dataset for this GPU
     dataset_raw = load_by_ext(file)
-    gpu_index = all_gpu_ids.index(gpu_id)
+
     dataset_raw = dataset_raw
 
     tokenizer = fix_think_chat_template_tokenizer(tokenizer)
@@ -83,7 +48,6 @@ def setup_model_and_training(
             A tuple containing the list of train/validation folds and the test set
         """
         # shufflt items
-        import random
 
         r = random.Random(seed)
         r.shuffle(items)
@@ -96,12 +60,36 @@ def setup_model_and_training(
         return folds, test
 
     trains, test = split_item(
-        dataset_raw, test_size=0.05, train_fold=len(all_gpu_ids), seed=42
+        dataset_raw, test_size=test_ratio, train_fold=num_gpus, seed=42
     )
-    ds_train = Dataset.from_list(trains[gpu_index])
+    return trains, test
+
+
+def setup_model_and_training(args, train_args):
+    """
+    Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
+
+    Args:
+        args: Configuration arguments
+        train_args: Training arguments
+
+    Returns:
+        Trainer object configured for multi-GPU training
+    """
+    # Initialize model and tokenizer
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=args.model_name,
+        max_seq_length=16_000,
+        dtype=None,
+    )
+    trains, test = load_dataset(
+        args.file, tokenizer, test_ratio=args.test_ratio, num_gpus=args.num_gpus
+    )
+    gpu_ith = args.visible_devices.index(args.gpu_index)
+    ds_train = Dataset.from_list(trains[gpu_ith])
     ds_test = Dataset.from_list(test)
     logger.debug(
-        f"GPU {gpu_id}: Training on {len(ds_train)} samples, testing on {len(ds_test)} samples"
+        f"GPU {args.gpu_index}: Training on {len(args.visible_devices)} samples, testing on {len(ds_test)} samples"
     )
 
     # Configure PEFT model
@@ -128,27 +116,18 @@ def setup_model_and_training(
     from trl import SFTTrainer
 
     # Configure trainer
-    do_eval = gpu_index == 0
-    logging_steps = 1 if gpu_index == 0 else int(1e12)
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
         train_dataset=ds_train,
-        eval_dataset=ds_test if gpu_index == 0 else None,
+        eval_dataset=ds_test if gpu_ith == 0 else None,
         dataset_text_field="text",
         max_seq_length=16_000,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         dataset_num_proc=2,
-        packing=packing,
-        args=args,
+        packing=args.packing,
+        args=train_args,
     )
-
-    # callback = WeightSyncCallback(
-    #     gpu_id, all_gpu_ids, sync_interval=weight_sync_every_update_steps, trainer=trainer
-    # )
-    
-    # trainer.add_callback(callback)
-
     # Configure to train on responses only
     instruct_part = "<｜begin▁of▁sentence｜><｜User｜>"
     response_part = "<｜Assistant｜>"
