@@ -33,12 +33,12 @@ def setup_model_and_training(args, train_args):
     # Initialize model and tokenizer
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
-        max_seq_length=16_000,
+        max_seq_length=args.max_seq_length,
         dtype=None,
     )
     gpu_ith = args.visible_devices.index(args.gpu_index)
     from .dataset_utils import get_alpaca
-    ds_train, ds_test = get_alpaca(tokenizer)
+    ds_train, ds_test = get_alpaca(tokenizer, nsplits=len(args.visible_devices), split=gpu_ith, test_ratio=0.1)
     logger.debug(
         f"GPU {args.gpu_index}: Training on {len(args.visible_devices)} samples, testing on {len(ds_test)} samples"
     )
@@ -73,7 +73,7 @@ def setup_model_and_training(args, train_args):
         train_dataset=ds_train,
         eval_dataset=ds_test if gpu_ith == 0 else None,
         dataset_text_field="text",
-        max_seq_length=16_000,
+        max_seq_length=args.max_seq_length,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         dataset_num_proc=2,
         packing=args.packing,

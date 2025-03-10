@@ -18,7 +18,7 @@ from speedy_utils.all import load_by_ext
 from unsloth import FastLanguageModel
 
 
-def load_dataset(file, tokenizer, test_ratio=0.05, num_gpus=1, gpu_ith=0):
+def load_dataset(file, tokenizer, test_ratio=0.05, num_gpus=1, gpu_ith=0, seed=42):
     # Load and shard dataset for this GPU
     dataset_raw = load_by_ext(file)
 
@@ -60,7 +60,7 @@ def load_dataset(file, tokenizer, test_ratio=0.05, num_gpus=1, gpu_ith=0):
         return folds, test
 
     trains, test = split_item(
-        dataset_raw, test_size=test_ratio, train_fold=num_gpus, seed=42
+        dataset_raw, test_size=test_ratio, train_fold=num_gpus, seed=seed
     )
     # return trains, test
 
@@ -83,7 +83,7 @@ def setup_model_and_training(args, train_args):
     # Initialize model and tokenizer
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
-        max_seq_length=16_000,
+        max_seq_length=args.max_seq_length,
         dtype=None,
     )
     gpu_ith = args.all_gpus.index(args.gpu_index)
@@ -93,6 +93,7 @@ def setup_model_and_training(args, train_args):
         test_ratio=args.test_ratio,
         num_gpus=args.num_gpus,
         gpu_ith=gpu_ith,
+        seed=args.seed
     )
     logger.debug(
         f"GPU {args.gpu_index}: Training on {len(args.visible_devices)} samples, testing on {len(ds_test)} samples"
@@ -128,7 +129,7 @@ def setup_model_and_training(args, train_args):
         train_dataset=ds_train,
         eval_dataset=ds_test if gpu_ith == 0 else None,
         dataset_text_field="text",
-        max_seq_length=16_000,
+        max_seq_length=args.max_seq_length,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         dataset_num_proc=2,
         packing=args.packing,

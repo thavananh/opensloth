@@ -1,4 +1,4 @@
-def get_alpaca(tokenizer):
+def get_alpaca(tokenizer, nsplits=1, split=0, test_ratio=0.1):
 
     alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 
@@ -36,5 +36,18 @@ def get_alpaca(tokenizer):
         batched=True,
     )
     # split train val
-    dataset = dataset.train_test_split(test_size=0.05, seed=42)
-    return dataset["train"], dataset["test"]
+    dataset = dataset.train_test_split(test_size=test_ratio, seed=42)
+    train_ds = dataset["train"]
+    if nsplits>2:
+        # split train_ds
+        train_ds.shuffle(seed=42)
+        ids = list(range(len(train_ds)))
+        this_split_ids = ids[split::nsplits]
+        train_ds = train_ds.select(this_split_ids)
+    return train_ds, dataset["test"]
+
+
+if __name__ == '__main__':
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    test = get_alpaca(tokenizer, nsplits=2, split=0, test_ratio=0.1)
