@@ -81,18 +81,6 @@ CUDA_VISIBLE_DEVICES=0,1 hypersloth \
 
 ### Help
 ```bash
-[>training| ~/projects/unsloth-trainer-multi-gpus ] 
-[>training| ~/projects/unsloth-trainer-multi-gpus ] 
-[>training| ~/projects/unsloth-trainer-multi-gpus ] hypersloth  --help
-Traceback (most recent call last):
-  File "/home/ubuntu/.conda/envs/training/bin/hypersloth", line 6, in <module>
-    sys.exit(main())
-             ^^^^^^
-  File "/home/ubuntu/projects/unsloth-trainer-multi-gpus/HyperSloth/scripts/hypersloth.py", line 185, in main
-    raise ValueError("CUDA_VISIBLE_DEVICES is not set.")
-ValueError: CUDA_VISIBLE_DEVICES is not set.
-[>training| ~/projects/unsloth-trainer-multi-gpus, 1 ] export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-[>training| ~/projects/unsloth-trainer-multi-gpus, 130 ] cu 0        
 [>training| ~/projects/unsloth-trainer-multi-gpus ] export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 [>training| ~/projects/unsloth-trainer-multi-gpus, 130 ] hypersloth  --help
 usage: hypersloth [-h] [--file FILE] [--packing] [--model_name MODEL_NAME] [--test_ratio TEST_RATIO] [--gradient_accumulation_steps GRADIENT_ACCUMULATION_STEPS] [--max_seq_length MAX_SEQ_LENGTH]
