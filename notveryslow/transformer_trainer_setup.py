@@ -76,6 +76,8 @@ def setup_model_and_training(args, train_args):
         packing=args.packing,
         args=train_args,
     )
+    max_len_ds = len(args.visible_devices) * (len(trainer.train_dataset) // len(args.visible_devices))
+    trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
     trainer.train_dataset = trainer.train_dataset.shard(
         num_shards=len(args.visible_devices), index=gpu_ith
     )
@@ -83,7 +85,7 @@ def setup_model_and_training(args, train_args):
     if args.loss_type == "target_only":
         from unsloth.chat_templates import train_on_responses_only
         if '<|im_start|>' in tokenizer.chat_template:
-            instruct_part = "<|im_start|>"
+            instruct_part = "<|im_start|>system\n"
             response_part = "<|im_start|>assistant\n"
         else:
             assert "<｜Assistant｜>" in tokenizer.chat_template, f'{tokenizer} does not have "<｜Assistant｜>" or "<|im_start|>"'
@@ -95,8 +97,8 @@ def setup_model_and_training(args, train_args):
             response_part=response_part,
         )
     
-    _debug_dataloader(trainer)
-    
+    # _debug_dataloader(trainer)
+    # 
     return trainer
 
 def _debug_dataloader(trainer):
@@ -104,14 +106,12 @@ def _debug_dataloader(trainer):
     g = iter(dl)
     batch = next(g)
     input_ids = batch["input_ids"]
-    text = trainer.tokenizer.decode(input_ids.cpu()[0])
+    from copy import deepcopy
+    tokenizer = deepcopy(trainer.tokenizer)
+    text = tokenizer.decode(input_ids.cpu()[0])
     labels = batch["labels"]
     # fill < 0 with 0
     labels[labels < 0] = 0
-    label_text = trainer.tokenizer.decode(labels.cpu()[0])
-    print('=====')
-    print(f'I: {text}')
-    print('-----')
-    print(f'L: {label_text}')
-    print('=====')
+    label_text = tokenizer.decode(labels.cpu()[0])
+    logger.info(f'=====\nI: {text}\n-----\nL: {label_text}\n=====')
     assert (batch["labels"] > 0).sum() != 0, "NO LABELS???"

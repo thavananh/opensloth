@@ -70,13 +70,14 @@ def parse_args() -> argparse.Namespace:
         help="Number of steps to perform learning rate warmup.",
     )
     parser.add_argument(
-        "--num_train_epochs",
+        "--num_train_epochs",'-e',
         type=int,
         default=1,
         help="Total number of training epochs to perform.",
     )
     parser.add_argument(
         "--learning_rate",
+        "-lr",
         type=float,
         default=2e-4,
         help="Initial learning rate for Adam.",

@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Usage: ./run_tmux_training.sh "0,1"
-#        ./run_tmux_training.sh "0,1,2"
+export TOKENIZERS_PARALLELISM=false
 rm -r grads/
 GPU_IDS=$1
 
