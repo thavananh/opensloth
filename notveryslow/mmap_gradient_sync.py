@@ -7,18 +7,21 @@ import filelock
 import numpy as np
 import torch
 from loguru import logger
+
 # Hypothetical multi-threading utility from speedy
 from speedy_utils.all import multi_thread
 import sys
+
 # Disable "report" and "verbose" in multi_thread calls
 multi_thread = partial(multi_thread, report=False, verbose=False)
 
 logger.remove()
-logger.add('mmap_gradient_sync.log', level='DEBUG')
+logger.add("mmap_gradient_sync.log", level="DEBUG")
 # add to terminal
 
-logger.add(sys.stdout, level='DEBUG')
-SLEEP_TIME = 0.1    
+logger.add(sys.stdout, level="DEBUG")
+SLEEP_TIME = 0.1
+
 
 # Transformers / Trainer imports
 class MmapGradientSync:
@@ -41,7 +44,7 @@ class MmapGradientSync:
         grad_dir: str,
         gpu_index: int,
         visible_devices: List[int],
-        lock_dir: str = './grads',
+        lock_dir: str = "./grads",
     ):
         """
         Args:
@@ -54,7 +57,9 @@ class MmapGradientSync:
         self.is_main = gpu_index == visible_devices[0]
         self.grad_dir = grad_dir
         self.gpu_index = gpu_index
-        self.visible_devices = visible_devices  # store the entire list for synchronization checks
+        self.visible_devices = (
+            visible_devices  # store the entire list for synchronization checks
+        )
         self.lock_dir = lock_dir if lock_dir is not None else grad_dir
 
         # Create directories if needed
@@ -177,7 +182,9 @@ class MmapGradientSync:
         # Parallelize across parameters
         multi_thread(self._accumulate_one_param, tasks)
 
-        logger.info("[GPU {}] Accumulated local gradients into memmaps.", self.gpu_index)
+        logger.info(
+            "[GPU {}] Accumulated local gradients into memmaps.", self.gpu_index
+        )
 
         # Write a "done writing" file for this GPU
         write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu_index}.txt"
@@ -199,8 +206,8 @@ class MmapGradientSync:
                 cf = f"{self.grad_dir}/count_write_gpu{i}.txt"
                 if os.path.exists(cf):
                     count += 1
-                else:
-                    logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
+                # else:
+                #     logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
             if count == len(self.visible_devices):
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
@@ -212,15 +219,17 @@ class MmapGradientSync:
         Wait until all GPUs have read gradients
         (presence of count_read_gpu{i}.txt for each i in self.gpus).
         """
-        logger.debug("[GPU {}] Waiting for all GPUs to read gradients..", self.gpu_index)
+        logger.debug(
+            "[GPU {}] Waiting for all GPUs to read gradients..", self.gpu_index
+        )
         while True:
             count = 0
             for gpu_id in self.visible_devices:
                 cf = f"{self.grad_dir}/count_read_gpu{gpu_id}.txt"
                 if os.path.exists(cf):
                     count += 1
-                else:
-                    logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
+                # else:
+                # logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
             if count == len(self.visible_devices):
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
@@ -263,7 +272,9 @@ class MmapGradientSync:
             shape = info["shape"]
             param.grad = torch.from_numpy(arr).view(shape).to(param.device)
 
-        logger.info("[GPU {}] Read final gradients from memmaps into model.", self.gpu_index)
+        logger.info(
+            "[GPU {}] Read final gradients from memmaps into model.", self.gpu_index
+        )
 
         # Write a "done reading" file for this GPU
         read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu_index}.txt"
@@ -278,7 +289,7 @@ class MmapGradientSync:
         """
         self._wait_for_all_read()
         # only perform zeroing on the main GPU
-        
+
         if self.is_main:
             with self.UniversalLocker(os.path.join(self.lock_dir, "zero.lock")):
                 logger.debug(f"[GPU {self.gpu_index}] Zeroing all memmap files..")
@@ -312,5 +323,3 @@ class MmapGradientSync:
                 if count == len(self.visible_devices):
                     break
                 time.sleep(SLEEP_TIME)
-                
-                

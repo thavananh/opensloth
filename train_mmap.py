@@ -75,8 +75,8 @@ class CustomCallback(TrainerCallback):
             while any(self.loss_file == 0):
                 time.sleep(0.1)
             losses = self.loss_file[:]
-            logger.info(f"Losses: {losses}")
-            state.log_history[-1]["loss"] = np.mean(losses)
+            state.log_history[-1]["mean_loss"] = np.mean(losses)
+            logger.info(f"Mean loss: {state.log_history[-1]['mean_loss']}")
             # if all losses are not zero, then reset all the losses
             if np.all(losses != 0):
                 self.loss_file[:] = 0
