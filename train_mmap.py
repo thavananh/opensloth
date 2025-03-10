@@ -73,7 +73,7 @@ class CustomCallback(TrainerCallback):
             # if main gpu, then read all the losses
             # wait for all the losses to be written
             while any(self.loss_file == 0):
-                time.sleep(0.1)
+                time.sleep(0.01)
             losses = self.loss_file[:]
             state.log_history[-1]["mean_loss"] = np.mean(losses)
             logger.info(f"Mean loss: {state.log_history[-1]['mean_loss']}")
@@ -86,7 +86,7 @@ class CustomCallback(TrainerCallback):
                 losses = self.loss_file[:]
                 if np.all(losses == 0):
                     break
-                time.sleep(0.1)
+                time.sleep(0.01)
         t = time.time() - t
         logger.info(f"Time taken to log: {t}")
     
@@ -133,7 +133,7 @@ def main():
 
     train_args = TrainingArguments(
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=4,
+        gradient_accumulation_steps=32,
         logging_steps=1,
         eval_strategy="steps" if args.is_main else "no",
         eval_steps=100,
