@@ -7,7 +7,7 @@ from speedy_utils import load_by_ext
 from .think_chat_template_tokenier_fix import fix_think_chat_template_tokenizer
 
 
-def load_dataset(file, tokenizer, test_ratio=0.052):
+def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
     # Load and shard dataset for this GPU
     dataset_raw = load_by_ext(file)
 
