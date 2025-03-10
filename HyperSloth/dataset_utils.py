@@ -7,7 +7,6 @@ from speedy_utils import load_by_ext
 from .think_chat_template_tokenier_fix import fix_think_chat_template_tokenizer
 import warnings
 
-# remove warnings about "UserWarning: WARNING: Unsloth should be imported befo"
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
