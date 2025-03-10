@@ -18,7 +18,7 @@ from speedy_utils.all import load_by_ext
 from unsloth import FastLanguageModel
 
 
-def load_dataset(file, tokenizer, test_ratio=0.05, num_gpus=1):
+def load_dataset(file, tokenizer, test_ratio=0.05, num_gpus=1, gpu_ith=0):
     # Load and shard dataset for this GPU
     dataset_raw = load_by_ext(file)
 
@@ -62,7 +62,11 @@ def load_dataset(file, tokenizer, test_ratio=0.05, num_gpus=1):
     trains, test = split_item(
         dataset_raw, test_size=test_ratio, train_fold=num_gpus, seed=42
     )
-    return trains, test
+    # return trains, test
+
+    ds_train = Dataset.from_list(trains[gpu_ith])
+    ds_test = Dataset.from_list(test)
+    return ds_train, ds_test
 
 
 def setup_model_and_training(args, train_args):
@@ -82,12 +86,14 @@ def setup_model_and_training(args, train_args):
         max_seq_length=16_000,
         dtype=None,
     )
-    trains, test = load_dataset(
-        args.file, tokenizer, test_ratio=args.test_ratio, num_gpus=args.num_gpus
+    gpu_ith = args.all_gpus.index(args.gpu_index)
+    ds_train, ds_test = load_dataset(
+        args.file,
+        tokenizer,
+        test_ratio=args.test_ratio,
+        num_gpus=args.num_gpus,
+        gpu_ith=gpu_ith,
     )
-    gpu_ith = args.visible_devices.index(args.gpu_index)
-    ds_train = Dataset.from_list(trains[gpu_ith])
-    ds_test = Dataset.from_list(test)
     logger.debug(
         f"GPU {args.gpu_index}: Training on {len(args.visible_devices)} samples, testing on {len(ds_test)} samples"
     )

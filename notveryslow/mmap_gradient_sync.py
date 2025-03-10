@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from functools import partial
 from typing import List, Tuple
@@ -7,10 +8,9 @@ import filelock
 import numpy as np
 import torch
 from loguru import logger
-
 # Hypothetical multi-threading utility from speedy
 from speedy_utils.all import multi_thread
-import sys
+from transformers import TrainerCallback, TrainerControl, TrainerState
 
 # Disable "report" and "verbose" in multi_thread calls
 multi_thread = partial(multi_thread, report=False, verbose=False)
@@ -182,7 +182,7 @@ class MmapGradientSync:
         # Parallelize across parameters
         multi_thread(self._accumulate_one_param, tasks)
 
-        logger.info(
+        logger.debug(
             "[GPU {}] Accumulated local gradients into memmaps.", self.gpu_index
         )
 
@@ -272,7 +272,7 @@ class MmapGradientSync:
             shape = info["shape"]
             param.grad = torch.from_numpy(arr).view(shape).to(param.device)
 
-        logger.info(
+        logger.debug(
             "[GPU {}] Read final gradients from memmaps into model.", self.gpu_index
         )
 
@@ -323,3 +323,68 @@ class MmapGradientSync:
                 if count == len(self.visible_devices):
                     break
                 time.sleep(SLEEP_TIME)
+
+
+class MmapGradSyncCallback(TrainerCallback):
+    def __init__(self, model, grad_dir, gpu_index, visible_devices):
+        self.model = model
+        self.grad_dir = grad_dir
+        self.gpu_index = gpu_index
+        self.visible_devices = visible_devices
+        self.is_main = gpu_index == visible_devices[0]
+
+        self.grad_sync = MmapGradientSync(
+            model,
+            grad_dir,
+            gpu_index,
+            visible_devices,
+        )
+        os.makedirs(self.grad_dir, exist_ok=True)
+        self.loss_file = np.memmap(
+            os.path.join(self.grad_dir, "loss.mmap"),
+            dtype="float32",
+            mode="w+",
+            shape=(len(self.visible_devices),),
+        )
+
+    def on_pre_optimizer_step(
+        self, args, state: TrainerState, control: TrainerControl, **kwargs
+    ):
+        """
+        Event called before optimizer step.
+        """
+        self.grad_sync.accumulate_local_grad(self.model)
+        self.grad_sync.read_final_grad_into_model(self.model, average=True)
+
+    def on_optimizer_step(
+        self, args, state: TrainerState, control: TrainerControl, **kwargs
+    ):
+        """
+        Event called after optimizer step.
+        """
+
+        self.grad_sync.zero_mmaps()
+
+    def on_log(self, args, state, control, **kwargs):
+        if "loss" in state.log_history[-1]:
+            self.loss_file[self.gpu_index] = np.float32(state.log_history[-1]["loss"])
+            t = time.time()
+            if self.is_main:
+                # if main gpu, then read all the losses
+                # wait for all the losses to be written
+                while any(self.loss_file == 0):
+                    time.sleep(0.01)
+                losses = self.loss_file[:]
+                state.log_history[-1]["mean_loss"] = np.mean(losses)
+                logger.info(f"Mean loss: {state.log_history[-1]['mean_loss']}")
+                # if all losses are not zero, then reset all the losses
+                if np.all(losses != 0):
+                    self.loss_file[:] = 0
+            else:
+                # if not main gpu, then wait for the main gpu to reset the losses
+                while True:
+                    losses = self.loss_file[:]
+                    if np.all(losses == 0):
+                        break
+                    time.sleep(0.01)
+            t = time.time() - t

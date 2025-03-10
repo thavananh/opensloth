@@ -1,62 +1,83 @@
-import os
-import numpy as np
-from datasets import load_dataset
+"""
+Utility functions for multi-GPU training with Unsloth models.
+Handles weight synchronization, model setup, and distributed training coordination.
+"""
+
+from typing import Dict, List, Tuple, Any
+import random
 from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    TrainingArguments,
-    Trainer
+    DataCollatorForSeq2Seq,
 )
-from evaluate import load
+from datasets import Dataset
+from loguru import logger
 
-def tokenize_function(examples, tokenizer):
-    return tokenizer(examples["text"], truncation=True, padding="max_length", max_length=128)
+from notveryslow.think_chat_template_tokenier_fix import (
+    fix_think_chat_template_tokenizer,
+)
+from speedy_utils.all import load_by_ext
+from unsloth import FastLanguageModel
 
-def compute_metrics(eval_pred):
-    """Optional: a simple accuracy metric."""
-    accuracy = load("accuracy")
-    predictions, labels = eval_pred
-    preds = np.argmax(predictions, axis=1)
-    return accuracy.compute(predictions=preds, references=labels)
 
-def setup_model_and_training():
-    # 1. Load a SMALL subset of IMDB for a quick test
-    #    The 'split' argument selects a fraction, e.g. first 2k training, first 500 test
-    raw_train = load_dataset("imdb", split="train[:2000]")
-    raw_test  = load_dataset("imdb", split="test[:500]")
 
-    # 2. Initialize a tokenizer + model
-    model_name = "distilbert-base-uncased"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+def setup_model_and_training(args, train_args):
+    """
+    Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
 
-    # 3. Tokenize the dataset
-    tokenized_train = raw_train.map(lambda x: tokenize_function(x, tokenizer), batched=True)
-    tokenized_test  = raw_test.map(lambda x: tokenize_function(x, tokenizer), batched=True)
+    Args:
+        args: Configuration arguments
+        train_args: Training arguments
 
-    # 4. Define training arguments
-    training_args = TrainingArguments(
-        output_dir="test-hf-trainer",
-        evaluation_strategy="epoch",
-        logging_steps=50,
-        save_strategy="epoch",
-        num_train_epochs=2,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
+    Returns:
+        Trainer object configured for multi-GPU training
+    """
+    # Initialize model and tokenizer
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=args.model_name,
+        max_seq_length=16_000,
+        dtype=None,
+    )
+    gpu_ith = args.visible_devices.index(args.gpu_index)
+    from .dataset_utils import get_alpaca
+    ds_train, ds_test = get_alpaca(tokenizer)
+    logger.debug(
+        f"GPU {args.gpu_index}: Training on {len(args.visible_devices)} samples, testing on {len(ds_test)} samples"
     )
 
-    # 5. Create a Trainer
-    trainer = Trainer(
+    # Configure PEFT model
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=16,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+        lora_alpha=16,
+        lora_dropout=0,
+        bias="none",
+        use_gradient_checkpointing="unsloth",
+        random_state=3407,
+        use_rslora=False,
+        loftq_config=None,
+    )
+    from trl import SFTTrainer
+
+    # Configure trainer
+    trainer = SFTTrainer(
         model=model,
-        args=training_args,
-        train_dataset=tokenized_train,
-        eval_dataset=tokenized_test,
-        tokenizer=tokenizer,    # Only needed if you plan to use Trainer for tokenization or generation
-        compute_metrics=compute_metrics
+        tokenizer=tokenizer,
+        train_dataset=ds_train,
+        eval_dataset=ds_test if gpu_ith == 0 else None,
+        dataset_text_field="text",
+        max_seq_length=16_000,
+        data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
+        dataset_num_proc=2,
+        packing=args.packing,
+        args=train_args,
     )
 
     return trainer
-    # trainer.train()
-
-    # 7. Evaluate
-    # metrics = trainer.evaluate()
