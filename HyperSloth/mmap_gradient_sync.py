@@ -42,7 +42,7 @@ class MmapGradientSync:
         grad_dir: str,
         gpu_index: int,
         visible_devices: List[int],
-        lock_dir: str = "./grads",
+        lock_dir: str = "/dev/shm",
     ):
         """
         Args:

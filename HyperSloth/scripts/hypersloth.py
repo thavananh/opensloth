@@ -1,29 +1,11 @@
 import argparse
 import os
-from functools import partial
-
 from loguru import logger
-from speedy_utils.all import multi_thread
-
-from notveryslow.mmap_gradient_sync import MmapGradSyncCallback
-
-multi_thread = partial(multi_thread, report=False, verbose=False)
-
 from transformers import TrainingArguments
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Training script for multi-GPU setup.")
-    parser.add_argument(
-        "--gpu_index", type=int, default=0, help="Index of the GPU to use."
-    )
-    parser.add_argument(
-        "--visible_devices",
-        type=int,
-        nargs="+",
-        default=[0],
-        help="List of visible GPU devices.",
-    )
     parser.add_argument(
         "--file", type=str, default="./data/cod_6k5.json", help="Path to the data file."
     )
@@ -61,7 +43,7 @@ def parse_args() -> argparse.Namespace:
         "--logging_steps", type=int, default=1, help="Log every X updates steps."
     )
     parser.add_argument(
-        "--eval_steps", type=int, default=100, help="Run an evaluation every X steps."
+        "--eval_steps", type=int, default=10000, help="Run an evaluation every X steps."
     )
     parser.add_argument(
         "--warmup_steps",
@@ -70,7 +52,8 @@ def parse_args() -> argparse.Namespace:
         help="Number of steps to perform learning rate warmup.",
     )
     parser.add_argument(
-        "--num_train_epochs",'-e',
+        "--num_train_epochs",
+        "-e",
         type=int,
         default=1,
         help="Total number of training epochs to perform.",
@@ -128,16 +111,27 @@ def parse_args() -> argparse.Namespace:
         default="tensorboard",
         help="The list of integrations to report the results and logs to.",
     )
+    parser.add_argument(
+        "--grad_dir",
+        type=str,
+        default="/dev/shm/hypersloth",
+        help="The directory to store the gradients.",
+    )
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_index)
+from fastcore.all import threaded
 
-    from notveryslow.transformer_trainer_setup import setup_model_and_training
 
-    all_gpus = args.visible_devices
+@threaded(process=True)
+def run(gpu_index, visible_devices, args):
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_index)
+
+    from HyperSloth.transformer_trainer_setup import setup_model_and_training
+
+    args.gpu_index = gpu_index
+    args.visible_devices = visible_devices
     args.is_main = args.gpu_index == args.visible_devices[0]
 
     train_args = TrainingArguments(
@@ -159,22 +153,42 @@ def main():
         seed=args.seed,
         output_dir=f"{args.output_dir}/{args.gpu_index}",
         save_total_limit=args.save_total_limit,
-        report_to=args.report_to,
+        report_to=args.report_to if args.is_main else None,
     )
+    from HyperSloth.dataset_utils import load_sharegpt_dataset
 
-    trainer = setup_model_and_training(args=args, train_args=train_args)
+    trainer = setup_model_and_training(
+        args=args,
+        train_args=train_args,
+        dataset_fn=lambda tokenizer, test_ratio: load_sharegpt_dataset(
+            args.file, tokenizer, test_ratio
+        ),
+    )
+    from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
     grad_sync_cb = MmapGradSyncCallback(
         model=trainer.model,
-        grad_dir="./grads",
+        grad_dir=args.grad_dir,
         gpu_index=args.gpu_index,
-        visible_devices=all_gpus,
+        visible_devices=visible_devices,
     )
     if len(args.visible_devices) > 1:
         logger.info(f"Using gradient sync callback for GPU {args.gpu_index}")
         trainer.add_callback(grad_sync_cb)
 
     trainer.train()
+
+
+def main():
+    gpus = os.environ.get("CUDA_VISIBLE_DEVICES", None)
+    if gpus is None:
+        raise ValueError("CUDA_VISIBLE_DEVICES is not set.")
+    visible_devices = [int(gpu) for gpu in gpus.split(",")]
+
+    args = parse_args()
+    for gpu_index in visible_devices:
+        print(f"Running on GPU {gpu_index}")
+        run(gpu_index, visible_devices, args)
 
 
 if __name__ == "__main__":

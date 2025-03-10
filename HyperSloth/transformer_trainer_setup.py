@@ -11,7 +11,7 @@ from transformers import (
 from datasets import Dataset
 from loguru import logger
 
-from notveryslow.think_chat_template_tokenier_fix import (
+from HyperSloth.think_chat_template_tokenier_fix import (
     fix_think_chat_template_tokenizer,
 )
 from speedy_utils.all import load_by_ext
@@ -39,7 +39,6 @@ def setup_model_and_training(args, train_args):
     from .dataset_utils import get_alpaca
 
     ds_train, ds_test = get_alpaca(tokenizer, test_ratio=0.1)
-    
 
     # Configure PEFT model
     model = FastLanguageModel.get_peft_model(
@@ -76,7 +75,9 @@ def setup_model_and_training(args, train_args):
         packing=args.packing,
         args=train_args,
     )
-    max_len_ds = len(args.visible_devices) * (len(trainer.train_dataset) // len(args.visible_devices))
+    max_len_ds = len(args.visible_devices) * (
+        len(trainer.train_dataset) // len(args.visible_devices)
+    )
     trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
     trainer.train_dataset = trainer.train_dataset.shard(
         num_shards=len(args.visible_devices), index=gpu_ith
@@ -84,11 +85,14 @@ def setup_model_and_training(args, train_args):
 
     if args.loss_type == "target_only":
         from unsloth.chat_templates import train_on_responses_only
-        if '<|im_start|>' in tokenizer.chat_template:
+
+        if "<|im_start|>" in tokenizer.chat_template:
             instruct_part = "<|im_start|>system\n"
             response_part = "<|im_start|>assistant\n"
         else:
-            assert "<｜Assistant｜>" in tokenizer.chat_template, f'{tokenizer} does not have "<｜Assistant｜>" or "<|im_start|>"'
+            assert (
+                "<｜Assistant｜>" in tokenizer.chat_template
+            ), f'{tokenizer} does not have "<｜Assistant｜>" or "<|im_start|>"'
             instruct_part = "<｜begin▁of▁sentence｜><｜User｜>"
             response_part = "<｜Assistant｜>"
         trainer = train_on_responses_only(
@@ -96,10 +100,11 @@ def setup_model_and_training(args, train_args):
             instruction_part=instruct_part,
             response_part=response_part,
         )
-    
+
     # _debug_dataloader(trainer)
-    # 
+    #
     return trainer
+
 
 def _debug_dataloader(trainer):
     dl = trainer.get_train_dataloader()
@@ -107,11 +112,12 @@ def _debug_dataloader(trainer):
     batch = next(g)
     input_ids = batch["input_ids"]
     from copy import deepcopy
+
     tokenizer = deepcopy(trainer.tokenizer)
     text = tokenizer.decode(input_ids.cpu()[0])
     labels = batch["labels"]
     # fill < 0 with 0
     labels[labels < 0] = 0
     label_text = tokenizer.decode(labels.cpu()[0])
-    logger.info(f'=====\nI: {text}\n-----\nL: {label_text}\n=====')
+    logger.info(f"=====\nI: {text}\n-----\nL: {label_text}\n=====")
     assert (batch["labels"] > 0).sum() != 0, "NO LABELS???"
