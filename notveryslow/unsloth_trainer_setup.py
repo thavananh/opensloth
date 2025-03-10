@@ -136,9 +136,9 @@ def setup_model_and_training(args, train_args):
         args=train_args,
     )
     # Configure to train on responses only
+    from unsloth.chat_templates import train_on_responses_only
     instruct_part = "<｜begin▁of▁sentence｜><｜User｜>"
     response_part = "<｜Assistant｜>"
-    from unsloth.chat_templates import train_on_responses_only
 
     trainer = train_on_responses_only(
         trainer,

@@ -18,7 +18,6 @@ from speedy_utils.all import load_by_ext
 from unsloth import FastLanguageModel
 
 
-
 def setup_model_and_training(args, train_args):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
@@ -38,10 +37,9 @@ def setup_model_and_training(args, train_args):
     )
     gpu_ith = args.visible_devices.index(args.gpu_index)
     from .dataset_utils import get_alpaca
-    ds_train, ds_test = get_alpaca(tokenizer, nsplits=len(args.visible_devices), split=gpu_ith, test_ratio=0.1)
-    logger.debug(
-        f"GPU {args.gpu_index}: Training on {len(args.visible_devices)} samples, testing on {len(ds_test)} samples"
-    )
+
+    ds_train, ds_test = get_alpaca(tokenizer, test_ratio=0.1)
+    
 
     # Configure PEFT model
     model = FastLanguageModel.get_peft_model(
@@ -74,10 +72,46 @@ def setup_model_and_training(args, train_args):
         eval_dataset=ds_test if gpu_ith == 0 else None,
         dataset_text_field="text",
         max_seq_length=args.max_seq_length,
-        data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         dataset_num_proc=2,
         packing=args.packing,
         args=train_args,
     )
+    trainer.train_dataset = trainer.train_dataset.shard(
+        num_shards=len(args.visible_devices), index=gpu_ith
+    )
 
+    if args.loss_type == "target_only":
+        from unsloth.chat_templates import train_on_responses_only
+        if '<|im_start|>' in tokenizer.chat_template:
+            instruct_part = "<|im_start|>"
+            response_part = "<|im_start|>assistant\n"
+        else:
+            assert "<｜Assistant｜>" in tokenizer.chat_template, f'{tokenizer} does not have "<｜Assistant｜>" or "<|im_start|>"'
+            instruct_part = "<｜begin▁of▁sentence｜><｜User｜>"
+            response_part = "<｜Assistant｜>"
+        trainer = train_on_responses_only(
+            trainer,
+            instruction_part=instruct_part,
+            response_part=response_part,
+        )
+    
+    _debug_dataloader(trainer)
+    
     return trainer
+
+def _debug_dataloader(trainer):
+    dl = trainer.get_train_dataloader()
+    g = iter(dl)
+    batch = next(g)
+    input_ids = batch["input_ids"]
+    text = trainer.tokenizer.decode(input_ids.cpu()[0])
+    labels = batch["labels"]
+    # fill < 0 with 0
+    labels[labels < 0] = 0
+    label_text = trainer.tokenizer.decode(labels.cpu()[0])
+    print('=====')
+    print(f'I: {text}')
+    print('-----')
+    print(f'L: {label_text}')
+    print('=====')
+    assert (batch["labels"] > 0).sum() != 0, "NO LABELS???"

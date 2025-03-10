@@ -1,27 +1,19 @@
-def get_alpaca(tokenizer, nsplits=1, split=0, test_ratio=0.1):
+from llm_utils import get_conversation_one_turn
 
-    alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 
-    ### Instruction:
-    {}
-
-    ### Input:
-    {}
-
-    ### Response:
-    {}"""
-
-    EOS_TOKEN = tokenizer.eos_token  # Must add EOS_TOKEN
-
+def get_alpaca(tokenizer, test_ratio=0.1):
     def formatting_prompts_func(examples):
         instructions = examples["instruction"]
         inputs = examples["input"]
         outputs = examples["output"]
         texts = []
         for instruction, input, output in zip(instructions, inputs, outputs):
-            # Must add EOS_TOKEN, otherwise your generation will go on forever!
-            text = alpaca_prompt.format(instruction, input, output) + EOS_TOKEN
-            texts.append(text)
+            messages = get_conversation_one_turn(
+                instruction,
+                input,
+                output,
+            )
+            texts.append(tokenizer.apply_chat_template(messages, tokenize=False))
         return {
             "text": texts,
         }
@@ -38,16 +30,13 @@ def get_alpaca(tokenizer, nsplits=1, split=0, test_ratio=0.1):
     # split train val
     dataset = dataset.train_test_split(test_size=test_ratio, seed=42)
     train_ds = dataset["train"]
-    if nsplits>2:
-        # split train_ds
-        train_ds.shuffle(seed=42)
-        ids = list(range(len(train_ds)))
-        this_split_ids = ids[split::nsplits]
-        train_ds = train_ds.select(this_split_ids)
+    # random shufle train_ds
+    train_ds = train_ds.shuffle(seed=42)
     return train_ds, dataset["test"]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    test = get_alpaca(tokenizer, nsplits=2, split=0, test_ratio=0.1)
+
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
+    train_ds, test_ds = get_alpaca(tokenizer, nsplits=2, split=0, test_ratio=0.1)

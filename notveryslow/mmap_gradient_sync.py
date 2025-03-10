@@ -17,8 +17,6 @@ multi_thread = partial(multi_thread, report=False, verbose=False)
 
 logger.remove()
 logger.add("mmap_gradient_sync.log", level="DEBUG")
-# add to terminal
-
 logger.add(sys.stdout, level="INFO")
 SLEEP_TIME = 0.1
 
@@ -367,7 +365,8 @@ class MmapGradSyncCallback(TrainerCallback):
 
     def on_log(self, args, state, control, **kwargs):
         if "loss" in state.log_history[-1]:
-            self.loss_file[self.gpu_index] = np.float32(state.log_history[-1]["loss"])
+            gputh = self.visible_devices.index(self.gpu_index)
+            self.loss_file[gputh] = np.float32(state.log_history[-1]["loss"])
             t = time.time()
             if self.is_main:
                 # if main gpu, then read all the losses

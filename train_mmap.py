@@ -89,6 +89,12 @@ def parse_args() -> argparse.Namespace:
         help="Whether to use 16-bit (mixed) precision training.",
     )
     parser.add_argument(
+        "--loss_type",
+        choices=["all", "target_only"],
+        default="target_only",
+        help="Whether to use 16-bit (mixed) precision training.",
+    )
+    parser.add_argument(
         "--optim", type=str, default="adamw_8bit", help="Optimizer to use."
     )
     parser.add_argument(
