@@ -66,29 +66,28 @@ class CustomCallback(TrainerCallback):
 
     
     def on_log(self, args, state, control, **kwargs):
-        # set the local value to lossfile
-        self.loss_file[self.gpu_index] = np.float32(state.log_history[-1]["loss"])
-        t = time.time()
-        if self.is_main:
-            # if main gpu, then read all the losses
-            # wait for all the losses to be written
-            while any(self.loss_file == 0):
-                time.sleep(0.01)
-            losses = self.loss_file[:]
-            state.log_history[-1]["mean_loss"] = np.mean(losses)
-            logger.info(f"Mean loss: {state.log_history[-1]['mean_loss']}")
-            # if all losses are not zero, then reset all the losses
-            if np.all(losses != 0):
-                self.loss_file[:] = 0
-        else:
-            # if not main gpu, then wait for the main gpu to reset the losses
-            while True:
+        if 'loss' not in state.log_history[-1]:
+            self.loss_file[self.gpu_index] = np.float32(state.log_history[-1]["loss"])
+            t = time.time()
+            if self.is_main:
+                # if main gpu, then read all the losses
+                # wait for all the losses to be written
+                while any(self.loss_file == 0):
+                    time.sleep(0.01)
                 losses = self.loss_file[:]
-                if np.all(losses == 0):
-                    break
-                time.sleep(0.01)
-        t = time.time() - t
-        logger.info(f"Time taken to log: {t}")
+                state.log_history[-1]["mean_loss"] = np.mean(losses)
+                logger.info(f"Mean loss: {state.log_history[-1]['mean_loss']}")
+                # if all losses are not zero, then reset all the losses
+                if np.all(losses != 0):
+                    self.loss_file[:] = 0
+            else:
+                # if not main gpu, then wait for the main gpu to reset the losses
+                while True:
+                    losses = self.loss_file[:]
+                    if np.all(losses == 0):
+                        break
+                    time.sleep(0.01)
+            t = time.time() - t
     
 
 

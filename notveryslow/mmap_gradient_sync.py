@@ -19,7 +19,7 @@ logger.remove()
 logger.add("mmap_gradient_sync.log", level="DEBUG")
 # add to terminal
 
-logger.add(sys.stdout, level="DEBUG")
+logger.add(sys.stdout, level="INFO")
 SLEEP_TIME = 0.1
 
 
