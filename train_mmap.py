@@ -1,16 +1,13 @@
 import argparse
 import os
 from functools import partial
-
+import filelock
 from loguru import logger
-
-# Hypothetical multi-threading utility from speedy
 from speedy_utils.all import multi_thread
+import time
 
-# Disable "report" and "verbose" in multi_thread calls
 multi_thread = partial(multi_thread, report=False, verbose=False)
 
-# Transformers / Trainer imports
 from transformers import (
     TrainerCallback,
     TrainerControl,
@@ -18,12 +15,33 @@ from transformers import (
     TrainingArguments,
 )
 
+import numpy as np
+
+
 
 class CustomCallback(TrainerCallback):
-    def __init__(self, model, grad_sync):
+    def __init__(self, model, grad_dir, gpu_index, visible_devices):
         self.model = model
-        self.grad_sync = grad_sync
-        
+        self.grad_dir = grad_dir
+        self.gpu_index = gpu_index
+        self.visible_devices = visible_devices
+        self.is_main = gpu_index == visible_devices[0]
+
+        from notveryslow.mmap_gradient_sync import MmapGradientSync
+
+        self.grad_sync = MmapGradientSync(
+            model,
+            grad_dir,
+            gpu_index,
+            visible_devices,
+        )
+        os.makedirs(self.grad_dir, exist_ok=True)
+        self.loss_file = np.memmap(
+            os.path.join(self.grad_dir, "loss.mmap"),
+            dtype="float32",
+            mode="w+",
+            shape=(len(self.visible_devices),),
+        )
 
     def on_pre_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -41,8 +59,37 @@ class CustomCallback(TrainerCallback):
         """
         Event called after optimizer step.
         """
+
+        t = time.time()
         logger.info("After optimizer step")
         self.grad_sync.zero_mmaps()
+
+    
+    def on_log(self, args, state, control, **kwargs):
+        # set the local value to lossfile
+        self.loss_file[self.gpu_index] = np.float32(state.log_history[-1]["loss"])
+        t = time.time()
+        if self.is_main:
+            # if main gpu, then read all the losses
+            # wait for all the losses to be written
+            while any(self.loss_file == 0):
+                time.sleep(0.1)
+            losses = self.loss_file[:]
+            logger.info(f"Losses: {losses}")
+            state.log_history[-1]["loss"] = np.mean(losses)
+            # if all losses are not zero, then reset all the losses
+            if np.all(losses != 0):
+                self.loss_file[:] = 0
+        else:
+            # if not main gpu, then wait for the main gpu to reset the losses
+            while True:
+                losses = self.loss_file[:]
+                if np.all(losses == 0):
+                    break
+                time.sleep(0.1)
+        t = time.time() - t
+        logger.info(f"Time taken to log: {t}")
+    
 
 
 def parse_args() -> argparse.Namespace:
@@ -77,8 +124,9 @@ def main():
 
     args = parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_index)
-    from notveryslow.mmap_gradient_sync import MmapGradientSync
+
     from notveryslow.unsloth_trainer_setup import setup_model_and_training
+
     all_gpus = args.visible_devices
     args.num_gpus = len(all_gpus)  # Calculate the number of GPUs
     args.is_main = args.gpu_index == args.visible_devices[0]
@@ -101,8 +149,8 @@ def main():
         seed=3407,
         output_dir=f"model_training_outputs/debug/{args.gpu_index}",
         save_total_limit=2,
-        save_steps=10,
-        max_steps=30,
+        # save_steps=10,
+        # max_steps=30,
         report_to="tensorboard",
     )
 
@@ -112,13 +160,15 @@ def main():
         train_args=train_args,
     )
 
-    grad_sync = MmapGradientSync(
+    # grad_sync = MmapGradientSync(
+
+    # )
+    grad_sync_cb = CustomCallback(
         model=trainer.model,
         grad_dir="./grads",
         gpu_index=args.gpu_index,
         visible_devices=all_gpus,
     )
-    grad_sync_cb = CustomCallback(model=trainer.model, grad_sync=grad_sync)
     trainer.add_callback(grad_sync_cb)
 
     # Then run training

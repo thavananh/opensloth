@@ -112,7 +112,7 @@ class MmapGradientSync:
 
     def _accumulate_one_param(self, task: Tuple[str, int, np.ndarray]):
         """
-        Merges local_grad into the memmap for one parameter.
+        Merges local_grad into the `memmap` for one parameter.
         'task' is a tuple: (filename, numel, local_grad).
         """
         filename, numel, local_grad = task
@@ -312,3 +312,5 @@ class MmapGradientSync:
                 if count == len(self.visible_devices):
                     break
                 time.sleep(SLEEP_TIME)
+                
+                
