@@ -5,6 +5,10 @@ from llm_utils import get_conversation_one_turn
 from speedy_utils import load_by_ext
 
 from .think_chat_template_tokenier_fix import fix_think_chat_template_tokenizer
+import warnings
+
+# remove warnings about "UserWarning: WARNING: Unsloth should be imported befo"
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
