@@ -23,6 +23,7 @@ class CustomCallback(TrainerCallback):
     def __init__(self, model, grad_sync):
         self.model = model
         self.grad_sync = grad_sync
+        
 
     def on_pre_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -98,9 +99,10 @@ def main():
         weight_decay=0.01,
         lr_scheduler_type="linear",
         seed=3407,
-        output_dir="model_training_outputs/debug",
+        output_dir=f"model_training_outputs/debug/{args.gpu_index}",
         save_total_limit=2,
-        save_steps=1000,
+        save_steps=10,
+        max_steps=30,
         report_to="tensorboard",
     )
 

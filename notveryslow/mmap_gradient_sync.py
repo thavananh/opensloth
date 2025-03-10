@@ -18,7 +18,7 @@ logger.add('mmap_gradient_sync.log', level='DEBUG')
 # add to terminal
 
 logger.add(sys.stdout, level='DEBUG')
-    
+SLEEP_TIME = 0.1    
 
 # Transformers / Trainer imports
 class MmapGradientSync:
@@ -51,6 +51,7 @@ class MmapGradientSync:
           gpus (List[int]): List of ALL GPU indices in the job (for counting).
           lock_dir (str, optional): Directory for .lock files (defaults to grad_dir).
         """
+        self.is_main = gpu_index == visible_devices[0]
         self.grad_dir = grad_dir
         self.gpu_index = gpu_index
         self.visible_devices = visible_devices  # store the entire list for synchronization checks
@@ -94,6 +95,21 @@ class MmapGradientSync:
     # Internal single-parameter operations for multi_thread
     # -------------------------------------------------------
 
+    class UniversalLocker:
+        """
+        A context manager for handling file locks.
+        """
+
+        def __init__(self, lockfile_path: str):
+            self.lockfile_path = lockfile_path
+            self.lock = filelock.FileLock(lockfile_path)
+
+        def __enter__(self):
+            self.lock.acquire()
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.lock.release()
+
     def _accumulate_one_param(self, task: Tuple[str, int, np.ndarray]):
         """
         Merges local_grad into the memmap for one parameter.
@@ -102,7 +118,7 @@ class MmapGradientSync:
         filename, numel, local_grad = task
         lockfile_path = self._lockfile(filename)
 
-        with filelock.FileLock(lockfile_path):
+        with self.UniversalLocker(lockfile_path):
             mm = np.memmap(filename, dtype=np.float32, mode="r+", shape=(numel,))
             mm[:] += local_grad[:]
             mm.flush()
@@ -116,7 +132,7 @@ class MmapGradientSync:
         filename, numel = task
         lockfile_path = self._lockfile(filename)
 
-        with filelock.FileLock(lockfile_path):
+        with self.UniversalLocker(lockfile_path):
             mm = np.memmap(filename, dtype=np.float32, mode="r", shape=(numel,))
             arr = np.copy(mm[:])  # copy out
             del mm
@@ -131,7 +147,7 @@ class MmapGradientSync:
         filename, numel = task
         lockfile_path = self._lockfile(filename)
 
-        with filelock.FileLock(lockfile_path):
+        with self.UniversalLocker(lockfile_path):
             mm = np.memmap(filename, dtype=np.float32, mode="r+", shape=(numel,))
             mm[:] = 0.0
             mm.flush()
@@ -164,8 +180,10 @@ class MmapGradientSync:
         logger.info("[GPU {}] Accumulated local gradients into memmaps.", self.gpu_index)
 
         # Write a "done writing" file for this GPU
-        with open(f"{self.grad_dir}/count_write_gpu{self.gpu_index}.txt", "w") as f:
-            f.write("1")
+        write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu_index}.txt"
+        with self.UniversalLocker(write_file_path + ".lock"):
+            with open(write_file_path, "w") as f:
+                f.write("1")
 
     def _wait_for_all_write(self):
         """
@@ -181,9 +199,11 @@ class MmapGradientSync:
                 cf = f"{self.grad_dir}/count_write_gpu{i}.txt"
                 if os.path.exists(cf):
                     count += 1
+                else:
+                    logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
             if count == len(self.visible_devices):
                 break
-            time.sleep(0.01)  # reduce busy waiting
+            time.sleep(SLEEP_TIME)  # reduce busy waiting
 
         logger.debug("[GPU {}] All GPUs have accumulated gradients.", self.gpu_index)
 
@@ -203,7 +223,7 @@ class MmapGradientSync:
                     logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
             if count == len(self.visible_devices):
                 break
-            time.sleep(1)  # reduce busy waiting
+            time.sleep(SLEEP_TIME)  # reduce busy waiting
 
         logger.debug("[GPU {}] All GPUs have read gradients.", self.gpu_index)
 
@@ -246,33 +266,49 @@ class MmapGradientSync:
         logger.info("[GPU {}] Read final gradients from memmaps into model.", self.gpu_index)
 
         # Write a "done reading" file for this GPU
-        with open(f"{self.grad_dir}/count_read_gpu{self.gpu_index}.txt", "w") as f:
-            f.write("1")
+        read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu_index}.txt"
+        with self.UniversalLocker(read_file_path + ".lock"):
+            with open(read_file_path, "w") as f:
+                f.write("1")
 
     def zero_mmaps(self):
         """
         Zeros out all memmap files so each iteration starts fresh.
         Also removes the count files to reset synchronization state.
         """
-        lock_zero = filelock.FileLock(os.path.join(self.lock_dir, "zero.lock"))
-        with lock_zero:
-            self._wait_for_all_read()
-            logger.debug(f"[GPU {self.gpu_index}] Zeroing all memmap files..")
-            tasks = []
-            for info in self.param_info:
-                filename = info["filename"]
-                numel = info["numel"]
-                tasks.append((filename, numel))
+        self._wait_for_all_read()
+        # only perform zeroing on the main GPU
+        
+        if self.is_main:
+            with self.UniversalLocker(os.path.join(self.lock_dir, "zero.lock")):
+                logger.debug(f"[GPU {self.gpu_index}] Zeroing all memmap files..")
+                tasks = []
+                for info in self.param_info:
+                    filename = info["filename"]
+                    numel = info["numel"]
+                    tasks.append((filename, numel))
 
-            multi_thread(self._zero_one_param, tasks)
+                multi_thread(self._zero_one_param, tasks)
 
-            logger.debug("[GPU {}] Zeroed all memmap files.", self.gpu_index)
-
-            # Clean up count files (both write and read signals)
-            for i in self.visible_devices:
-                wfile = f"{self.grad_dir}/count_write_gpu{i}.txt"
-                if os.path.exists(wfile):
-                    os.remove(wfile)
-                rfile = f"{self.grad_dir}/count_read_gpu{i}.txt"
-                if os.path.exists(rfile):
-                    os.remove(rfile)
+                # Clean up count files (both write and read signals)
+                for i in self.visible_devices:
+                    wfile = f"{self.grad_dir}/count_write_gpu{i}.txt"
+                    with self.UniversalLocker(wfile + ".lock"):
+                        if os.path.exists(wfile):
+                            os.remove(wfile)
+                    rfile = f"{self.grad_dir}/count_read_gpu{i}.txt"
+                    with self.UniversalLocker(rfile + ".lock"):
+                        if os.path.exists(rfile):
+                            os.remove(rfile)
+        else:
+            # wait for all count files to be removed
+            while True:
+                count = 0
+                for i in self.visible_devices:
+                    wfile = f"{self.grad_dir}/count_write_gpu{i}.txt"
+                    rfile = f"{self.grad_dir}/count_read_gpu{i}.txt"
+                    if not os.path.exists(wfile) and not os.path.exists(rfile):
+                        count += 1
+                if count == len(self.visible_devices):
+                    break
+                time.sleep(SLEEP_TIME)
