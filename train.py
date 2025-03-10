@@ -7,12 +7,7 @@ import argparse
 import os
 from typing import List, Tuple
 
-from fastcore.all import parallel, threaded
-from speedy_utils import setup_logger
 from transformers import (
-    DataCollatorForSeq2Seq,
-    TrainerCallback,
-    TrainerState,
     TrainingArguments,
 )
 
@@ -34,19 +29,19 @@ def parse_arguments() -> Tuple[int, List[int]]:
         "--gpus",
         "-g",
         type=str,
-        default="0,2",
+        default="0",
         help="Comma separated list of all GPUs to use",
     )
     parser.add_argument(
         "--weight_sync_every_update_steps",
         type=int,
-        default=32,
+        default=1,
         help="Steps between weight synchronization",
     )
     parser.add_argument(
-        "--gradient_accumulation_steps",
+        "--gradient_accumulation_steps", '-ac',
         type=int,
-        default=16,
+        default=64,
         help="Number of steps to accumulate gradients",
     )
     parser.add_argument(
@@ -98,7 +93,9 @@ def main():
         weight_decay=0.01,
         lr_scheduler_type="linear",
         seed=3407,
-        output_dir="model_training_outputs",
+        output_dir=f"model_training_outputs/{current_gpu_id}",
+        save_total_limit=2,
+        save_steps=args.weight_sync_every_update_steps,
         report_to="tensorboard",
     )
     trainer = setup_model_and_training(
@@ -110,6 +107,7 @@ def main():
         model_name=args.model_name,
         weight_sync_every_update_steps=args.weight_sync_every_update_steps,
     )
+    
     trainer.train()
 
 

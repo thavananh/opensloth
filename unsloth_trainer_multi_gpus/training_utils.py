@@ -140,11 +140,14 @@ def setup_model_and_training(
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         dataset_num_proc=2,
         packing=packing,
-        callbacks=[
-            WeightSyncCallback(gpu_id, all_gpu_ids, sync_interval=weight_sync_every_update_steps)
-        ],
         args=args,
     )
+
+    # callback = WeightSyncCallback(
+    #     gpu_id, all_gpu_ids, sync_interval=weight_sync_every_update_steps, trainer=trainer
+    # )
+    
+    # trainer.add_callback(callback)
 
     # Configure to train on responses only
     instruct_part = "<｜begin▁of▁sentence｜><｜User｜>"

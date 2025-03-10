@@ -1,230 +1,214 @@
 import os
 import time
-from typing import Dict, List, Optional, Tuple, Any, Union
 from collections import defaultdict
+from typing import Any, List
 
 import torch
-from transformers import TrainerCallback, TrainerState, DataCollatorForSeq2Seq, TrainingArguments
-from datasets import Dataset
 from loguru import logger
-
-from unsloth_trainer_multi_gpus.think_chat_template_tokenier_fix import fix_think_chat_template_tokenizer
-
-
-# from unsloth.chat_templates import train_on_responses_only
-# from speedy_utils.all import load_by_ext
+from safetensors.torch import load_file, save_file
+from transformers import TrainerCallback, TrainerState, TrainingArguments
 
 # Configuration constants
 WEIGHT_SYNC_INTERVAL = 10  # Steps between weight synchronization
 WEIGHT_FILE_WAIT_TIMEOUT = 1800  # 30 minutes in seconds
-LOCK_FILE_WAIT_TIMEOUT = 60  # 60 seconds
 
 
-def merge_and_save_weights(source_weight_files: List[str], target_weight_file: str) -> None:
-    """
-    Merge weights from multiple GPUs and save to a target file.
-    
-    Args:
-        source_weight_files: List of weight files from different GPUs
-        target_weight_file: Path where the merged weights will be saved
-    
-    Raises:
-        FileNotFoundError: If source weight file creation times out
-        FileExistsError: If lock file doesn't release in time
-    """
-    weights_by_param = defaultdict(list)
-
-    # First check if all files exist before proceeding
-    for weight_file in source_weight_files:
-        wait_start = time.time()
-        while not os.path.exists(weight_file):
-            if time.time() - wait_start > WEIGHT_FILE_WAIT_TIMEOUT:
-                logger.warning(f"Timeout waiting for {weight_file}")
-                raise FileNotFoundError(f"Timeout waiting for {weight_file}")
-            logger.debug(f"Waiting for {weight_file} to be created")
+def torch_load(path):
+    lock_file = f"{path}.lock"
+    while os.path.exists(lock_file):
+        time.sleep(1)
+    for _ in range(10):
+        try:
+            if path.endswith(".pt"):
+                return torch.load(path)
+            else:
+                return load_file(path, device="cpu")
+        except Exception as e:
+            # logger.warning(f"Error loading file {path}: {e}")
             time.sleep(1)
-            
-        # Wait for the lock to release
-        lock_file = f"{weight_file}.lock"
-        wait_start = time.time()
-        while os.path.exists(lock_file):
-            if time.time() - wait_start > LOCK_FILE_WAIT_TIMEOUT:
-                logger.warning(f"Timeout waiting for lock to be released on {weight_file}")
-                raise FileExistsError(f"Timeout waiting for lock to be released on {weight_file}")
-            logger.debug(f"Waiting for lock to be released on {weight_file}")
-            time.sleep(1)
-        state_dict = None
-        e = None
-        for i in range(5):
-            try:
-                state_dict = torch.load(weight_file)
-            except Exception as e:
-                time.sleep(1)
-        if not state_dict:
-            logger.warning(f"Error loading {weight_file}: {e}")
-            raise FileNotFoundError(f"Error loading {weight_file}: {e}") 
-        
-        for param_name, param_value in state_dict.items():
-            weights_by_param[param_name].append(param_value)
+    logger.error(f"Failed to load file {path}")
+    raise RuntimeError(f"Failed to load file {path}")
 
-    # Merge the weights by averaging across GPUs
-    merged_weights = {
-        param_name: torch.stack(param_values).mean(0)
-        for param_name, param_values in weights_by_param.items()
-    }
 
-    # Create lock file then save weights
-    lock_file = f"{target_weight_file}.lock"
+def torch_save(obj, path):
+    lock_file = f"{path}.lock"
+    # Create a lock file
     with open(lock_file, "w") as f:
         f.write("lock")
+    try:
+        if path.endswith(".pt"):
+            torch.save(obj, path)
+        else:
+            save_file(obj, path)
+    finally:
+        # Remove the lock file
+        os.remove(lock_file)
 
-    # Save the weights
-    torch.save(merged_weights, target_weight_file)
 
-    # Remove lock file when done
-    os.remove(lock_file)
-    logger.debug(f"Saved merged weights to {target_weight_file}")
-
-
-def wait_for_weights_and_load(model: Any, weight_file_path: str) -> None:
+def merge_optim(paths, output_path):
     """
-    Wait for target weights file to be fully written and then load it into the model.
-    
+    Merge optimizer states from multiple checkpoint files.
+
     Args:
-        model: The model to load weights into
-        weight_file_path: Path to the weights file to load
+        paths (List[str]): List of file paths for optimizer state files.
+        output_path (str): Where to save the merged optimizer state.
     """
-    lock_file = f"{weight_file_path}.lock"
+    merged_state = dict()
+    merged_param_groups = None
 
-    # Wait for file to be created
-    wait_start = time.time()
-    while not os.path.exists(weight_file_path):
-        if time.time() - wait_start > WEIGHT_FILE_WAIT_TIMEOUT:
-            logger.warning(f"Timeout waiting for {weight_file_path}")
-            return
-        logger.debug(f"Waiting for {weight_file_path} to be created")
-        time.sleep(1)
+    for i, optimizer_path in enumerate(paths):
+        while not os.path.exists(optimizer_path):
+            time.sleep(1)
+            logger.debug(f"Waiting for file {optimizer_path} to be available")
+        _optimizer_state = torch_load(optimizer_path)
+        # Grab param_groups from the first file (assuming identical on each GPU).
+        if i == 0:
+            merged_param_groups = _optimizer_state["param_groups"]
 
-    # Wait for lock file to be removed (indicating write is complete)
-    wait_start = time.time()
-    while os.path.exists(lock_file):
-        if time.time() - wait_start > LOCK_FILE_WAIT_TIMEOUT:
-            logger.warning(f"Timeout waiting for lock to be released on {weight_file_path}")
-            return
-        logger.debug(f"Waiting for lock to be released on {weight_file_path}")
+        # Merge the 'state' dictionaries
+        for param_id, state_dict in _optimizer_state["state"].items():
+            if not param_id in merged_state:
+                merged_state[param_id] = dict()
+
+            for key, value in state_dict.items():
+                # If not a tensor, simply store (assumed to be identical across GPUs)
+                if not isinstance(value, torch.Tensor):
+                    merged_state[param_id][key] = value
+                else:
+                    if key not in merged_state[param_id]:
+                        merged_state[param_id][key] = []
+                    merged_state[param_id][key].append(value)
+
+    # Process the lists of tensors: if floating point, average them; else, choose first.
+    for param_id, inner in merged_state.items():
+        for key, value in inner.items():
+            if isinstance(value, list):
+                # If the tensor dtype is floating point, average; else, take the first.
+                if value[0].dtype in (torch.float16, torch.float32, torch.float64):
+                    merged_value = torch.stack(value).mean(dim=0)
+                else:
+                    merged_value = value[0]
+                merged_state[param_id][key] = merged_value
+
+    # Build the final optimizer state dict that matches PyTorch's expected format:
+    final_optim_state = {
+        "state": merged_state,
+        "param_groups": merged_param_groups,
+    }
+    torch_save(final_optim_state, output_path)
+    # torch.save(final_optim_state, output_path)
+    logger.debug(f"Merged optimizer states -> {output_path}")
+
+
+def merge_adapter(paths, output_path):
+    state_dict = defaultdict(list)
+
+    for adapter_model_path in paths:
+        while not os.path.exists(adapter_model_path):
+            time.sleep(1)
+            logger.debug(f"Waiting for file {adapter_model_path} to be available")
+
+        _adapter_model_state = torch_load(adapter_model_path)
+        for k, v in _adapter_model_state.items():
+            state_dict[k].append(v)
+    merged_state = {
+        key: torch.stack(values).mean(0) for key, values in state_dict.items()
+    }
+    # torch.save(merged_state, output_path)
+    torch_save(merged_state, output_path)
+    logger.debug(f"Merged adapter model states -> {output_path}")
+
+
+def wait_for(file: str, timeout: int):
+    lock_file = f"{file}.lock"
+    start_time = time.time()
+    # cond is the first exist and no lock
+    while not os.path.exists(file) and not os.path.exists(lock_file):
         time.sleep(1)
-        
-    logger.debug(f"Loading weights from {weight_file_path} to {model.device}")
-    weights = torch.load(weight_file_path, map_location=f"cuda:{model.device.index}")
-    result = model.load_state_dict(weights, strict=False)
-    
-    num_loaded = len(result[0])
-    num_missing = len(result[1])
-    logger.debug(f"Loaded {num_loaded} weights, {num_missing} missing")
+        if time.time() - start_time > timeout:
+            raise TimeoutError(f"Timeout waiting for {file} to be available")
+    logger.success(f"File {file} is available after {time.time() - start_time} seconds")
+    return file
+
 
 class WeightSyncCallback(TrainerCallback):
-    """
-    Callback to synchronize weights across multiple GPUs during training.
-    
-    Periodically saves weights from each GPU, merges them on GPU 0,
-    and loads the merged weights back to all GPUs.
-    """
-    
-    def __init__(self, gpu_id: int, all_gpu_ids: List[int], sync_interval: int = WEIGHT_SYNC_INTERVAL):
-        """
-        Initialize the weight synchronization callback.
-        
-        Args:
-            gpu_id: Current GPU ID
-            all_gpu_ids: List of all GPU IDs participating in training
-            sync_interval: Number of steps between synchronizations
-        """
+    """Synchronize weights across multiple GPUs during training."""
+
+    def __init__(
+        self,
+        gpu_id: int,
+        all_gpu_ids: List[int],
+        sync_interval: int = WEIGHT_SYNC_INTERVAL,
+        trainer=None,
+    ):
         self.gpu_id = gpu_id
         self.all_gpu_ids = all_gpu_ids
         self.sync_interval = sync_interval
-        
-    def on_optimizer_step(self, args: TrainingArguments, state: TrainerState, control: Any, **kwargs):
-        """
-        Called after each optimizer step to potentially synchronize weights.
-        
-        Args:
-            args: Training arguments
-            state: Current trainer state
-            control: Control object
-        """
-        output_dir = args.output_dir
+        self.trainer = trainer
+
+    def on_save(
+        self, args: TrainingArguments, state: TrainerState, control: Any, **kwargs
+    ):
+        # Only run sync on specified intervals
+        if state.global_step % self.sync_interval != 0:
+            return
+
+        out_path_optimizer = f"model_training_outputs/0/checkpoint-{state.global_step}/optimizer.merge.pt"
+        out_path_adapter_model = f"model_training_outputs/0/checkpoint-{state.global_step}/adapter_model.merge.pt"
+
+        if self.gpu_id == 0:
+            optimizer_paths = [
+                f"model_training_outputs/{gpu}/checkpoint-{state.global_step}/optimizer.pt"
+                for gpu in self.all_gpu_ids
+            ]
+            merge_optim(optimizer_paths, out_path_optimizer)
+            # Merge adapter model states
+            adapter_model_paths = [
+                f"model_training_outputs/{gpu}/checkpoint-{state.global_step}/adapter_model.safetensors"
+                for gpu in self.all_gpu_ids
+            ]
+            merge_adapter(adapter_model_paths, out_path_adapter_model)
+            
+        wait_for(file=out_path_optimizer, timeout=WEIGHT_FILE_WAIT_TIMEOUT)
+        wait_for(file=out_path_adapter_model, timeout=WEIGHT_FILE_WAIT_TIMEOUT)
+
+        # Load the merged weights
         model = state.model
-        current_step = state.global_step
+        optimizer = state.optimizer
+
+        model_st = torch_load(out_path_adapter_model)
+        optimizer_st = torch_load(out_path_optimizer)
+
+        model_st_updated = {}
+        for k, v in model_st.items():
+            model_st_updated[k.replace(".weight", ".default.weight")] = v
+        ret = optimizer.load_state_dict(optimizer_st)
+
         
-        # Path for this GPU's weights
-        this_gpu_weights_path = os.path.join(
-            output_dir, f"checkpoint-{current_step}.gpu.{self.gpu_id}.pt"
-        )
-        
-        # Path for merged weights
-        merged_weights_path = os.path.join(output_dir, f"checkpoint-{current_step}.pt")
+        # Suppose we already have merged checkpoint files in some path:
+        trainer = self.trainer
+        ret = trainer.model.load_state_dict(model_st_updated, strict=False)
+        assert len(ret.unexpected_keys) == 0, f"Unexpected keys: {ret.unexpected_keys}"
+        trainer.optimizer.load_state_dict(optimizer_st)
+        # # ckpt_path = self.ckpt_path_getter(state.global_step)
 
-        # Synchronize only at specified intervals
-        if current_step % self.sync_interval == 0:
-            logger.debug(f"Step {current_step}: Saving weights for GPU {self.gpu_id}")
-            
-            # Extract trainable parameters
-            state_dict = model.state_dict()
-            trainable_state_dict = {k: v for k, v in state_dict.items() if "lora" in k}
+        # # 1) Load model weights
+        # # merged_model_dict = torch.load(f"{ckpt_path}/pytorch_model.bin", map_location="cpu")
+        # merged_model_dict = torch.load(f"{ckpt_path}/adapter_model.merge.pt", map_location="cpu")
+        # trainer.model.load_state_dict(merged_model_dict, strict=False)
 
-            # Create lock file before saving weights
-            lock_file = f"{this_gpu_weights_path}.lock"
-            with open(lock_file, "w") as f:
-                f.write("lock")
-            logger.debug(f"Created lock file {lock_file}")
+        # # 2) Load optimizer state (if you want to resume optimizer)
+        # if trainer.optimizer is not None:
+        #     opt_dict = torch.load(f"{ckpt_path}/optimizer.pt", map_location="cpu")
+        #     trainer.optimizer.load_state_dict(opt_dict)
 
-            # Save the weights
-            torch.save(trainable_state_dict, this_gpu_weights_path)
-            logger.debug(f"Saved weights to {this_gpu_weights_path}")
-            os.remove(lock_file)
-            logger.debug(f"Removed lock file {lock_file}")
-            
-            # If this is GPU 0, merge weights from all GPUs
-            if self.gpu_id == self.all_gpu_ids[0]:
-                all_gpu_weights_paths = [
-                    os.path.join(output_dir, f"checkpoint-{current_step}.gpu.{i}.pt")
-                    for i in self.all_gpu_ids
-                ]
-                logger.debug(f"GPU 0: Merging weights from all GPUs: {all_gpu_weights_paths}")
-                merge_and_save_weights(all_gpu_weights_paths, merged_weights_path)
+        # # 3) If you also want to restore the LR scheduler:
+        # if trainer.lr_scheduler is not None:
+        #     sched_dict = torch.load(f"{ckpt_path}/scheduler.pt", map_location="cpu")
+        #     trainer.lr_scheduler.load_state_dict(sched_dict)
 
-            # Wait for the merged weights file and load it
-            logger.debug(
-                f"GPU {self.gpu_id}: Waiting for merged weights {merged_weights_path}"
-            )
-            wait_for_weights_and_load(state.model, merged_weights_path)
-            logger.debug(f"GPU {self.gpu_id}: Loaded merged weights from {merged_weights_path}")
-            
-            # Clean up individual GPU weight files after all GPUs have loaded the merged weights
-            # Only GPU 0 needs to clean up to avoid race conditions
-            if self.gpu_id == self.all_gpu_ids[0]:
-                # Wait a bit to ensure all GPUs have loaded the merged weights
-                from fastcore.all import threaded
-                @threaded
-                def f_clean():
-                    logger.debug(f"Starting cleanup for step {current_step} sleep 30s for all GPUs to load merged weights safely")
-                    time.sleep(30)
-                    for gpu_id in self.all_gpu_ids:
-                        gpu_weight_path = os.path.join(
-                            output_dir, f"checkpoint-{current_step}.gpu.{gpu_id}.pt"
-                        )
-                        if os.path.exists(gpu_weight_path):
-                            try:
-                                os.remove(gpu_weight_path)
-                                logger.debug(f"Cleaned up {gpu_weight_path}")
-                            except Exception as e:
-                                logger.warning(f"Failed to clean up {gpu_weight_path}: {e}")
-                    # remove the merged weights file
-                    if os.path.exists(merged_weights_path):
-                        try:
-                            os.remove(merged_weights_path)
-                            logger.debug(f"Cleaned up {merged_weights_path}")
-                        except Exception as e:
-                            logger.warning(f"Failed to clean up {merged_weights_path}: {e}")
-                    logger.debug(f"Cleanup completed for step {current_step}")
-                f_clean()
+        # # You might also want to adjust 'state.global_step' if you are fully resuming.
+        # # But typically, we do not override TrainerState steps here unless we're doing a full resume.
+
+        # # Return control if you need to adjust or stop training
+        # return control
