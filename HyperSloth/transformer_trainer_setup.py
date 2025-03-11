@@ -4,18 +4,15 @@ Handles weight synchronization, model setup, and distributed training coordinati
 """
 
 from loguru import logger
-
-from unsloth import FastLanguageModel
-from .app_config import HyperSlothConfig
 from transformers import TrainingArguments
+
+from .app_config import HyperSlothConfig
 
 
 def setup_model_and_training(
+    gpu:int,
     hyper_config: HyperSlothConfig,
     hf_train_args: TrainingArguments,
-    dataset_fn: callable, # return train_ds, test_ds
-    gpu_index: int, # the raw gpu index (0, 1, 2, ...)
-    visible_devices: list[int], # the list to be used in CUDA_VISIBLE_DEVICES
 ):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
@@ -27,7 +24,17 @@ def setup_model_and_training(
     Returns:
         Trainer object configured for multi-GPU training
     """
-    gpu_ith = visible_devices.index(gpu_index)
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    # import must be here to avoid gpu setup before model is loaded
+    from unsloth import \
+        FastLanguageModel  
+
+    from HyperSloth.dataset_utils import load_sharegpt_dataset
+    dataset_fn = lambda tokenizer, test_ratio: load_sharegpt_dataset(
+                hyper_config.dataset_file, tokenizer, test_ratio
+            )
+    gpu_ith = hyper_config.gpus.index(gpu)
     # Initialize model and tokenizer
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=hyper_config.model_name,
@@ -72,12 +79,12 @@ def setup_model_and_training(
         packing=hyper_config.packing,
         args=hf_train_args,
     )
-    max_len_ds = len(visible_devices) * (
-        len(trainer.train_dataset) // len(visible_devices)
+    max_len_ds = len(hyper_config.gpus) * (
+        len(trainer.train_dataset) // len(hyper_config.gpus)
     )
     trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
     trainer.train_dataset = trainer.train_dataset.shard(
-        num_shards=len(visible_devices), index=gpu_ith
+        num_shards=len(hyper_config.gpus), index=gpu_ith
     )
 
     if hyper_config.loss_type == "target_only":

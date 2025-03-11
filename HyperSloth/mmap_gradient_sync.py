@@ -8,9 +8,8 @@ import filelock
 import numpy as np
 import torch
 from loguru import logger
-# Hypothetical multi-threading utility from speedy
 from speedy_utils.all import multi_thread
-from transformers import TrainerCallback, TrainerControl, TrainerState
+from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 
 # Disable "report" and "verbose" in multi_thread calls
 multi_thread = partial(multi_thread, report=False, verbose=False)
@@ -40,7 +39,7 @@ class MmapGradientSync:
         self,
         model: torch.nn.Module,
         grad_dir: str,
-        gpu_index: int,
+        gpu: int,
         visible_devices: List[int],
         lock_dir: str = "/dev/shm",
     ):
@@ -52,9 +51,9 @@ class MmapGradientSync:
           gpus (List[int]): List of ALL GPU indices in the job (for counting).
           lock_dir (str, optional): Directory for .lock files (defaults to grad_dir).
         """
-        self.is_main = gpu_index == visible_devices[0]
+        self.is_main = gpu == visible_devices[0]
         self.grad_dir = grad_dir
-        self.gpu_index = gpu_index
+        self.gpu = gpu
         self.visible_devices = (
             visible_devices  # store the entire list for synchronization checks
         )
@@ -181,11 +180,11 @@ class MmapGradientSync:
         multi_thread(self._accumulate_one_param, tasks)
 
         logger.debug(
-            "[GPU {}] Accumulated local gradients into memmaps.", self.gpu_index
+            "[GPU {}] Accumulated local gradients into memmaps.", self.gpu
         )
 
         # Write a "done writing" file for this GPU
-        write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu_index}.txt"
+        write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu}.txt"
         with self.UniversalLocker(write_file_path + ".lock"):
             with open(write_file_path, "w") as f:
                 f.write("1")
@@ -196,7 +195,7 @@ class MmapGradientSync:
         (presence of count_write_gpu{i}.txt for each i in self.gpus).
         """
         logger.debug(
-            "[GPU {}] Waiting for all GPUs to accumulate gradients..", self.gpu_index
+            "[GPU {}] Waiting for all GPUs to accumulate gradients..", self.gpu
         )
         while True:
             count = 0
@@ -210,7 +209,7 @@ class MmapGradientSync:
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
 
-        logger.debug("[GPU {}] All GPUs have accumulated gradients.", self.gpu_index)
+        logger.debug("[GPU {}] All GPUs have accumulated gradients.", self.gpu)
 
     def _wait_for_all_read(self):
         """
@@ -218,7 +217,7 @@ class MmapGradientSync:
         (presence of count_read_gpu{i}.txt for each i in self.gpus).
         """
         logger.debug(
-            "[GPU {}] Waiting for all GPUs to read gradients..", self.gpu_index
+            "[GPU {}] Waiting for all GPUs to read gradients..", self.gpu
         )
         while True:
             count = 0
@@ -232,7 +231,7 @@ class MmapGradientSync:
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
 
-        logger.debug("[GPU {}] All GPUs have read gradients.", self.gpu_index)
+        logger.debug("[GPU {}] All GPUs have read gradients.", self.gpu)
 
     def read_final_grad_into_model(self, model: torch.nn.Module, average: bool = True):
         """
@@ -271,11 +270,11 @@ class MmapGradientSync:
             param.grad = torch.from_numpy(arr).view(shape).to(param.device)
 
         logger.debug(
-            "[GPU {}] Read final gradients from memmaps into model.", self.gpu_index
+            "[GPU {}] Read final gradients from memmaps into model.", self.gpu
         )
 
         # Write a "done reading" file for this GPU
-        read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu_index}.txt"
+        read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu}.txt"
         with self.UniversalLocker(read_file_path + ".lock"):
             with open(read_file_path, "w") as f:
                 f.write("1")
@@ -290,7 +289,7 @@ class MmapGradientSync:
 
         if self.is_main:
             with self.UniversalLocker(os.path.join(self.lock_dir, "zero.lock")):
-                logger.debug(f"[GPU {self.gpu_index}] Zeroing all memmap files..")
+                logger.debug(f"[GPU {self.gpu}] Zeroing all memmap files..")
                 tasks = []
                 for info in self.param_info:
                     filename = info["filename"]
@@ -324,17 +323,17 @@ class MmapGradientSync:
 
 
 class MmapGradSyncCallback(TrainerCallback):
-    def __init__(self, model, grad_dir, gpu_index, visible_devices):
+    def __init__(self, model, grad_dir, gpu, visible_devices):
         self.model = model
         self.grad_dir = grad_dir
-        self.gpu_index = gpu_index
+        self.gpu_index = gpu
         self.visible_devices = visible_devices
-        self.is_main = gpu_index == visible_devices[0]
+        self.is_main = gpu == visible_devices[0]
 
         self.grad_sync = MmapGradientSync(
             model,
             grad_dir,
-            gpu_index,
+            gpu,
             visible_devices,
         )
         os.makedirs(self.grad_dir, exist_ok=True)
