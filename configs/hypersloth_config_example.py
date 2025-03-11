@@ -11,7 +11,7 @@ hyper_config = HyperSlothConfig(
     gpus=[0],
 )
 
-
+# MUST NOT INITIALIZE DEVICE BEFORE threaded.run() IN HyperSloth/scripts/hypersloth.py
 training_config = dict(
     output_dir="model_training_outputs/debug",
     per_device_train_batch_size=8,
