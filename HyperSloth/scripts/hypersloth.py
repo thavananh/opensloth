@@ -12,6 +12,7 @@ def run(
     train_args: TrainingArguments,
 ):
     import os
+
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
@@ -41,7 +42,9 @@ def main(
         config_py.replace("/", ".").replace(".py", ""), fromlist=[""]
     )
     hyper_config: HyperSlothConfig = config_module.hyper_config
-    training_config: TrainingArguments = config_module.training_config
+    training_config: TrainingArguments = TrainingArguments(
+        **config_module.training_config
+    )
 
     for gpu_index in hyper_config.gpus:
         logger.debug(f"Running on GPU {gpu_index}")
