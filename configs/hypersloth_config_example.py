@@ -9,25 +9,26 @@ hyper_config = HyperSlothConfig(
     max_seq_length=2048,
     loss_type="target_only",
     packing=False,
-    gpus=[0, 1, 2, 3],
+    gpus=[0],
 )
 
 
 training_config = dict(
+    output_dir="model_training_outputs/debug",
     per_device_train_batch_size=8,
-    per_device_eval_batch_size=2,
+    learning_rate=0.0002,  
     gradient_accumulation_steps=16,
+    per_device_eval_batch_size=2,
+    eval_steps=100,
     logging_steps=1,
-    eval_steps=10000,
-    warmup_steps=5,
+    report_to="tensorboard",
     num_train_epochs=1,
-    learning_rate=0.0002,  # 2e-4
+    lr_scheduler_type="linear",
+    warmup_steps=5,
+    seed=3407,
+    save_total_limit=2,
     bf16=True,
+    fp16=False,
     optim="adamw_8bit",
     weight_decay=0.01,
-    lr_scheduler_type="linear",
-    seed=3407,
-    output_dir="model_training_outputs/debug",
-    save_total_limit=2,
-    report_to="tensorboard",
 )
