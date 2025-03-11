@@ -5,7 +5,6 @@ from transformers.training_args import TrainingArguments
 from HyperSloth.app_config import HyperSlothConfig
 
 
-@threaded(process=True)
 def run(
     gpu: int,
     hyper_config: HyperSlothConfig,
@@ -38,6 +37,8 @@ def run(
     trainer.train()
 
 
+run_in_process = threaded(process=True)(run)
+
 import importlib.util
 
 
@@ -66,11 +67,17 @@ def train(config_file: str):
     _s = {**hyper_config_dict, **training_config}
     _s = tabulate.tabulate(_s.items(), headers=["Key", "Value"])
     logger.info("\n" + _s)
-
-    for gpu_index in hyper_config.gpus:
-        logger.debug(f"Running on GPU {gpu_index}")
+    if len(hyper_config.gpus) > 1:
+        for gpu_index in hyper_config.gpus:
+            logger.debug(f"Running on GPU {gpu_index}")
+            run_in_process(
+                gpu_index,
+                hyper_config=hyper_config,
+                train_args=training_config,
+            )
+    else:
         run(
-            gpu_index,
+            hyper_config.gpus[0],
             hyper_config=hyper_config,
             train_args=training_config,
         )
