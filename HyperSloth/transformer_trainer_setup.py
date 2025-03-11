@@ -3,22 +3,20 @@ Utility functions for multi-GPU training with Unsloth models.
 Handles weight synchronization, model setup, and distributed training coordination.
 """
 
-from typing import Dict, List, Tuple, Any
-import random
-from transformers import (
-    DataCollatorForSeq2Seq,
-)
-from datasets import Dataset
 from loguru import logger
 
-from HyperSloth.think_chat_template_tokenier_fix import (
-    fix_think_chat_template_tokenizer,
-)
-from speedy_utils.all import load_by_ext
 from unsloth import FastLanguageModel
+from .app_config import HyperSlothConfig
+from transformers import TrainingArguments
 
 
-def setup_model_and_training(args, train_args, dataset_fn):
+def setup_model_and_training(
+    hyper_config: HyperSlothConfig,
+    hf_train_args: TrainingArguments,
+    dataset_fn: callable, # return train_ds, test_ds
+    gpu_index: int, # the raw gpu index (0, 1, 2, ...)
+    visible_devices: list[int], # the list to be used in CUDA_VISIBLE_DEVICES
+):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
 
@@ -29,13 +27,13 @@ def setup_model_and_training(args, train_args, dataset_fn):
     Returns:
         Trainer object configured for multi-GPU training
     """
+    gpu_ith = visible_devices.index(gpu_index)
     # Initialize model and tokenizer
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.model_name,
-        max_seq_length=args.max_seq_length,
+        model_name=hyper_config.model_name,
+        max_seq_length=hyper_config.max_seq_length,
         dtype=None,
     )
-    gpu_ith = args.visible_devices.index(args.gpu_index)
 
     ds_train, ds_test = dataset_fn(tokenizer, test_ratio=0.1)
 
@@ -69,20 +67,20 @@ def setup_model_and_training(args, train_args, dataset_fn):
         train_dataset=ds_train,
         eval_dataset=ds_test if gpu_ith == 0 else None,
         dataset_text_field="text",
-        max_seq_length=args.max_seq_length,
+        max_seq_length=hyper_config.max_seq_length,
         dataset_num_proc=2,
-        packing=args.packing,
-        args=train_args,
+        packing=hyper_config.packing,
+        args=hf_train_args,
     )
-    max_len_ds = len(args.visible_devices) * (
-        len(trainer.train_dataset) // len(args.visible_devices)
+    max_len_ds = len(visible_devices) * (
+        len(trainer.train_dataset) // len(visible_devices)
     )
     trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
     trainer.train_dataset = trainer.train_dataset.shard(
-        num_shards=len(args.visible_devices), index=gpu_ith
+        num_shards=len(visible_devices), index=gpu_ith
     )
 
-    if args.loss_type == "target_only":
+    if hyper_config.loss_type == "target_only":
         from unsloth.chat_templates import train_on_responses_only
 
         if "<|im_start|>" in tokenizer.chat_template:
