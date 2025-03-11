@@ -1,14 +1,13 @@
-import fire
+import argparse
 from fastcore.all import threaded
 from loguru import logger
-from typing import Literal
 from transformers.training_args import TrainingArguments
 from HyperSloth.app_config import HyperSlothConfig
 
 
 @threaded(process=True)
 def run(
-    gpu,
+    gpu: int,
     hyper_config: HyperSlothConfig,
     train_args: TrainingArguments,
 ):
@@ -38,15 +37,27 @@ def run(
 
     trainer.train()
 
+import importlib.util
 
-def train(
-    config_py="configs/hypersloth_config_example.py",
-):
-    config_module = __import__(
-        config_py.replace("/", ".").replace(".py", ""), fromlist=[""]
-    )
-    hyper_config = config_module.hyper_config
+def load_config_from_path(config_path: str):
+    spec = importlib.util.spec_from_file_location("config_module", config_path)
+    config_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(config_module)
+    return config_module
+
+def train(config_file: str):
+    import os
+
+    config_file = os.path.abspath(config_file)
+    assert os.path.exists(config_file), f"Config file {config_file} not found"
+
+    config_module = load_config_from_path(config_file)
+
+    hyper_config = config_module.hyper_config # type is HyperSlothConfig which is dataclass
     training_config = config_module.training_config
+    from speedy_utils import fprint
+    hyper_config_dict = hyper_config.__dict__
+    fprint({**hyper_config_dict, **training_config})
 
     for gpu_index in hyper_config.gpus:
         logger.debug(f"Running on GPU {gpu_index}")
@@ -56,15 +67,33 @@ def train(
             train_args=training_config,
         )
 
-
 def init():
     import os
 
-    file = 'https://raw.githubusercontent.com/anhvth/hypersloth/refs/heads/main/configs/hypersloth_config_example.py'
-    local_file = 'hypersloth_config.py'
+    file = "https://raw.githubusercontent.com/anhvth/hypersloth/refs/heads/main/configs/hypersloth_config_example.py"
+    local_file = "hypersloth_config.py"
     os.system(f"wget {file} -O {local_file}")
     logger.info(f"Downloaded {file} to {local_file}")
 
 
+def main():
+    parser = argparse.ArgumentParser(description="HyperSloth CLI")
+    subparsers = parser.add_subparsers(dest="command")
+
+    train_parser = subparsers.add_parser("train", help="Train the model")
+    train_parser.add_argument("config_file", type=str, help="Path to the config file")
+
+    init_parser = subparsers.add_parser("init", help="Initialize the configuration")
+
+    args = parser.parse_args()
+
+    if args.command == "train":
+        train(args.config_file)
+    elif args.command == "init":
+        init()
+    else:
+        parser.print_help()
+
+
 if __name__ == "__main__":
-    fire.Fire(train)
+    main()
