@@ -24,9 +24,6 @@ def setup_model_and_training(
     Returns:
         Trainer object configured for multi-GPU training
     """
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-    # import must be here to avoid gpu setup before model is loaded
     from unsloth import \
         FastLanguageModel  
 

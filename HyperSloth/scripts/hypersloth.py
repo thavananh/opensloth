@@ -1,6 +1,7 @@
 import fire
 from fastcore.all import threaded
 from loguru import logger
+
 from transformers.training_args import TrainingArguments
 from HyperSloth.app_config import HyperSlothConfig
 
@@ -13,14 +14,16 @@ def run(
 ):
     import os
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    from unsloth import FastLanguageModel
 
     trainer = setup_model_and_training(
         gpu=gpu,
         hyper_config=hyper_config,
-        hf_train_args=train_args,
+        hf_train_args=TrainingArguments(**train_args),
     )
 
     if len(hyper_config.gpus) > 1:
@@ -41,10 +44,8 @@ def main(
     config_module = __import__(
         config_py.replace("/", ".").replace(".py", ""), fromlist=[""]
     )
-    hyper_config: HyperSlothConfig = config_module.hyper_config
-    training_config: TrainingArguments = TrainingArguments(
-        **config_module.training_config
-    )
+    hyper_config = config_module.hyper_config
+    training_config = config_module.training_config
 
     for gpu_index in hyper_config.gpus:
         logger.debug(f"Running on GPU {gpu_index}")
