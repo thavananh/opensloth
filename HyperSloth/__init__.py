@@ -1,1 +1,1 @@
-from .app_config import HyperSlothConfig
+from . import app_config
