@@ -58,14 +58,12 @@ def train(
 
 
 def init():
-    import shutil, os
+    import os
 
-    this_file_dir = os.path.dirname(__file__)
-    abs_path_config = os.path.join(
-        this_file_dir, "../../configs/hypersloth_config_example.py"
-    )
-    shutil.copyfile(abs_path_config, "hypersloth_config.py")
-    logger.info(f"Config file created at hypersloth_config.py")
+    file = 'https://github.com/anhvth/hypersloth/blob/b771c3442d0159b2cdadb3bea9a6739ecd34d59b/configs/hypersloth_config_example.py'
+    local_file = 'hypersloth_config.py'
+    os.system(f"wget {file} -O {local_file}")
+    logger.info(f"Downloaded {file} to {local_file}")
 
 
 if __name__ == "__main__":
