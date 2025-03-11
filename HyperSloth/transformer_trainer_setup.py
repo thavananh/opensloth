@@ -10,7 +10,7 @@ from .app_config import HyperSlothConfig
 
 
 def setup_model_and_training(
-    gpu:int,
+    gpu: int,
     hyper_config: HyperSlothConfig,
     hf_train_args: TrainingArguments,
 ):
@@ -24,13 +24,13 @@ def setup_model_and_training(
     Returns:
         Trainer object configured for multi-GPU training
     """
-    from unsloth import \
-        FastLanguageModel  
+    from unsloth import FastLanguageModel
 
     from HyperSloth.dataset_utils import load_sharegpt_dataset
+
     dataset_fn = lambda tokenizer, test_ratio: load_sharegpt_dataset(
-                hyper_config.dataset_file, tokenizer, test_ratio
-            )
+        hyper_config.dataset_file, tokenizer, test_ratio
+    )
     gpu_ith = hyper_config.gpus.index(gpu)
     # Initialize model and tokenizer
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -44,17 +44,9 @@ def setup_model_and_training(
     # Configure PEFT model
     model = FastLanguageModel.get_peft_model(
         model,
-        r=16,
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
-        lora_alpha=16,
+        r=hyper_config.lora_rank,
+        target_modules=hyper_config.target_modules,
+        lora_alpha=hyper_config.lora_alpha,
         lora_dropout=0,
         bias="none",
         use_gradient_checkpointing="unsloth",

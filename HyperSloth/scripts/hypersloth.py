@@ -37,13 +37,16 @@ def run(
 
     trainer.train()
 
+
 import importlib.util
+
 
 def load_config_from_path(config_path: str):
     spec = importlib.util.spec_from_file_location("config_module", config_path)
     config_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(config_module)
     return config_module
+
 
 def train(config_file: str):
     import os
@@ -53,11 +56,16 @@ def train(config_file: str):
 
     config_module = load_config_from_path(config_file)
 
-    hyper_config = config_module.hyper_config # type is HyperSlothConfig which is dataclass
+    hyper_config = (
+        config_module.hyper_config
+    )  # type is HyperSlothConfig which is dataclass
     training_config = config_module.training_config
-    from speedy_utils import fprint
+    import tabulate
+
     hyper_config_dict = hyper_config.__dict__
-    fprint({**hyper_config_dict, **training_config})
+    _s = {**hyper_config_dict, **training_config}
+    _s = tabulate.tabulate(_s.items(), headers=["Key", "Value"])
+    logger.info("\n" + _s)
 
     for gpu_index in hyper_config.gpus:
         logger.debug(f"Running on GPU {gpu_index}")
@@ -67,7 +75,8 @@ def train(config_file: str):
             train_args=training_config,
         )
 
-def init():
+
+def init_config():
     import os
 
     file = "https://raw.githubusercontent.com/anhvth/hypersloth/refs/heads/main/configs/hypersloth_config_example.py"
@@ -90,7 +99,7 @@ def main():
     if args.command == "train":
         train(args.config_file)
     elif args.command == "init":
-        init()
+        init_config()
     else:
         parser.print_help()
 

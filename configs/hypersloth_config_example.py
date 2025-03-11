@@ -8,14 +8,26 @@ hyper_config = HyperSlothConfig(
     max_seq_length=2048,
     loss_type="target_only",
     packing=False,
-    gpus=[0,1,2],
+    gpus=[0, 1, 2],
+    target_modules=[
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ],
+    lora_alpha=16,
+    lora_rank=16,
+    load_in_4bit=True,
 )
 
 # MUST NOT INITIALIZE DEVICE BEFORE threaded.run() IN HyperSloth/scripts/hypersloth.py
 training_config = dict(
     output_dir="model_training_outputs/debug",
     per_device_train_batch_size=8,
-    learning_rate=0.0002,  
+    learning_rate=0.0002,
     gradient_accumulation_steps=16,
     per_device_eval_batch_size=2,
     eval_steps=100,
