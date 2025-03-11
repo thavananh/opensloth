@@ -19,5 +19,5 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-hps-train = "HyperSloth.scripts.hypersloth:main"
-hps-init = "HyperSloth.scripts.hypersloth:init"
+hypersloth-train = "HyperSloth.scripts.hypersloth:main"
+hypersloth-init = "HyperSloth.scripts.hypersloth:init"
