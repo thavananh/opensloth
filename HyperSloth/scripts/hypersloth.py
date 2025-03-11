@@ -60,7 +60,7 @@ def train(
 def init():
     import os
 
-    file = 'https://github.com/anhvth/hypersloth/blob/main/configs/hypersloth_config_example.py'
+    file = 'https://raw.githubusercontent.com/anhvth/hypersloth/refs/heads/main/configs/hypersloth_config_example.py'
     local_file = 'hypersloth_config.py'
     os.system(f"wget {file} -O {local_file}")
     logger.info(f"Downloaded {file} to {local_file}")
