@@ -40,7 +40,7 @@ class MmapGradientSync:
         model: torch.nn.Module,
         grad_dir: str,
         gpu: int,
-        visible_devices: List[int],
+        gpus: List[int],
         lock_dir: str = "/dev/shm",
     ):
         """
@@ -51,12 +51,10 @@ class MmapGradientSync:
           gpus (List[int]): List of ALL GPU indices in the job (for counting).
           lock_dir (str, optional): Directory for .lock files (defaults to grad_dir).
         """
-        self.is_main = gpu == visible_devices[0]
+        self.is_main = gpu == gpus[0]
         self.grad_dir = grad_dir
         self.gpu = gpu
-        self.visible_devices = (
-            visible_devices  # store the entire list for synchronization checks
-        )
+        self.visible_devices = gpus  # store the entire list for synchronization checks
         self.lock_dir = lock_dir if lock_dir is not None else grad_dir
 
         # Create directories if needed
@@ -179,9 +177,7 @@ class MmapGradientSync:
         # Parallelize across parameters
         multi_thread(self._accumulate_one_param, tasks)
 
-        logger.debug(
-            "[GPU {}] Accumulated local gradients into memmaps.", self.gpu
-        )
+        logger.debug("[GPU {}] Accumulated local gradients into memmaps.", self.gpu)
 
         # Write a "done writing" file for this GPU
         write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu}.txt"
@@ -216,9 +212,7 @@ class MmapGradientSync:
         Wait until all GPUs have read gradients
         (presence of count_read_gpu{i}.txt for each i in self.gpus).
         """
-        logger.debug(
-            "[GPU {}] Waiting for all GPUs to read gradients..", self.gpu
-        )
+        logger.debug("[GPU {}] Waiting for all GPUs to read gradients..", self.gpu)
         while True:
             count = 0
             for gpu_id in self.visible_devices:
@@ -269,9 +263,7 @@ class MmapGradientSync:
             shape = info["shape"]
             param.grad = torch.from_numpy(arr).view(shape).to(param.device)
 
-        logger.debug(
-            "[GPU {}] Read final gradients from memmaps into model.", self.gpu
-        )
+        logger.debug("[GPU {}] Read final gradients from memmaps into model.", self.gpu)
 
         # Write a "done reading" file for this GPU
         read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu}.txt"
@@ -323,25 +315,25 @@ class MmapGradientSync:
 
 
 class MmapGradSyncCallback(TrainerCallback):
-    def __init__(self, model, grad_dir, gpu, visible_devices):
+    def __init__(self, model, grad_dir, gpu, gpus):
         self.model = model
         self.grad_dir = grad_dir
         self.gpu_index = gpu
-        self.visible_devices = visible_devices
-        self.is_main = gpu == visible_devices[0]
+        self.gpus = gpus
+        self.is_main = gpu == gpus[0]
 
         self.grad_sync = MmapGradientSync(
             model,
             grad_dir,
             gpu,
-            visible_devices,
+            gpus,
         )
         os.makedirs(self.grad_dir, exist_ok=True)
         self.loss_file = np.memmap(
             os.path.join(self.grad_dir, "loss.mmap"),
             dtype="float32",
             mode="w+",
-            shape=(len(self.visible_devices),),
+            shape=(len(self.gpus),),
         )
 
     def on_pre_optimizer_step(
@@ -364,7 +356,7 @@ class MmapGradSyncCallback(TrainerCallback):
 
     def on_log(self, args, state, control, **kwargs):
         if "loss" in state.log_history[-1]:
-            gputh = self.visible_devices.index(self.gpu_index)
+            gputh = self.gpus.index(self.gpu_index)
             self.loss_file[gputh] = np.float32(state.log_history[-1]["loss"])
             t = time.time()
             if self.is_main:
@@ -386,5 +378,3 @@ class MmapGradSyncCallback(TrainerCallback):
                         break
                     time.sleep(0.01)
             t = time.time() - t
-
-        

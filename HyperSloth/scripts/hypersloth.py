@@ -1,7 +1,7 @@
 import fire
 from fastcore.all import threaded
 from loguru import logger
-
+from typing import Literal
 from transformers.training_args import TrainingArguments
 from HyperSloth.app_config import HyperSlothConfig
 
@@ -31,6 +31,7 @@ def run(
             model=trainer.model,
             grad_dir=hyper_config.grad_dir,
             gpu=gpu,
+            gpus=hyper_config.gpus,
         )
         logger.info(f"Using gradient sync callback for GPU {gpu}")
         trainer.add_callback(grad_sync_cb)
@@ -38,7 +39,7 @@ def run(
     trainer.train()
 
 
-def main(
+def train(
     config_py="configs/hypersloth_config_example.py",
 ):
     config_module = __import__(
@@ -56,5 +57,16 @@ def main(
         )
 
 
+def init():
+    import shutil, os
+
+    this_file_dir = os.path.dirname(__file__)
+    abs_path_config = os.path.join(
+        this_file_dir, "../../configs/hypersloth_config_example.py"
+    )
+    shutil.copyfile(abs_path_config, "hypersloth_config.py")
+    logger.info(f"Config file created at hypersloth_config.py")
+
+
 if __name__ == "__main__":
-    fire.Fire(main)
+    fire.Fire(train)

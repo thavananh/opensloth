@@ -8,7 +8,7 @@ hyper_config = HyperSlothConfig(
     max_seq_length=2048,
     loss_type="target_only",
     packing=False,
-    gpus=[0],
+    gpus=[0,1,2],
 )
 
 # MUST NOT INITIALIZE DEVICE BEFORE threaded.run() IN HyperSloth/scripts/hypersloth.py
