@@ -32,4 +32,4 @@ class HyperSlothConfig:
     load_in_4bit: bool = True
 
     instruction_part = "<｜User｜>"
-    instruction_part = "<｜Assistant｜>"
+    response_part = "<｜Assistant｜>"

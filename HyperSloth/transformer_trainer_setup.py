@@ -8,7 +8,7 @@ from transformers import TrainingArguments
 
 from .app_config import HyperSlothConfig
 
-from unsloth.tokenizer_utils import load_correct_tokenizer,_load_correct_tokenizer
+from unsloth.tokenizer_utils import load_correct_tokenizer, _load_correct_tokenizer
 
 
 def setup_model_and_training(
@@ -85,13 +85,12 @@ def setup_model_and_training(
         if "<|im_start|>" in tokenizer.chat_template:
             instruct_part = "<|im_start|>system\n"
             response_part = "<|im_start|>assistant\n"
-        else:
-            assert (
-                "<｜Assistant｜>" in tokenizer.chat_template
-            ), f'{tokenizer} does not have "<｜Assistant｜>" or "<|im_start|>"'
+        elif "<｜Assistant｜>" in tokenizer.chat_template:
             instruct_part = hyper_config.instruction_part or "<｜User｜>"
             response_part = hyper_config.response_part or "<｜Assistant｜>"
-            
+        else:
+            raise ValueError("Unknown chat template")
+
         trainer = train_on_responses_only(
             trainer,
             instruction_part=instruct_part,
