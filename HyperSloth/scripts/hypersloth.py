@@ -11,11 +11,11 @@ def run(
     train_args: TrainingArguments,
 ):
     import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
     from unsloth import FastLanguageModel
 
     trainer = setup_model_and_training(
@@ -67,20 +67,23 @@ def train(config_file: str):
     _s = {**hyper_config_dict, **training_config}
     _s = tabulate.tabulate(_s.items(), headers=["Key", "Value"])
     logger.info("\n" + _s)
-    if len(hyper_config.gpus) > 1:
-        for gpu_index in hyper_config.gpus:
+    # if len(hyper_config.gpus) > 1:
+    for gpu_index in hyper_config.gpus:
+        is_main = gpu_index == hyper_config.gpus[0]
+        if is_main:
+            logger.info(f"Running on GPU {gpu_index}")
+            run(
+                gpu_index,
+                hyper_config=hyper_config,
+                train_args=training_config,
+            )
+        else:
             logger.debug(f"Running on GPU {gpu_index}")
             run_in_process(
                 gpu_index,
                 hyper_config=hyper_config,
                 train_args=training_config,
             )
-    else:
-        run(
-            hyper_config.gpus[0],
-            hyper_config=hyper_config,
-            train_args=training_config,
-        )
 
 
 def init_config():
@@ -90,24 +93,6 @@ def init_config():
     local_file = "hypersloth_config.py"
     os.system(f"wget {file} -O {local_file}")
     logger.info(f"Downloaded {file} to {local_file}")
-
-
-def prepare_model(model_name, tokenizer_name, output_dir):
-    # from unsloth import FastLanguageModel
-    # model, tokenizer = FastLanguageModel.from_pretrained(
-    # model_name = "ModelSpace/GemmaX2-28-9B-v0.1", # YOUR MODEL YOU USED FOR TRAINING
-    # max_seq_length = max_seq_length,
-    # dtype = dtype,
-    # load_in_4bit = True,
-    # )
-    from transformers import AutoModel, AutoTokenizer
-    import torch
-
-    model = AutoModel.from_pretrained(model_name, torch_dtype=torch.bfloat16)
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-
-    model.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
 
 
 def main():

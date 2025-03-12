@@ -16,7 +16,7 @@ def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
 
     dataset_raw = dataset_raw
 
-    tokenizer = fix_think_chat_template_tokenizer(tokenizer)
+    # tokenizer = fix_think_chat_template_tokenizer(tokenizer)
 
     def format_chat_template(row: Dict[str, Any]) -> Dict[str, Any]:
         row["text"] = tokenizer.apply_chat_template(row["messages"], tokenize=False)

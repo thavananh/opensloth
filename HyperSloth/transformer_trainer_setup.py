@@ -81,18 +81,15 @@ def setup_model_and_training(
 
     if hyper_config.loss_type == "target_only":
         from unsloth.chat_templates import train_on_responses_only
-
-        logger.info(f"Instruction part: {instruct_part_tokens}")
-        logger.info(f"Response part: {response_part_tokens}")
-
+        instruction_part = "<bos><start_of_turn>user\n"
+        response_part = "<start_of_turn>model\n"
         trainer = train_on_responses_only(
             trainer,
-            instruction_part=instruct_part,
+            instruction_part=instruction_part,
             response_part=response_part,
         )
 
     _debug_dataloader(trainer)
-    #
     return trainer
 
 

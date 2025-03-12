@@ -6,9 +6,6 @@ from dataclasses import field
 @dataclass
 class HyperSlothConfig:
     """Configuration for HyperSloth training."""
-    instruction_part = None
-    response_part = None
-
     dataset_file: str = "./data/cod_6k5.json"
     packing: bool = False
     model_name: str = "unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit"

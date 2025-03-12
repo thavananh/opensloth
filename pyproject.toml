@@ -20,4 +20,5 @@ packages = [
 
 [tool.poetry.scripts]
 hypersloth-cli = "HyperSloth.scripts.hypersloth:main"
+hypersloth-prepare-unsloth-model = "HyperSloth.scripts.prepare_model:main"
 # hypersloth-init = "HyperSloth.scripts.hypersloth:init"
