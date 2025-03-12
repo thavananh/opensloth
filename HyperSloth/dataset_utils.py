@@ -12,11 +12,10 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
     # Load and shard dataset for this GPU
-    dataset_raw = load_by_ext(file)
-
-    dataset_raw = dataset_raw
-
-    # tokenizer = fix_think_chat_template_tokenizer(tokenizer)
+    files = file.split(",")
+    dataset_raw = []
+    for file in files:
+        dataset_raw += load_by_ext(file)
 
     def format_chat_template(row: Dict[str, Any]) -> Dict[str, Any]:
         row["text"] = tokenizer.apply_chat_template(row["messages"], tokenize=False)

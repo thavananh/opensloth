@@ -70,7 +70,7 @@ def train(config_file: str):
     logger.info("\n" + _s)
     
     logger.info('Cleaning up previous runs')
-    os.system(f'rm -rf {hyper_config.hyper_config}')
+    os.system(f'rm -rf {hyper_config.grad_dir}/*')
     
     if len(hyper_config.gpus) > 1:
         for gpu_index in hyper_config.gpus:
