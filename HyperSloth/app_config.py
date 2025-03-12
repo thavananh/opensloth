@@ -6,6 +6,8 @@ from dataclasses import field
 @dataclass
 class HyperSlothConfig:
     """Configuration for HyperSloth training."""
+    instruction_part = None
+    response_part = None
 
     dataset_file: str = "./data/cod_6k5.json"
     packing: bool = False
@@ -31,5 +33,3 @@ class HyperSlothConfig:
     lora_rank: int = 16
     load_in_4bit: bool = True
 
-    instruction_part = "<｜User｜>"
-    response_part = "<｜Assistant｜>"

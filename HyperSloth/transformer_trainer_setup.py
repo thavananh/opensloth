@@ -82,14 +82,8 @@ def setup_model_and_training(
     if hyper_config.loss_type == "target_only":
         from unsloth.chat_templates import train_on_responses_only
 
-        if "<|im_start|>" in tokenizer.chat_template:
-            instruct_part = "<|im_start|>system\n"
-            response_part = "<|im_start|>assistant\n"
-        elif "<｜Assistant｜>" in tokenizer.chat_template:
-            instruct_part = hyper_config.instruction_part or "<｜User｜>"
-            response_part = hyper_config.response_part or "<｜Assistant｜>"
-        else:
-            raise ValueError("Unknown chat template")
+        logger.info(f"Instruction part: {instruct_part_tokens}")
+        logger.info(f"Response part: {response_part_tokens}")
 
         trainer = train_on_responses_only(
             trainer,

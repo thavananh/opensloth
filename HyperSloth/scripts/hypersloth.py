@@ -57,13 +57,13 @@ def train(config_file: str):
 
     config_module = load_config_from_path(config_file)
 
-    hyper_config = (
-        config_module.hyper_config
-    )  # type is HyperSlothConfig which is dataclass
+    hyper_config_dict = config_module.hyper_config
+
     training_config = config_module.training_config
     import tabulate
+    from fastcore.all import dict2obj
 
-    hyper_config_dict = hyper_config.__dict__
+    hyper_config = dict2obj(hyper_config_dict)
     _s = {**hyper_config_dict, **training_config}
     _s = tabulate.tabulate(_s.items(), headers=["Key", "Value"])
     logger.info("\n" + _s)
