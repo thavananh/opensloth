@@ -30,3 +30,6 @@ class HyperSlothConfig:
     lora_alpha: int = 16
     lora_rank: int = 16
     load_in_4bit: bool = True
+
+    instruction_part = "<｜User｜>"
+    instruction_part = "<｜Assistant｜>"

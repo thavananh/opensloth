@@ -92,6 +92,24 @@ def init_config():
     logger.info(f"Downloaded {file} to {local_file}")
 
 
+def prepare_model(model_name, tokenizer_name, output_dir):
+    # from unsloth import FastLanguageModel
+    # model, tokenizer = FastLanguageModel.from_pretrained(
+    # model_name = "ModelSpace/GemmaX2-28-9B-v0.1", # YOUR MODEL YOU USED FOR TRAINING
+    # max_seq_length = max_seq_length,
+    # dtype = dtype,
+    # load_in_4bit = True,
+    # )
+    from transformers import AutoModel, AutoTokenizer
+    import torch
+
+    model = AutoModel.from_pretrained(model_name, torch_dtype=torch.bfloat16)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+    model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+
 def main():
     parser = argparse.ArgumentParser(description="HyperSloth CLI")
     subparsers = parser.add_subparsers(dest="command")

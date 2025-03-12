@@ -21,6 +21,9 @@ hyper_config = HyperSlothConfig(
     lora_alpha=16,
     lora_rank=16,
     load_in_4bit=True,
+    
+    instruction_part = "<｜User｜>"
+    instruction_part = "<｜Assistant｜>"
 )
 
 # MUST NOT INITIALIZE DEVICE BEFORE threaded.run() IN HyperSloth/scripts/hypersloth.py

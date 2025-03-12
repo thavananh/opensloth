@@ -8,6 +8,8 @@ from transformers import TrainingArguments
 
 from .app_config import HyperSlothConfig
 
+from unsloth.tokenizer_utils import load_correct_tokenizer,_load_correct_tokenizer
+
 
 def setup_model_and_training(
     gpu: int,
@@ -37,6 +39,7 @@ def setup_model_and_training(
         model_name=hyper_config.model_name,
         max_seq_length=hyper_config.max_seq_length,
         dtype=None,
+        fix_tokenizer=False,
     )
 
     ds_train, ds_test = dataset_fn(tokenizer, test_ratio=0.1)
@@ -86,8 +89,9 @@ def setup_model_and_training(
             assert (
                 "<｜Assistant｜>" in tokenizer.chat_template
             ), f'{tokenizer} does not have "<｜Assistant｜>" or "<|im_start|>"'
-            instruct_part = "<｜begin▁of▁sentence｜><｜User｜>"
-            response_part = "<｜Assistant｜>"
+            instruct_part = hyper_config.instruction_part or "<｜User｜>"
+            response_part = hyper_config.response_part or "<｜Assistant｜>"
+            
         trainer = train_on_responses_only(
             trainer,
             instruction_part=instruct_part,
