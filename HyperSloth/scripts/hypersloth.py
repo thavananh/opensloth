@@ -11,6 +11,7 @@ def run(
     train_args: TrainingArguments,
 ):
     import os
+
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
@@ -67,23 +68,25 @@ def train(config_file: str):
     _s = {**hyper_config_dict, **training_config}
     _s = tabulate.tabulate(_s.items(), headers=["Key", "Value"])
     logger.info("\n" + _s)
-    # if len(hyper_config.gpus) > 1:
-    for gpu_index in hyper_config.gpus:
-        is_main = gpu_index == hyper_config.gpus[0]
-        if is_main:
-            logger.info(f"Running on GPU {gpu_index}")
-            run(
-                gpu_index,
-                hyper_config=hyper_config,
-                train_args=training_config,
-            )
-        else:
+    
+    logger.info('Cleaning up previous runs')
+    os.system(f'rm -rf {hyper_config.hyper_config}')
+    
+    if len(hyper_config.gpus) > 1:
+        for gpu_index in hyper_config.gpus:
             logger.debug(f"Running on GPU {gpu_index}")
             run_in_process(
                 gpu_index,
                 hyper_config=hyper_config,
                 train_args=training_config,
             )
+
+    else:
+        run(
+            gpu=hyper_config.gpus[0],
+            hyper_config=hyper_config,
+            train_args=training_config,
+        )
 
 
 def init_config():
