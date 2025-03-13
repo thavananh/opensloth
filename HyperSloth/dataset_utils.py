@@ -12,7 +12,13 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
     # Load and shard dataset for this GPU
-    files = file.split(",")
+    if "," in file:
+        files = file.split(",")
+
+    elif "*" in file:
+        import glob
+
+        files = glob.glob(file)
     dataset_raw = []
     for file in files:
         dataset_raw += load_by_ext(file.strip())
