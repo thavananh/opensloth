@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = [{ name = "anhvth", email = "anhvth.226@gmail.com" }]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = ["pyyaml (>=6.0.2,<7.0.0)", "jupyterlab (>=4.3.5,<5.0.0)"]
 
 [build-system]
@@ -21,4 +21,5 @@ packages = [
 [tool.poetry.scripts]
 hypersloth-cli = "HyperSloth.scripts.hypersloth:main"
 hypersloth-prepare-unsloth-model = "HyperSloth.scripts.prepare_model:main"
+sim-vllm = "HyperSloth.scripts.vllm_serve:main"
 # hypersloth-init = "HyperSloth.scripts.hypersloth:init"

@@ -50,7 +50,7 @@ def load_config_from_path(config_path: str):
     return config_module
 
 
-def train(config_file: str):
+def train(config_file: str, **kwargs):
     import os
 
     config_file = os.path.abspath(config_file)
@@ -59,6 +59,7 @@ def train(config_file: str):
     config_module = load_config_from_path(config_file)
 
     hyper_config_dict = config_module.hyper_config
+    hyper_config_dict = {**hyper_config_dict, **kwargs}
 
     training_config = config_module.training_config
     import tabulate
@@ -68,10 +69,10 @@ def train(config_file: str):
     _s = {**hyper_config_dict, **training_config}
     _s = tabulate.tabulate(_s.items(), headers=["Key", "Value"])
     logger.info("\n" + _s)
-    
-    logger.info('Cleaning up previous runs')
-    os.system(f'rm -rf {hyper_config.grad_dir}/*')
-    
+
+    logger.info("Cleaning up previous runs")
+    os.system(f"rm -rf {hyper_config.grad_dir}/*")
+
     if len(hyper_config.gpus) > 1:
         for gpu_index in hyper_config.gpus:
             logger.debug(f"Running on GPU {gpu_index}")

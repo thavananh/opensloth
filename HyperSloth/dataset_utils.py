@@ -19,6 +19,8 @@ def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
         import glob
 
         files = glob.glob(file)
+    else:
+        files = [file]
     dataset_raw = []
     for file in files:
         dataset_raw += load_by_ext(file.strip())
