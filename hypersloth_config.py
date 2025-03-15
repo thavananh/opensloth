@@ -1,5 +1,7 @@
+from HyperSloth.app_config import HyperSlothConfig
 
-hyper_config = dict(
+
+hyper_config = HyperSlothConfig(
     dataset_file="data/cod_1k.json",
     model_name="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
     test_ratio=0.05,
