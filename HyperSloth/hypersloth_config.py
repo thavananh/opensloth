@@ -1,0 +1,112 @@
+from typing import List, Optional, Dict, Any, Union
+from pydantic import BaseModel, Field
+
+
+
+class DataConfig(BaseModel):
+    """Configuration for dataset handling and processing."""
+
+    dataset: str = "data/cod_1k.json"
+    test_ratio: float = 0.05
+    dataset_num_proc: int = 4
+    instruction_part: str = "Instruction:"
+    response_part: str = "Response:"
+
+    class Config:
+        """Pydantic configuration for DataConfig."""
+
+        extra = "allow"
+
+
+class TrainingConfig(BaseModel):
+    """Configuration for training setup and parameters."""
+
+    gpus: List[int] = Field(default=[0], description="List of GPU indices to use")
+    loss_type: str = Field(
+        default="target_only",
+        description="Loss calculation type: 'all' or 'target_only'",
+    )
+    packing: bool = Field(
+        default=False, description="Whether to use packing for training data"
+    )
+
+    class Config:
+        """Pydantic configuration for DataConfig."""
+
+        extra = "allow"
+
+
+class FastModelArgs(BaseModel):
+    """Configuration for Unsloth's FastModel initialization."""
+
+    model_name: str = "unsloth/gemma-3-4b-it"
+    max_seq_length: int = 2048
+    load_in_4bit: bool = True
+    load_in_8bit: bool = False
+    full_finetuning: bool = False
+    token: Optional[str] = None
+
+    class Config:
+        """Pydantic configuration for DataConfig."""
+
+        extra = "allow"
+
+
+class LoraArgs(BaseModel):
+    """Configuration for LoRA parameters in PEFT."""
+
+    finetune_vision_layers: bool = False
+    finetune_language_layers: bool = True
+    finetune_attention_modules: bool = True
+    finetune_mlp_modules: bool = True
+    r: int = 8
+    lora_alpha: int = 8
+    lora_dropout: float = 0.0
+    bias: str = "none"
+    random_state: int = 3407
+
+    class Config:
+        """Pydantic configuration for DataConfig."""
+
+        extra = "allow"
+
+
+class HyperConfig(BaseModel):
+    """Main configuration class combining all sub-configurations."""
+
+    grad_dir: str = "/dev/shm/hypersloth"
+    data: DataConfig = Field(default_factory=DataConfig)
+    training: TrainingConfig = Field(default_factory=TrainingConfig)
+    fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
+    lora_args: LoraArgs = Field(default_factory=LoraArgs)
+
+    class Config:
+        """Pydantic configuration for DataConfig."""
+
+        extra = "allow"
+
+
+class TrainingArgsConfig(BaseModel):
+    """Configuration for Hugging Face TrainingArguments."""
+
+    output_dir: str = "model_training_outputs/debug"
+    per_device_train_batch_size: int = 8
+    learning_rate: float = 2e-4
+    gradient_accumulation_steps: int = 16
+    per_device_eval_batch_size: int = 2
+    eval_steps: int = 100
+    logging_steps: int = 1
+    report_to: str = "tensorboard"
+    num_train_epochs: int = 1
+    lr_scheduler_type: str = "linear"
+    warmup_steps: int = 5
+    seed: int = 42
+    save_total_limit: int = 2
+    bf16: bool = True
+    fp16: bool = False
+    optim: str = "adamw_8bit"
+    weight_decay: float = 0.01
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for TrainingArguments initialization."""
+        return self.model_dump()

@@ -1,42 +1,51 @@
-hyper_config = dict(
+from HyperSloth.hypersloth_config import (
+    HyperConfig, 
+    TrainingArgsConfig,
+    FastModelArgs,
+    LoraArgs,
+    TrainingConfig,
+    DataConfig
+)
+
+# Main configuration using Pydantic models
+hyper_config_model = HyperConfig(
     grad_dir="/dev/shm/hypersloth",
-    data=dict(
-        dataset="data/cod_1k.json",
+    data=DataConfig(
+        # dataset="data/cod_1k.json",
+        dataset="mlabonne/FineTome-100k",
+        split="train",
         test_ratio=0.05,
         dataset_num_proc=4,
     ),
-    training=dict(
-        gpus=[0],
-        loss_type="all",  # Fixed argument reference
+    training=TrainingConfig(
+        gpus=range(8),
+        loss_type="all",
         packing=False,
     ),
-    # =====
-    fast_model_args=dict(
+    fast_model_args=FastModelArgs(
         model_name="unsloth/gemma-3-4b-it",
-        max_seq_length=2048,  # Choose any for long context!
-        load_in_4bit=True,  # 4 bit quantization to reduce memory
-        load_in_8bit=False,  # [NEW!] A bit more accurate, uses 2x memory
-        full_finetuning=False,  # [NEW!] We have full finetuning now!
-        # token = "hf_...", # use one if using gated models
+        max_seq_length=2048,
+        load_in_4bit=True,
+        load_in_8bit=False,
+        full_finetuning=False,
     ),
-    lora_args=dict(
-        finetune_vision_layers=False,  # Turn off for just text!
-        finetune_language_layers=True,  # Should leave on!
-        finetune_attention_modules=True,  # Attention good for GRPO
-        finetune_mlp_modules=True,  # SHould leave on always!
-        r=8,  # Larger = higher accuracy, but might overfit
-        lora_alpha=8,  # Recommended alpha == r at least
+    lora_args=LoraArgs(
+        finetune_vision_layers=False,
+        finetune_language_layers=True,
+        finetune_attention_modules=True,
+        finetune_mlp_modules=True,
+        r=8,
+        lora_alpha=8,
         lora_dropout=0,
         bias="none",
         random_state=3407,
     ),
-    
 )
 
-# MUST NOT INITIALIZE DEVICE BEFORE threaded.run() IN HyperSloth/scripts/hypersloth.py
-training_config = dict(
+# Training arguments using Pydantic model
+training_config_model = TrainingArgsConfig(
     output_dir="model_training_outputs/debug",
-    per_device_train_batch_size=8,
+    per_device_train_batch_size=2,
     learning_rate=0.0002,
     gradient_accumulation_steps=16,
     per_device_eval_batch_size=2,
@@ -53,3 +62,7 @@ training_config = dict(
     optim="adamw_8bit",
     weight_decay=0.01,
 )
+
+# Keeping the old dict versions for backward compatibility
+hyper_config = hyper_config_model.model_dump()
+training_config = training_config_model.model_dump()

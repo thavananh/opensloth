@@ -5,55 +5,10 @@ Handles weight synchronization, model setup, and distributed training coordinati
 
 from loguru import logger
 from transformers import TrainingArguments
-from unsloth.tokenizer_utils import load_correct_tokenizer, _load_correct_tokenizer
 
-
-from typing import List, Optional
-from pydantic import BaseModel
-
-
-class DataConfig(BaseModel):
-    dataset: str = "data/cod_1k.json"
-    test_ratio: float = 0.05
-    dataset_num_proc: int = 4
-    instruction_part: str = "Instruction:"
-    response_part: str = "Response:"
-
-
-class TrainingConfig(BaseModel):
-    gpus: List[int] = [0]
-    loss_type: str = "target_only"  # "target_only" from your config
-    packing: bool = False
-
-
-class FastModelArgs(BaseModel):
-    model_name: str = "unsloth/gemma-3-4b-it"
-    max_seq_length: int = 2048
-    load_in_4bit: bool = True
-    load_in_8bit: bool = False
-    full_finetuning: bool = False
-    # If you want to allow for a 'token' field:
-    token: Optional[str] = None
-
-
-class LoraArgs(BaseModel):
-    finetune_vision_layers: bool = False
-    finetune_language_layers: bool = True
-    finetune_attention_modules: bool = True
-    finetune_mlp_modules: bool = True
-    r: int = 8
-    lora_alpha: int = 8
-    lora_dropout: int = 0
-    bias: str = "none"
-    random_state: int = 3407
-
-
-class HyperConfig(BaseModel):
-    grad_dir: str = "/dev/shm/hypersloth"
-    data: DataConfig = DataConfig()
-    training: TrainingConfig = TrainingConfig()
-    fast_model_args: FastModelArgs = FastModelArgs()
-    lora_args: LoraArgs = LoraArgs()
+from .hypersloth_config import (
+    HyperConfig,
+)
 
 
 def setup_model_and_training(
@@ -79,19 +34,23 @@ def setup_model_and_training(
     gpu_ith = hyper_config.training.gpus[gpu]
 
     # Initialize model and tokenizer
-    model, tokenizer = FastModel.from_pretrained(**hyper_config.fast_model_args)
+    model, tokenizer = FastModel.from_pretrained(
+        **hyper_config.fast_model_args.model_dump()
+    )
 
     # Load dataset
     ds_train = get_chat_dataset(hyper_config.data.dataset, tokenizer=tokenizer)
     if hyper_config.data.test_ratio > 0:
-        ds = ds_train.train_test_split(test_size=hyper_config.data.test_ratio, shuffle=True)
+        ds = ds_train.train_test_split(
+            test_size=hyper_config.data.test_ratio, shuffle=True
+        )
         ds_train, ds_test = ds["train"], ds["test"]
         logger.info(f"Train size: {len(ds_train)}, Test size: {len(ds_test)}")
     else:
         ds_train, ds_test = ds_train, None
 
     # Apply PEFT model
-    model = FastModel.get_peft_model(model, **hyper_config.lora_args)
+    model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
 
     # Initialize trainer
     trainer = SFTTrainer(
