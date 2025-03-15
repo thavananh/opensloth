@@ -12,6 +12,8 @@ def merge_and_save_lora(
         lora_path: Local path to the LoRA adapter weights
         output_path: Where to save the merged model (defaults to lora_path + "-merged")
     """
+    import os
+    assert os.path.exists(lora_path), f"LoRA model not found at {lora_path}"
     from peft import AutoPeftModelForCausalLM
     from transformers import AutoTokenizer
 
