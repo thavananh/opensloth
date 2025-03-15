@@ -1,78 +1,53 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from datasets import Dataset
-from llm_utils import get_conversation_one_turn
-from speedy_utils import load_by_ext
 
-from .think_chat_template_tokenier_fix import fix_think_chat_template_tokenizer
 import warnings
+import os
+from datasets import load_dataset
+from typing import Any
+# from speedy_utils.all import *
+from datasets import load_dataset
+from unsloth.chat_templates import standardize_data_formats
+from datasets import Dataset
+
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
-def load_sharegpt_dataset(file, tokenizer, test_ratio=0.052):
-    # Load and shard dataset for this GPU
-    if "," in file:
-        files = file.split(",")
+def get_chat_dataset(
+    dataset_name_or_path: str, split: str = None, num_samples: int = None, tokenizer: Any = None
+) -> Any:
+    """
+    Load and preprocess the dataset.
 
-    elif "*" in file:
-        import glob
+    Args:
+        dataset_name (str): The name or json path
+        split (str): The dataset split to load.
+        num_samples (int): The number of samples to select from the dataset.
 
-        files = glob.glob(file)
+    Returns:
+        Any: The preprocessed dataset.
+    """
+
+    if os.path.exists(dataset_name_or_path):
+        dataset = Dataset.from_json(dataset_name_or_path)
     else:
-        files = [file]
-    dataset_raw = []
-    for file in files:
-        dataset_raw += load_by_ext(file.strip())
+        dataset = load_dataset(dataset_name_or_path, split=split)
+    dataset = standardize_data_formats(dataset)
 
-    def format_chat_template(row: Dict[str, Any]) -> Dict[str, Any]:
-        row["text"] = tokenizer.apply_chat_template(row["messages"], tokenize=False)
-        return row
+    def apply_chat_template(examples):
+        messages_key = "messages" if "messages" in examples else "conversations"
+        assert messages_key in examples, f"Dataset does not have {messages_key} key"
+        texts = tokenizer.apply_chat_template(examples[messages_key], tokenize=False)
+        return {"text": texts}
 
-    dataset_raw = [format_chat_template(row) for row in dataset_raw]
-
-    ds = Dataset.from_list(dataset_raw)
-
-    ds = ds.train_test_split(test_size=test_ratio, seed=42)
-    return ds["train"], ds["test"]
-
-
-def get_alpaca(tokenizer, test_ratio=0.1):
-    def formatting_prompts_func(examples):
-        instructions = examples["instruction"]
-        inputs = examples["input"]
-        outputs = examples["output"]
-        texts = []
-        for instruction, input, output in zip(instructions, inputs, outputs):
-            messages = get_conversation_one_turn(
-                instruction,
-                input,
-                output,
-            )
-            texts.append(tokenizer.apply_chat_template(messages, tokenize=False))
-        return {
-            "text": texts,
-        }
-
-    pass
-
-    from datasets import load_dataset
-
-    dataset = load_dataset("yahma/alpaca-cleaned", split="train")
-    dataset = dataset.map(
-        formatting_prompts_func,
-        batched=True,
-    )
-    # split train val
-    dataset = dataset.train_test_split(test_size=test_ratio, seed=42)
-    train_ds = dataset["train"]
-    # random shufle train_ds
-    train_ds = train_ds.shuffle(seed=42)
-    return train_ds, dataset["test"]
+    if num_samples:
+        num_samples = min(num_samples, len(dataset))
+        dataset = dataset.shuffle(seed=42)
+        dataset = dataset.select(range(num_samples))
+    if tokenizer:
+        dataset = dataset.map(apply_chat_template, batched=True)
+    return dataset
 
 
-if __name__ == "__main__":
-    from transformers import AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
-    train_ds, test_ds = get_alpaca(tokenizer, nsplits=2, split=0, test_ratio=0.1)

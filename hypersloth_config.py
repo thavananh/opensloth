@@ -1,28 +1,36 @@
-from HyperSloth.app_config import HyperSlothConfig
-
-
-hyper_config = HyperSlothConfig(
-    dataset_file="data/cod_1k.json",
-    model_name="unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit",
-    test_ratio=0.05,
-    max_seq_length=2048,
-    loss_type="target_only",
-    packing=False,
-    gpus=[0, 1, 2],
-    target_modules=[
-        "q_proj",
-        "k_proj",
-        "v_proj",
-        "o_proj",
-        "gate_proj",
-        "up_proj",
-        "down_proj",
-    ],
-    lora_alpha=16,
-    lora_rank=16,
-    load_in_4bit=True,
-    instruction_part=None,
-    response_part=None,
+hyper_config = dict(
+    grad_dir="/dev/shm/hypersloth",
+    data=dict(
+        dataset="data/cod_1k.json",
+        test_ratio=0.05,
+        dataset_num_proc=4,
+    ),
+    training=dict(
+        gpus=[0],
+        loss_type="all",  # Fixed argument reference
+        packing=False,
+    ),
+    # =====
+    fast_model_args=dict(
+        model_name="unsloth/gemma-3-4b-it",
+        max_seq_length=2048,  # Choose any for long context!
+        load_in_4bit=True,  # 4 bit quantization to reduce memory
+        load_in_8bit=False,  # [NEW!] A bit more accurate, uses 2x memory
+        full_finetuning=False,  # [NEW!] We have full finetuning now!
+        # token = "hf_...", # use one if using gated models
+    ),
+    lora_args=dict(
+        finetune_vision_layers=False,  # Turn off for just text!
+        finetune_language_layers=True,  # Should leave on!
+        finetune_attention_modules=True,  # Attention good for GRPO
+        finetune_mlp_modules=True,  # SHould leave on always!
+        r=8,  # Larger = higher accuracy, but might overfit
+        lora_alpha=8,  # Recommended alpha == r at least
+        lora_dropout=0,
+        bias="none",
+        random_state=3407,
+    ),
+    
 )
 
 # MUST NOT INITIALIZE DEVICE BEFORE threaded.run() IN HyperSloth/scripts/hypersloth.py

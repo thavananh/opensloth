@@ -2,12 +2,11 @@ import argparse
 from fastcore.all import threaded
 from loguru import logger
 from transformers.training_args import TrainingArguments
-from HyperSloth.app_config import HyperSlothConfig
 
 
 def run(
     gpu: int,
-    hyper_config: HyperSlothConfig,
+    hyper_config,
     train_args: TrainingArguments,
 ):
     import os
@@ -17,7 +16,6 @@ def run(
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
-    from unsloth import FastLanguageModel
 
     trainer = setup_model_and_training(
         gpu=gpu,
@@ -25,12 +23,12 @@ def run(
         hf_train_args=TrainingArguments(**train_args),
     )
 
-    if len(hyper_config.gpus) > 1:
+    if len(hyper_config.training.gpus) > 1:
         grad_sync_cb = MmapGradSyncCallback(
             model=trainer.model,
             grad_dir=hyper_config.grad_dir,
             gpu=gpu,
-            gpus=hyper_config.gpus,
+            gpus=hyper_config.training.gpus,
         )
         logger.info(f"Using gradient sync callback for GPU {gpu}")
         trainer.add_callback(grad_sync_cb)
@@ -60,20 +58,17 @@ def train(config_file: str, **kwargs):
     import tabulate
     from fastcore.all import dict2obj, obj2dict
 
-    hyper_config_dict = config_module.hyper_config
-    hyper_config_dict = {**hyper_config_dict, **kwargs, **obj2dict(HyperSlothConfig().__dict__)}
     training_config = config_module.training_config
-
-    hyper_config = dict2obj(hyper_config_dict)
-    _s = {**hyper_config_dict, **training_config}
+    hyper_config = dict2obj( config_module.hyper_config)
+    _s = {**config_module.hyper_config, **training_config}
     _s = tabulate.tabulate(_s.items(), headers=["Key", "Value"])
     logger.info("\n" + _s)
 
     logger.info("Cleaning up previous runs")
     os.system(f"rm -rf {hyper_config.grad_dir}/*")
 
-    if len(hyper_config.gpus) > 1:
-        for gpu_index in hyper_config.gpus:
+    if len(hyper_config.training.gpus) > 1:
+        for gpu_index in hyper_config.training.gpus:
             logger.debug(f"Running on GPU {gpu_index}")
             run_in_process(
                 gpu_index,
@@ -83,7 +78,7 @@ def train(config_file: str, **kwargs):
 
     else:
         run(
-            gpu=hyper_config.gpus[0],
+            gpu=hyper_config.training.gpus[0],
             hyper_config=hyper_config,
             train_args=training_config,
         )
