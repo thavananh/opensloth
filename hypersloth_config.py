@@ -19,8 +19,8 @@ hyper_config_model = HyperConfig(
         # num_samples=1000
     ),
     training=TrainingConfig(
-        # gpus=range(8),
-        gpus=range(1),
+        gpus=range(8),
+        # gpus=range(1),
         loss_type="all",
         packing=False,
     ),
