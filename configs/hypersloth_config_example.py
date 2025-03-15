@@ -6,7 +6,7 @@ hyper_config = dict(
     max_seq_length=2048,
     loss_type="target_only",
     packing=False,
-    gpus=[0, 1, 2],
+    gpus=[0],
     target_modules=[
         "q_proj",
         "k_proj",

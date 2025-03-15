@@ -57,13 +57,12 @@ def train(config_file: str, **kwargs):
     assert os.path.exists(config_file), f"Config file {config_file} not found"
 
     config_module = load_config_from_path(config_file)
+    import tabulate
+    from fastcore.all import dict2obj, obj2dict
 
     hyper_config_dict = config_module.hyper_config
-    hyper_config_dict = {**hyper_config_dict, **kwargs}
-
+    hyper_config_dict = {**hyper_config_dict, **kwargs, **obj2dict(HyperSlothConfig().__dict__)}
     training_config = config_module.training_config
-    import tabulate
-    from fastcore.all import dict2obj
 
     hyper_config = dict2obj(hyper_config_dict)
     _s = {**hyper_config_dict, **training_config}
