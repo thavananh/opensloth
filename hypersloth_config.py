@@ -18,7 +18,8 @@ hyper_config_model = HyperConfig(
         dataset_num_proc=4,
     ),
     training=TrainingConfig(
-        gpus=range(8),
+        # gpus=range(8),
+        gpus=range(1),
         loss_type="all",
         packing=False,
     ),

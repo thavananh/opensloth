@@ -107,6 +107,10 @@ class TrainingArgsConfig(BaseModel):
     optim: str = "adamw_8bit"
     weight_decay: float = 0.01
 
+    class Config:
+        """Pydantic configuration for DataConfig."""
+
+        extra = "allow"
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for TrainingArguments initialization."""
         return self.model_dump()
