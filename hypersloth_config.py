@@ -16,17 +16,17 @@ hyper_config_model = HyperConfig(
         # split="train",
         test_ratio=0.05,
         dataset_num_proc=4,
-        # num_samples=1000
+        num_samples=234_00,
     ),
     training=TrainingConfig(
-        gpus=range(8),
-        # gpus=range(1),
+        # gpus=range(8),
+        gpus=range(1),
         loss_type="all",
-        packing=False,
+        
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/gemma-3-27b-it",
-        max_seq_length=2048,
+        model_name="/mnt/data/huggingface-models/ModelSpace/GemmaX2-28-9B-v0.1-bnb-4bit",
+        max_seq_length=16_000,
         load_in_4bit=True,
         load_in_8bit=False,
         full_finetuning=False,
@@ -49,7 +49,7 @@ training_config_model = TrainingArgsConfig(
     output_dir="model_training_outputs/debug",
     per_device_train_batch_size=1,
     learning_rate=0.0002,
-    gradient_accumulation_steps=16,
+    gradient_accumulation_steps=8,
     per_device_eval_batch_size=2,
     eval_steps=100,
     logging_steps=1,
@@ -63,6 +63,7 @@ training_config_model = TrainingArgsConfig(
     fp16=False,
     optim="adamw_8bit",
     weight_decay=0.01,
+    packing=False,
 )
 
 # Keeping the old dict versions for backward compatibility

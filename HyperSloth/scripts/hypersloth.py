@@ -1,14 +1,16 @@
 import argparse
+import time
 from fastcore.all import threaded
 from loguru import logger
-from transformers.training_args import TrainingArguments
 from typing import Union, Dict, Any
+
+from HyperSloth.hypersloth_config import TrainingArgsConfig
 
 
 def run(
     gpu: int,
     hyper_config,
-    train_args: Union[Dict[str, Any], TrainingArguments],
+    train_args: Union[Dict[str, Any], TrainingArgsConfig],
 ):
     import os
 
@@ -19,7 +21,7 @@ def run(
 
     # Convert dictionary to TrainingArguments if needed
     if isinstance(train_args, dict):
-        hf_train_args = TrainingArguments(**train_args)
+        hf_train_args = TrainingArgsConfig(**train_args)
     else:
         hf_train_args = train_args
 
@@ -100,6 +102,7 @@ def train(config_file: str, **kwargs):
                 hyper_config=hyper_config,
                 train_args=training_config.to_dict(),
             )
+            time.sleep(1)
     else:
         run(
             gpu=hyper_config.training.gpus[0],

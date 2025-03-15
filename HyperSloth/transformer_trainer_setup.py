@@ -4,17 +4,16 @@ Handles weight synchronization, model setup, and distributed training coordinati
 """
 
 from loguru import logger
-from transformers import TrainingArguments
 
 from .hypersloth_config import (
-    HyperConfig,
+    HyperConfig,TrainingArgsConfig
 )
 
 
 def setup_model_and_training(
     gpu: int,
     hyper_config: HyperConfig,
-    hf_train_args: TrainingArguments,
+    hf_train_args: TrainingArgsConfig,
 ):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
@@ -56,7 +55,6 @@ def setup_model_and_training(
         dataset_text_field="text",
         max_seq_length=hyper_config.fast_model_args.max_seq_length,
         dataset_num_proc=hyper_config.data.dataset_num_proc,
-        packing=hyper_config.training.packing,
         args=hf_train_args,
     )
 

@@ -107,6 +107,7 @@ class TrainingArgsConfig(BaseModel):
     fp16: bool = False
     optim: str = "adamw_8bit"
     weight_decay: float = 0.01
+    packing: bool = False
 
     class Config:
         """Pydantic configuration for DataConfig."""
