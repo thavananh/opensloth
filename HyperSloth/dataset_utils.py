@@ -6,6 +6,7 @@ import warnings
 import os
 from datasets import load_dataset
 from typing import Any
+
 # from speedy_utils.all import *
 from datasets import load_dataset
 from unsloth.chat_templates import standardize_data_formats
@@ -16,7 +17,12 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def get_chat_dataset(
-    dataset_name_or_path: str, split: str = None, num_samples: int = None, tokenizer: Any = None
+    dataset_name_or_path: str,
+    split: str = None,
+    num_samples: int = None,
+    test_ratio: float = 0,
+    tokenizer: Any = None,
+    **kwargs,
 ) -> Any:
     """
     Load and preprocess the dataset.
@@ -34,6 +40,11 @@ def get_chat_dataset(
         dataset = Dataset.from_json(dataset_name_or_path)
     else:
         dataset = load_dataset(dataset_name_or_path, split=split)
+        try:
+            first_item = dataset[0]
+        except:
+            raise ValueError(f"You might forget to set split? {split=}")
+
     dataset = standardize_data_formats(dataset)
 
     def apply_chat_template(examples):
@@ -48,6 +59,10 @@ def get_chat_dataset(
         dataset = dataset.select(range(num_samples))
     if tokenizer:
         dataset = dataset.map(apply_chat_template, batched=True)
-    return dataset
 
-
+    if test_ratio > 0:
+        ds = dataset.train_test_split(test_size=test_ratio, shuffle=True, seed=42)
+        ds_train, ds_test = ds["train"], ds["test"]
+    else:
+        ds_train, ds_test = dataset, None
+    return ds_train, ds_test

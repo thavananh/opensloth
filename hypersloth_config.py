@@ -12,10 +12,11 @@ hyper_config_model = HyperConfig(
     grad_dir="/dev/shm/hypersloth",
     data=DataConfig(
         # dataset="data/cod_1k.json",
-        dataset="mlabonne/FineTome-100k",
-        split="train",
+        dataset_name_or_path="../localization/data/sharegpt/train_234k.json",
+        # split="train",
         test_ratio=0.05,
         dataset_num_proc=4,
+        # num_samples=1000
     ),
     training=TrainingConfig(
         # gpus=range(8),
@@ -24,7 +25,7 @@ hyper_config_model = HyperConfig(
         packing=False,
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/gemma-3-4b-it",
+        model_name="unsloth/gemma-3-27b-it",
         max_seq_length=2048,
         load_in_4bit=True,
         load_in_8bit=False,
@@ -46,7 +47,7 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="model_training_outputs/debug",
-    per_device_train_batch_size=2,
+    per_device_train_batch_size=1,
     learning_rate=0.0002,
     gradient_accumulation_steps=16,
     per_device_eval_batch_size=2,

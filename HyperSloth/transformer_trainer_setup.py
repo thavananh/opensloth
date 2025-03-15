@@ -39,15 +39,10 @@ def setup_model_and_training(
     )
 
     # Load dataset
-    ds_train = get_chat_dataset(hyper_config.data.dataset, tokenizer=tokenizer)
-    if hyper_config.data.test_ratio > 0:
-        ds = ds_train.train_test_split(
-            test_size=hyper_config.data.test_ratio, shuffle=True
-        )
-        ds_train, ds_test = ds["train"], ds["test"]
-        logger.info(f"Train size: {len(ds_train)}, Test size: {len(ds_test)}")
-    else:
-        ds_train, ds_test = ds_train, None
+    ds_train, ds_test = get_chat_dataset(
+        tokenizer=tokenizer, **hyper_config.data.model_dump()
+    )
+
 
     # Apply PEFT model
     model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
