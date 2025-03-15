@@ -16,17 +16,17 @@ hyper_config_model = HyperConfig(
         # split="train",
         test_ratio=0.05,
         dataset_num_proc=4,
-        num_samples=234_00,
+        # num_samples=234_00,
     ),
     training=TrainingConfig(
-        # gpus=range(8),
-        gpus=range(1),
+        gpus=range(8),
+        # gpus=range(1),
         loss_type="all",
         
     ),
     fast_model_args=FastModelArgs(
         model_name="/mnt/data/huggingface-models/ModelSpace/GemmaX2-28-9B-v0.1-bnb-4bit",
-        max_seq_length=16_000,
+        max_seq_length=2048,
         load_in_4bit=True,
         load_in_8bit=False,
         full_finetuning=False,
@@ -36,8 +36,8 @@ hyper_config_model = HyperConfig(
         finetune_language_layers=True,
         finetune_attention_modules=True,
         finetune_mlp_modules=True,
-        r=8,
-        lora_alpha=8,
+        r=16,
+        lora_alpha=16,
         lora_dropout=0,
         bias="none",
         random_state=3407,
@@ -47,7 +47,7 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="model_training_outputs/debug",
-    per_device_train_batch_size=1,
+    per_device_train_batch_size=10,
     learning_rate=0.0002,
     gradient_accumulation_steps=8,
     per_device_eval_batch_size=2,
