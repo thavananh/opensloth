@@ -45,3 +45,4 @@ model_training_outputs
 unsloth_compiled_cache
 data
 grads/
+gemma-thinking-4bit/
