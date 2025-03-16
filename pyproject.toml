@@ -22,5 +22,5 @@ packages = [
 hypersloth-train = "HyperSloth.scripts.trainner:train"
 hypersloth-init = "HyperSloth.scripts.get_example_config:main"
 hypersloth-prepare-unsloth-model = "HyperSloth.scripts.prepare_model:main"
-sim-vllm = "HyperSloth.scripts.vllm_serve:main"
-merge_and_save_lora = "HyperSloth.scripts.merge_and_save_lora:main"
+hypersloth-serve = "HyperSloth.scripts.vllm_serve:main"
+hypersloth-export = "HyperSloth.scripts.merge_and_save_lora:main"
