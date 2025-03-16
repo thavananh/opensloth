@@ -107,7 +107,8 @@ def _debug_dataloader(trainer):
         is_trainable = parts_mask[a]
         text_color = f"\033[91m{text}\033[0m" if is_trainable else f"\033[92m{text}\033[0m"
         parts.append(text_color)
-    print("".join(parts))
+    debug_msg = 'Example training item (red is trainable, green is context):```\n{}\n```'.format(''.join(parts))
+    print(debug_msg)
         
     
     
