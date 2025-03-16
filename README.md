@@ -186,8 +186,12 @@ Hyper-Sloth demonstrates significant performance improvements over other popular
 
 The loss scale between Hyper-Sloth and LlamaFactory looks comparable, indicating similar training quality with significantly improved training speed.
 
-![Hyper-Sloth Tensorboard](images/hyper-sloth-tb.png)
-![LlamaFactory Tensorboard](images/llama-factory-tb.png)
+| ![Hyper-Sloth Tensorboard](images/hyper-sloth-tb.png){ width=150 } | ![LlamaFactory Tensorboard](images/llama-factory-tb.png){ width=150 } |
+|--------------------------------------------------------------------|--------------------------------------------------------------------|
+| Hyper-Sloth Tensorboard[^1]                                        | LlamaFactory Tensorboard[^2]                                        |
+
+[^1]: Hyper-Sloth Tensorboard visualization.
+[^2]: LlamaFactory Tensorboard visualization.
 
 ## Configuration
 
