@@ -4,9 +4,10 @@ from HyperSloth.hypersloth_config import *
 hyper_config_model = HyperConfig(
     grad_dir="/dev/shm/hypersloth",
     data=DataConfig(
-        dataset_name_or_path="../localization/data/sharegpt/train_50k.json",
+        dataset_name_or_path="mlabonne/FineTome-100k",
         test_ratio=0.05,
-        dataset_num_proc=16,
+        split="train",
+        num_samples=1000, # for debuging
     ),
     training=TrainingConfig(
         gpus=range(1),
@@ -14,7 +15,7 @@ hyper_config_model = HyperConfig(
         
     ),
     fast_model_args=FastModelArgs(
-        model_name="/mnt/data/huggingface-models/ModelSpace/GemmaX2-28-2B-v0.1",
+        model_name="unsloth/gemma-3-1b-it",
         max_seq_length=2048,
     ),
     lora_args=LoraArgs(
@@ -45,6 +46,4 @@ training_config_model = TrainingArgsConfig(
     packing=False,
 )
 
-# Keeping the old dict versions for backward compatibility
-hyper_config = hyper_config_model.model_dump()
-training_config = training_config_model.model_dump()
+
