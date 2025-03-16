@@ -1,3 +1,7 @@
+<p align="center">
+    <img src="images/hpsloth.png" alt="HyperSloth Logo" width="200" />
+</p>
+
 # Hyper-Sloth
 
 A high-performance framework for fine-tuning large language models.
@@ -25,7 +29,41 @@ pip install git+https://github.com/anhvth/HyperSloth.git
 ### Train a model across multiple GPUs
 
 ```bash
-hypersloth-cli train example_training_config.py
+# create a config file for training
+[>training| ~/projects/hyper-sloth ] hypersloth-init
+# Example training config: ./hs_training_config.py
+hypersloth-train ./hs_training_config.py
+
+# [>training| ~/projects/hyper-sloth ] hypersloth-train ./hs_training_config.py
+# 2025-03-16 06:53:56.861 | INFO     | HyperSloth.scripts.trainner:train:94 - 
+# Key                          Value
+# ---------------------------  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# grad_dir                     /dev/shm/hypersloth
+# data                         {'dataset_name_or_path': 'mlabonne/FineTome-100k', 'test_ratio': 0.05, 'dataset_num_proc': 4, 'instruction_part': '<start_of_turn>user\n', 'response_part': '<start_of_turn>model\n', 'num_samples': 1000, 'split': 'train'}
+# training                     {'gpus': [0, 1], 'loss_type': 'response_only', 'packing': False}
+# fast_model_args              {'model_name': 'unsloth/gemma-3-1b-it', 'max_seq_length': 2048, 'load_in_4bit': True, 'load_in_8bit': False, 'full_finetuning': False, 'token': None}
+# lora_args                    {'finetune_vision_layers': False, 'finetune_language_layers': True, 'finetune_attention_modules': True, 'finetune_mlp_modules': True, 'r': 16, 'lora_alpha': 16, 'lora_dropout': 0.0, 'bias': 'none', 'random_state': 3407}
+# output_dir                   outputs/2B/
+# per_device_train_batch_size  4
+# learning_rate                0.0002
+# gradient_accumulation_steps  16
+# per_device_eval_batch_size   2
+# eval_steps                   100
+# logging_steps                1
+# report_to                    tensorboard
+# num_train_epochs             1
+# lr_scheduler_type            linear
+# warmup_steps                 5
+# seed                         42
+# save_total_limit             2
+# bf16                         True
+# fp16                         False
+# optim                        adamw_8bit
+# weight_decay                 0.01
+# packing                      False
+# 2025-03-16 06:53:56.861 | INFO     | HyperSloth.scripts.trainner:train:97 - Cleaning up previous runs
+# 2025-03-16 06:53:56.868 | DEBUG    | HyperSloth.scripts.trainner:train:103 - Running on GPU 0
+# 2025-03-16 06:53:57.870 | DEBUG    | HyperSloth.scripts.trainner:train:103 - Running on GPU 1
 ```
 see 
 ## Performance Benchmarks
@@ -48,17 +86,6 @@ The loss scale between Hyper-Sloth and LlamaFactory looks comparable, indicating
 |--------------------------------------------------------------------|--------------------------------------------------------------------|
 | Hyper-Sloth Tensorboard[^1]                                        | LlamaFactory Tensorboard[^2]                                        |
 
-[^1]: Hyper-Sloth Tensorboard visualization.
-[^2]: LlamaFactory Tensorboard visualization.
+[^1]: Hyper-Sloth Tensorboard.
+[^2]: LlamaFactory Tensorboard.
 
-## Configuration
-
-Hyper-Sloth uses Pydantic models for configuration. See `hypersloth_config.py` for an example configuration.
-
-## Getting Started
-
-[Configuration instructions and usage examples will go here]
-
-<p align="center">
-    <img src="images/hpsloth.png" alt="HyperSloth Logo" width="200" />
-</p>

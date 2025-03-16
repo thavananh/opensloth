@@ -31,7 +31,7 @@ def run(
         hf_train_args=hf_train_args,
     )
 
-    if len(hyper_config.training.gpus) > 1 or True:
+    if len(hyper_config.training.gpus) > 1:
         grad_sync_cb = MmapGradSyncCallback(
             model=trainer.model,
             grad_dir=hyper_config.grad_dir,
