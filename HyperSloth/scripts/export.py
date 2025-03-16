@@ -20,24 +20,24 @@ def merge_and_save_lora(
     from peft import AutoPeftModelForCausalLM
     from transformers import AutoTokenizer
     from unsloth import FastModel
-    
-    # /adapter_config.json 
-    config = load_by_ext(lora_path+'/adapter_config.json')
-    base_model_name_or_path = base_model_name_or_path or config["base_model_name_or_path"]
-    if base_model_name_or_path.endswith('-bnb-4bit'):
-        base_model_name_or_path = base_model_name_or_path.split('-bnb-4bit')[0]
+
+    # /adapter_config.json
+    config = load_by_ext(lora_path + "/adapter_config.json")
+    base_model_name_or_path = (
+        base_model_name_or_path or config["base_model_name_or_path"]
+    )
+    if base_model_name_or_path.endswith("-bnb-4bit"):
+        base_model_name_or_path = base_model_name_or_path.split("-bnb-4bit")[0]
     logger.info(f"Base model: {base_model_name_or_path}")
 
     if output_path is None:
         output_path = f"{lora_path}-merged"
 
     # Load the LoRA model
-    if 'gemma-3' in base_model_name_or_path.lower():
+    if "gemma-3" in base_model_name_or_path.lower():
         logger.info("Using FastModel for LoRA")
-        model = FastModel.from_pretrained(
-            lora_path
-        )
-        model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit")
+        model, tokenizer = FastModel.from_pretrained(lora_path)
+        model.save_pretrained_merged(output_path, tokenizer, save_method="merged_16bit")
 
     else:
         model = AutoPeftModelForCausalLM.from_pretrained(
@@ -57,7 +57,6 @@ def merge_and_save_lora(
         tokenizer.save_pretrained(output_path)
 
         print(f"Merged model saved to {output_path}")
-
 
 
 def main():
