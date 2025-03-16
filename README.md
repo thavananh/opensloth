@@ -1,3 +1,33 @@
+# Hyper-Sloth
+
+A high-performance framework for fine-tuning large language models.
+
+## Performance Benchmarks
+
+Hyper-Sloth demonstrates significant performance improvements over other popular fine-tuning frameworks.
+
+### Training Time Comparison (4x RTX 4090)
+
+| Framework    | Training Time | VRAM Peak Consumption |
+|--------------|---------------|----------------------|
+| Hyper-Sloth  | 19 minutes    | 6035MB               |
+| LlamaFactory | 30 minutes    | 21GB                 |
+| Unsloth (1X) | ~70 minutes   | 6035MB               |
+
+### Loss Curves
+
+The loss scale between Hyper-Sloth and LlamaFactory looks comparable, indicating similar training quality with significantly improved training speed.
+
+![Hyper-Sloth Tensorboard](images/hyper-sloth-tb.png)
+![LlamaFactory Tensorboard](images/llama-factory-tb.png)
+
+## Configuration
+
+Hyper-Sloth uses Pydantic models for configuration. See `hypersloth_config.py` for an example configuration.
+
+## Getting Started
+
+[Configuration instructions and usage examples will go here]
 # HyperSloth: Efficient Multi-GPU Training for LLMs
 
 <p align="center">
