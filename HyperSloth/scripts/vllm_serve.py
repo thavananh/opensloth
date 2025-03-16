@@ -5,8 +5,10 @@ from typing import List, Optional
 from fastcore.script import call_parse
 
 
-def kill_existing_vllm(vllm_binary: str) -> None:
+def kill_existing_vllm(vllm_binary=None) -> None:
     """Kill existing vLLM processes silently."""
+    if not vllm_binary:
+        vllm_binary = get_vllm()
     subprocess.run(
         "tmux kill-session -a -t vllm",
         shell=True,
@@ -19,7 +21,7 @@ def kill_existing_vllm(vllm_binary: str) -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    time.sleep(2)
+    time.sleep()
 
 
 def start_vllm_containers(
@@ -88,12 +90,9 @@ def main(
     dtype: str = "half",
     max_model_len: int = 8192,
     extra_args: List[str] = [],
-    # kill: bool = False,
 ):
     """Main function to start or kill vLLM containers."""
-    VLLM_BINARY = "/home/ubuntu/.conda/envs/vllm/bin/vllm"
-    VLLM_BINARY = os.getenv("VLLM_BINARY", VLLM_BINARY)
-    assert os.path.exists(VLLM_BINARY), f"vLLM binary not found at {VLLM_BINARY}, please set VLLM_BINARY env variable"
+    VLLM_BINARY = get_vllm()
 
     if not gpu_groups:
         print("Usage: serve_vllm.py [--model path_to_model] GPU_GROUP_1[,GPU_GROUP_2,...]")
@@ -110,3 +109,9 @@ def main(
         extra_args,
         VLLM_BINARY,
     )
+
+def get_vllm():
+    VLLM_BINARY = "/home/ubuntu/.conda/envs/vllm/bin/vllm"
+    VLLM_BINARY = os.getenv("VLLM_BINARY", VLLM_BINARY)
+    assert os.path.exists(VLLM_BINARY), f"vLLM binary not found at {VLLM_BINARY}, please set VLLM_BINARY env variable"
+    return VLLM_BINARY
