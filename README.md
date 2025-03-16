@@ -10,9 +10,9 @@ Hyper-Sloth demonstrates significant performance improvements over other popular
 
 | Framework    | Training Time | VRAM Peak Consumption |
 |--------------|---------------|----------------------|
-| Hyper-Sloth  | 19 minutes    | 6035MB               |
+| Hyper-Sloth  | 19 minutes    | 6 GB               |
 | LlamaFactory | 30 minutes    | 21GB                 |
-| Unsloth (1X) | ~70 minutes   | 6035MB               |
+| Unsloth (1X) | ~70 minutes   | 6 GB               |
 
 ### Loss Curves
 
