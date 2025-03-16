@@ -55,7 +55,11 @@ def load_config_from_path(config_path: str):
     config_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(config_module)
     return config_module
+
+
 from fastcore.all import call_parse
+
+
 @call_parse
 def train(config_file: str):
     import os
@@ -65,25 +69,25 @@ def train(config_file: str):
 
     config_module = load_config_from_path(config_file)
     import tabulate
-    
+
     # Get configurations from the module
     from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 
     # Use Pydantic models directly or create from dictionaries if needed
-    if hasattr(config_module, 'hyper_config_model'):
+    if hasattr(config_module, "hyper_config_model"):
         hyper_config = config_module.hyper_config_model
-    elif hasattr(config_module, 'hyper_config'):
+    elif hasattr(config_module, "hyper_config"):
         hyper_config = HyperConfig(**config_module.hyper_config)
     else:
         hyper_config = HyperConfig()
-    
-    if hasattr(config_module, 'training_config_model'):
+
+    if hasattr(config_module, "training_config_model"):
         training_config = config_module.training_config_model
-    elif hasattr(config_module, 'training_config'):
+    elif hasattr(config_module, "training_config"):
         training_config = TrainingArgsConfig(**config_module.training_config)
     else:
         training_config = TrainingArgsConfig()
-    
+
     # Display configuration
     combined_config = {**hyper_config.model_dump(), **training_config.model_dump()}
     config_table = tabulate.tabulate(combined_config.items(), headers=["Key", "Value"])
@@ -109,8 +113,3 @@ def train(config_file: str):
             hyper_config=hyper_config,
             train_args=training_config.to_dict(),
         )
-
-
-
-if __name__ == "__main__":
-    main()
