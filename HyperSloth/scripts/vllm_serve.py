@@ -21,7 +21,6 @@ def kill_existing_vllm(vllm_binary=None) -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    time.sleep()
 
 
 def start_vllm_containers(
