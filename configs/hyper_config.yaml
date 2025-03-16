@@ -2,7 +2,7 @@ file: ./data/cod_6k5.json
 model_name: unsloth/DeepSeek-R1-Distill-Qwen-7B-unsloth-bnb-4bit
 test_ratio: 0.05
 max_seq_length: 2048
-loss_type: target_only # or all
+loss_type: response_only # or all
 grad_dir: /dev/shm/hypersloth
 packing: false
 

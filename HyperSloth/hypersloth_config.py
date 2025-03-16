@@ -1,6 +1,5 @@
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Literal, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
-
 
 
 class DataConfig(BaseModel):
@@ -23,9 +22,9 @@ class TrainingConfig(BaseModel):
     """Configuration for training setup and parameters."""
 
     gpus: List[int] = Field(default=[0], description="List of GPU indices to use")
-    loss_type: str = Field(
-        default="target_only",
-        description="Loss calculation type: 'all' or 'target_only'",
+    loss_type: Literal["all", "response_only"] = Field(
+        default="response_only",
+        description="Loss calculation type: 'all' or 'response_only'",
     )
     packing: bool = Field(
         default=False, description="Whether to use packing for training data"
@@ -113,6 +112,7 @@ class TrainingArgsConfig(BaseModel):
         """Pydantic configuration for DataConfig."""
 
         extra = "allow"
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for TrainingArguments initialization."""
         return self.model_dump()

@@ -66,7 +66,7 @@ def setup_model_and_training(
     )
 
     # Handle specific training loss type
-    if hyper_config.training.loss_type == "target_only":
+    if hyper_config.training.loss_type == "response_only":
         from unsloth.chat_templates import train_on_responses_only
 
         first_text = ds_train[0]["text"]
@@ -79,8 +79,9 @@ def setup_model_and_training(
             instruction_part=instruction_part,
             response_part=response_part,
         )
-
-    _debug_dataloader(trainer)
+    if gpu_ith == 0:
+        logger.info(f"Model setup complete for GPU {gpu_ith}")
+        _debug_dataloader(trainer)
     return trainer
 
 
@@ -88,16 +89,36 @@ def _debug_dataloader(trainer):
     """
     Debug function to log the first batch of the training dataloader.
     """
+    from copy import deepcopy
+    tokenizer = deepcopy(trainer.tokenizer)
+    #===
     dl = trainer.get_train_dataloader()
     g = iter(dl)
     batch = next(g)
-    input_ids = batch["input_ids"]
-    from copy import deepcopy
-
-    tokenizer = deepcopy(trainer.tokenizer)
-    text = tokenizer.decode(input_ids.cpu()[0])
-    labels = batch["labels"]
-    labels[labels < 0] = 0  # Fill < 0 with 0
-    label_text = tokenizer.decode(labels.cpu()[0])
-    logger.info(f"=====\nI: {text}\n-----\nL: {label_text}\n=====")
-    assert (batch["labels"] > 0).sum() != 0, "NO LABELS???"
+    input_ids = batch["input_ids"][0]
+    label_ids = batch["labels"][0]
+    parts_mask = label_ids >= 0 # this segment the text 1D array into parts where True is trainable and False is not
+    
+    split_points = [0] + [i for i, val in enumerate(parts_mask) if i > 0 and val != parts_mask[i-1]] + [len(parts_mask)]
+    parts = []
+    for a,b in zip(split_points[:-1],split_points[1:]):
+        text = tokenizer.decode(input_ids[a:b])
+        # text = #mark color to the red is the green is trainable text and yellow is context
+        is_trainable = parts_mask[a]
+        text_color = f"\033[91m{text}\033[0m" if is_trainable else f"\033[92m{text}\033[0m"
+        parts.append(text_color)
+    print("".join(parts))
+        
+    
+    
+    
+    
+        
+            
+    
+    # text = tokenizer.decode(input_ids.cpu()[0])
+    # labels = batch["labels"]
+    # labels[labels < 0] = 0  # Fill < 0 with 0
+    # label_text = tokenizer.decode(labels.cpu()[0])
+    # logger.info(f"=====\nI: {text}\n-----\nL: {label_text}\n=====")
+    # assert (batch["labels"] > 0).sum() != 0, "NO LABELS???"
