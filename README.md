@@ -145,12 +145,6 @@ hypersloth-cli train hypersloth_config.py
 | LlamaFactory | 30 minutes    | 21GB                 |
 | Unsloth (1X) | ~70 minutes   | 6 GB               |
 
-### Loss Curves
-
-The loss scale between Hyper-Sloth and LlamaFactory looks comparable, indicating similar training quality with significantly improved training speed.
-
-![Hyper-Sloth Tensorboard](images/hyper-sloth-tb.png)
-![LlamaFactory Tensorboard](images/llama-factory-tb.png)
 
 ## Configuration
 
