@@ -11,8 +11,7 @@ from loguru import logger
 from speedy_utils.all import multi_thread
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 
-# Disable "report" and "verbose" in multi_thread calls
-multi_thread = partial(multi_thread, report=False, verbose=False)
+multi_thread = partial(multi_thread, report=False, progress=False)
 
 logger.remove()
 logger.add("mmap_gradient_sync.log", level="DEBUG")
