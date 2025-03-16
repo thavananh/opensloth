@@ -85,41 +85,81 @@ def setup_model_and_training(
     return trainer
 
 
-def _debug_dataloader(trainer):
+def _debug_dataloader(trainer, n_example=10):
     """
-    Debug function to log the first batch of the training dataloader.
+    Debug function to log samples from the training dataloader in an HTML format.
+    Outputs to both terminal (with colors) and an HTML file with CSS styling.
     """
     from copy import deepcopy
+
     tokenizer = deepcopy(trainer.tokenizer)
-    #===
     dl = trainer.get_train_dataloader()
     g = iter(dl)
-    batch = next(g)
-    input_ids = batch["input_ids"][0]
-    label_ids = batch["labels"][0]
-    parts_mask = label_ids >= 0 # this segment the text 1D array into parts where True is trainable and False is not
+    html_path = ".log/dataloader_examples.html"
     
-    split_points = [0] + [i for i, val in enumerate(parts_mask) if i > 0 and val != parts_mask[i-1]] + [len(parts_mask)]
-    parts = []
-    for a,b in zip(split_points[:-1],split_points[1:]):
-        text = tokenizer.decode(input_ids[a:b])
-        # text = #mark color to the red is the green is trainable text and yellow is context
-        is_trainable = parts_mask[a]
-        text_color = f"\033[91m{text}\033[0m" if is_trainable else f"\033[92m{text}\033[0m"
-        parts.append(text_color)
-    debug_msg = 'Example training item (red is trainable, green is context):```\n{}\n```'.format(''.join(parts))
-    print(debug_msg)
+    # Create HTML file with CSS styling
+    with open(html_path, "w") as html_file:
+        html_file.write("""<!DOCTYPE html>
+<html>
+<head>
+    <title>Dataloader Examples</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .trainable { background-color: #FFEBCD; padding: 2px; }
+        .context { background-color: #E0FFE0; padding: 2px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        h2 { margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>Dataloader Examples</h1>
+    <p>This file contains examples of training data with context and trainable parts.</p>
+""")
         
-    
-    
-    
-    
-        
+        for i in range(n_example):
+            batch = next(g)
+            input_ids = batch["input_ids"][0]
+            label_ids = batch["labels"][0]
+            parts_mask = (label_ids >= 0)  # True is trainable, False is context
+
+            # Find split points where trainable/non-trainable sections change
+            split_points = [0] + [
+                i for i, val in enumerate(parts_mask)
+                if i > 0 and val != parts_mask[i - 1]
+            ] + [len(parts_mask)]
             
+            colored_parts = []
+            html_file.write(f"\n    <h2>Example {i+1}</h2>\n")
+            html_file.write("    <table>\n        <tr><th>Text</th><th>Label</th></tr>\n")
+            
+            for a, b in zip(split_points[:-1], split_points[1:]):
+                text = tokenizer.decode(input_ids[a:b])
+                is_trainable = parts_mask[a]
+                
+                # Colored text for terminal
+                colored_text = f"\033[93m{text}\033[0m" if is_trainable else f"\033[92m{text}\033[0m"
+                colored_parts.append(colored_text)
+                
+                # HTML with CSS classes
+                css_class = "trainable" if is_trainable else "context"
+                label = "🟠 TRAIN" if is_trainable else "🟢 CONTEXT"
+                
+                # Escape HTML special characters
+                text_escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                
+                # Add row to HTML table
+                html_file.write(f"        <tr>\n            <td><span class=\"{css_class}\">{text_escaped}</span></td>\n"
+                               f"            <td>{label}</td>\n        </tr>\n")
+            
+            html_file.write("    </table>\n")
+            
+            # Colored text for terminal
+            colored_output = "".join(colored_parts)
+            terminal_msg = f"\n=== EXAMPLE #{i+1} ===\n" + colored_output + "\n"
+            print(terminal_msg)
+        
+        html_file.write("</body>\n</html>")
     
-    # text = tokenizer.decode(input_ids.cpu()[0])
-    # labels = batch["labels"]
-    # labels[labels < 0] = 0  # Fill < 0 with 0
-    # label_text = tokenizer.decode(labels.cpu()[0])
-    # logger.info(f"=====\nI: {text}\n-----\nL: {label_text}\n=====")
-    # assert (batch["labels"] > 0).sum() != 0, "NO LABELS???"
+    print(f"Debug examples written to {html_path}")

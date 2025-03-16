@@ -47,3 +47,4 @@ data
 grads/
 gemma-thinking-4bit/
 outputs/
+.log
