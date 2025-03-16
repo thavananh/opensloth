@@ -5,7 +5,7 @@ description = ""
 authors = [{ name = "anhvth", email = "anhvth.226@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["pyyaml (>=6.0.2,<7.0.0)", "jupyterlab (>=4.3.5,<5.0.0)"]
+dependencies = ["pyyaml (>=6.0.2,<7.0.0)", "jupyterlab (>=4.3.5,<5.0.0)", "fastcore (>=1.7.29,<2.0.0)"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
