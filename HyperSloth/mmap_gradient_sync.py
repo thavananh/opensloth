@@ -369,8 +369,8 @@ class MmapGradSyncCallback(TrainerCallback):
                 while any(self.loss_file == 0):
                     time.sleep(0.01)
                 losses = self.loss_file[:]
-                # state.log_history[-1]["mean_loss"] = np.mean(losses)
-                logger.info(f"Mean loss: {state.log_history[-1]['mean_loss']}")
+                mean_loss = np.mean(losses)
+                logger.info(f"Mean loss: {mean_loss}")
                 # if all losses are not zero, then reset all the losses
                 if np.all(losses != 0):
                     self.loss_file[:] = 0
