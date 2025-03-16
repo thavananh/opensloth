@@ -30,7 +30,7 @@ def start_vllm_containers(
     gpu_memory_utilization: float,
     dtype: str,
     max_model_len: int,
-    extra_args: List[str],
+    # extra_args: List[str],
     vllm_binary: str,
 ) -> None:
     """Start vLLM containers with dynamic args."""
@@ -65,8 +65,8 @@ def start_vllm_containers(
         if served_model_name:
             cmd.extend(["--served-model-name", served_model_name])
 
-        if extra_args:
-            cmd.extend(extra_args)
+        # if extra_args:
+        #     cmd.extend(extra_args)
 
         final_cmd = " ".join(cmd)
         log_file = f"/tmp/vllm_{port}.txt"
@@ -88,15 +88,12 @@ def main(
     dtype: str = "half",
     max_model_len: int = 8192,
     extra_args: List[str] = [],
-    kill: bool = False,
+    # kill: bool = False,
 ):
     """Main function to start or kill vLLM containers."""
     VLLM_BINARY = "/home/ubuntu/.conda/envs/vllm/bin/vllm"
     VLLM_BINARY = os.getenv("VLLM_BINARY", VLLM_BINARY)
-
-    if kill:
-        kill_existing_vllm(VLLM_BINARY)
-        exit(0)
+    assert os.path.exists(VLLM_BINARY), f"vLLM binary not found at {VLLM_BINARY}, please set VLLM_BINARY env variable"
 
     if not gpu_groups:
         print("Usage: serve_vllm.py [--model path_to_model] GPU_GROUP_1[,GPU_GROUP_2,...]")
