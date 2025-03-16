@@ -11,12 +11,12 @@ from HyperSloth.hypersloth_config import (
 hyper_config_model = HyperConfig(
     grad_dir="/dev/shm/hypersloth",
     data=DataConfig(
-        dataset_name_or_path="../localization/data/sharegpt/train_234k.json",
+        dataset_name_or_path="../localization/data/sharegpt/train_50k.json",
         test_ratio=0.05,
         dataset_num_proc=16,
     ),
     training=TrainingConfig(
-        gpus=range(8),
+        gpus=range(1),
         loss_type="all",
         
     ),

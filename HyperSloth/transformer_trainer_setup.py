@@ -56,30 +56,6 @@ def setup_model_and_training(
         args=hf_train_args,
     )
 
-    # import numpy as np
-    # from fastcore.all import chunked
-
-    # def bz_same_size(dataset, device_effective_bz):
-    #     ls = [len(x) for x in dataset["input_ids"]]  # length array
-
-    #     # 1. Get sort indices by length
-    #     ids = np.argsort(ls)
-
-    #     # 2. Chunk those sorted indices
-    #     chunks = list(chunked(ids, device_effective_bz))
-
-    #     # 3. Shuffle the chunks
-    #     # np.random.shuffle(chunks)
-
-    #     # 4. Flatten the shuffled chunks
-    #     flat_ids = [i for chunk in chunks for i in chunk]
-
-    #     return dataset.select(flat_ids)
-
-    # trainer.train_dataset = bz_same_size(
-    #     trainer.train_dataset, hf_train_args.per_device_train_batch_size
-    # )
-
     # Adjust dataset for multi-GPU training
     max_len_ds = len(hyper_config.training.gpus) * (
         len(trainer.train_dataset) // len(hyper_config.training.gpus)
