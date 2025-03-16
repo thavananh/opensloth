@@ -3,6 +3,7 @@ Utility functions for multi-GPU training with Unsloth models.
 Handles weight synchronization, model setup, and distributed training coordination.
 """
 
+import os
 from loguru import logger
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
@@ -96,27 +97,43 @@ def _debug_dataloader(trainer, n_example=10):
     dl = trainer.get_train_dataloader()
     g = iter(dl)
     html_path = ".log/dataloader_examples.html"
+    os.makedirs(os.path.dirname(html_path), exist_ok=True)
     
     # Create HTML file with CSS styling
     with open(html_path, "w") as html_file:
         html_file.write("""<!DOCTYPE html>
-<html>
-<head>
-    <title>Dataloader Examples</title>
-    <style>
+    <html>
+    <head>
+        <title>Dataloader Examples</title>
+        <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        .trainable { background-color: #FFEBCD; padding: 2px; }
-        .context { background-color: #E0FFE0; padding: 2px; }
+        
+        @media (prefers-color-scheme: light) {
+            body { background-color: #ffffff; color: #333; }
+            .trainable { background-color: #FFEBCD; color: #333; }
+            .context { background-color: #E0FFE0; color: #333; }
+            th { background-color: #f2f2f2; }
+            th, td { border-color: #ddd; }
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #222; color: #f0f0f0; }
+            .trainable { background-color: #664a20; color: #f0f0f0; }
+            .context { background-color: #2a5a2a; color: #f0f0f0; }
+            th { background-color: #444; color: #f0f0f0; }
+            th, td { border-color: #555; }
+        }
+        
+        .trainable, .context { padding: 2px; border-radius: 3px; }
         table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        th, td { border: 1px solid; padding: 8px; text-align: left; }
         h2 { margin-top: 30px; }
-    </style>
-</head>
-<body>
-    <h1>Dataloader Examples</h1>
-    <p>This file contains examples of training data with context and trainable parts.</p>
-""")
+        </style>
+    </head>
+    <body>
+        <h1>Dataloader Examples</h1>
+        <p>This file contains examples of training data with context and trainable parts.</p>
+    """)
         
         for i in range(n_example):
             batch = next(g)
@@ -158,8 +175,9 @@ def _debug_dataloader(trainer, n_example=10):
             # Colored text for terminal
             colored_output = "".join(colored_parts)
             terminal_msg = f"\n=== EXAMPLE #{i+1} ===\n" + colored_output + "\n"
-            print(terminal_msg)
+            if i == 0:
+                print(terminal_msg)
         
         html_file.write("</body>\n</html>")
     
-    print(f"Debug examples written to {html_path}")
+    print(f"More training debug examples written to {html_path}")
