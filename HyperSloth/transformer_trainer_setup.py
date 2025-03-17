@@ -28,8 +28,8 @@ def setup_model_and_training(
     from unsloth import FastModel
     from HyperSloth.dataset_utils import get_chat_dataset
     from trl import SFTTrainer
-
-    gpu_ith = hyper_config.training.gpus[gpu]
+    gpu_ith = hyper_config.training.gpus.index(gpu)
+    
 
     # Initialize model and tokenizer
     model, tokenizer = FastModel.from_pretrained(
