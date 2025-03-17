@@ -31,11 +31,10 @@ def start_vllm_containers(
     gpu_memory_utilization: float,
     dtype: str,
     max_model_len: int,
-    # extra_args: List[str],
-    vllm_binary: str,
 ) -> None:
     """Start vLLM containers with dynamic args."""
     gpu_groups_arr = gpu_groups.split(",")
+    VLLM_BINARY = get_vllm()
 
     for i, gpu_group in enumerate(gpu_groups_arr):
         port = port_start + i
@@ -44,7 +43,7 @@ def start_vllm_containers(
 
         cmd = [
             f"CUDA_VISIBLE_DEVICES={gpus}",
-            vllm_binary,
+            VLLM_BINARY,
             "serve",
             model,
             "--port",
@@ -91,7 +90,6 @@ def main(
     extra_args: List[str] = [],
 ):
     """Main function to start or kill vLLM containers."""
-    VLLM_BINARY = get_vllm()
 
     if not gpu_groups:
         print("Usage: serve_vllm.py [--model path_to_model] GPU_GROUP_1[,GPU_GROUP_2,...]")
@@ -105,8 +103,6 @@ def main(
         gpu_memory_utilization,
         dtype,
         max_model_len,
-        extra_args,
-        VLLM_BINARY,
     )
 
 def get_vllm():

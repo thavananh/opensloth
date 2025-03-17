@@ -4,7 +4,10 @@ from speedy_utils.all import load_by_ext, logger
 
 @call_parse
 def merge_and_save_lora(
-    lora_path: str, base_model_name_or_path: str = None, output_path: str = None
+    lora_path: str,
+    base_model_name_or_path: str = None,
+    output_path: str = None,
+    force_use_unsloth: bool = False,
 ) -> None:
     """
     Merges a LoRA model with its base model and saves the result.
@@ -28,20 +31,28 @@ def merge_and_save_lora(
     )
     if base_model_name_or_path.endswith("-bnb-4bit"):
         base_model_name_or_path = base_model_name_or_path.split("-bnb-4bit")[0]
+
+    if "qwen" in base_model_name_or_path.lower():
+        # replace unsloth/ with Qwen/
+        base_model_name_or_path = base_model_name_or_path.replace("unsloth/", "Qwen/")
+    if "gemma" in base_model_name_or_path.lower():
+        # replace unsloth/ with Gemma/
+        base_model_name_or_path = base_model_name_or_path.replace("unsloth/", "Google/")
     logger.info(f"Base model: {base_model_name_or_path}")
 
     if output_path is None:
         output_path = f"{lora_path}-merged"
 
     # Load the LoRA model
-    if "gemma-3" in base_model_name_or_path.lower():
+    if "gemma-3" in base_model_name_or_path.lower() or force_use_unsloth:
         logger.info("Using FastModel for LoRA")
-        model, tokenizer = FastModel.from_pretrained(lora_path)
+        model, tokenizer = FastModel.from_pretrained(lora_path, load_in_4bit=False)
         model.save_pretrained_merged(output_path, tokenizer, save_method="merged_16bit")
 
     else:
+        logger.info("Using PeftModel for LoRA")
         model = AutoPeftModelForCausalLM.from_pretrained(
-            lora_path, device_map="auto", trust_remote_code=True
+            lora_path, device_map="cpu", trust_remote_code=True
         ).eval()
 
         # Merge the LoRA weights with the base model
