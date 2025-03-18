@@ -42,15 +42,16 @@ def get_chat_dataset(
     """
     # Load dataset based on input type
     if os.path.exists(dataset_name_or_path):
-        dataset = Dataset.from_json(dataset_name_or_path)
+        if dataset_name_or_path.endswith(".json"):
+            dataset = Dataset.from_json(dataset_name_or_path)
+        elif dataset_name_or_path.endswith(".csv"):
+            dataset = Dataset.from_csv(dataset_name_or_path)
     else:
         try:
             dataset = load_dataset(dataset_name_or_path, split=split)
             # Check if dataset is empty
             dataset[0]
-            if dataset_already_formated:
-                assert "text" in dataset[0], "Dataset already formated, but no 'text' key found"
-                return dataset, None
+
         except IndexError:
             raise ValueError(
                 f"Dataset is empty. Check dataset name and split: {dataset_name_or_path}, split={split}"
@@ -64,9 +65,11 @@ def get_chat_dataset(
                 raise ValueError(
                     f"Failed to load dataset '{dataset_name_or_path}' with split '{split}': {str(e)}"
                 ) from e
-
-    # Show dataset structure for debugging
+    if dataset_already_formated:
+        assert "text" in dataset[0], "Dataset already formated, but no 'text' key found"
+        return dataset, None
     example = dataset[0]
+    # Show dataset structure for debugging
     dataset_keys = list(example.keys())
     if num_samples:
         num_samples = min(num_samples, len(dataset))
