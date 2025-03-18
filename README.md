@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="images/hpsloth.png" alt="HyperSloth Logo" width="200" />
+    <img src="images/hpsloth.webp" alt="HyperSloth Logo" width="200" />
 </p>
 
 # Hyper-Sloth

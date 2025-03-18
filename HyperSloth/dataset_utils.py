@@ -22,6 +22,7 @@ def get_chat_dataset(
     test_ratio: float = 0,
     tokenizer: Any = None,
     message_key: str = None,
+    chat_template=None,
     **kwargs,
 ) -> tuple[Dataset, Dataset | None]:
     """
@@ -63,9 +64,13 @@ def get_chat_dataset(
     # Show dataset structure for debugging
     example = dataset[0]
     dataset_keys = list(example.keys())
+    if num_samples:
+        num_samples = min(num_samples, len(dataset))
+        dataset = dataset.shuffle(seed=42)
+        dataset = dataset.select(range(num_samples))
 
     # Try to standardize data format
-    dataset = standardize_data_formats(dataset)
+    # dataset = standardize_data_formats(dataset)
 
     # Apply chat template if tokenizer is provided
     if tokenizer:
@@ -87,6 +92,12 @@ def get_chat_dataset(
                     "Use the message_key parameter to specify the correct key. "
                     "Expected chat format example: (mlabonne/FineTome-100k) https://huggingface.co/datasets/mlabonne/FineTome-100k"
                 )
+            if chat_template:
+                from transformers import AutoTokenizer
+
+                tokenizer.chat_template = AutoTokenizer.from_pretrained(
+                    chat_template
+                ).chat_template
 
             texts = tokenizer.apply_chat_template(
                 examples[messages_key], tokenize=False
@@ -104,10 +115,6 @@ def get_chat_dataset(
             ) from e
 
     # Sample dataset if requested
-    if num_samples:
-        num_samples = min(num_samples, len(dataset))
-        dataset = dataset.shuffle(seed=42)
-        dataset = dataset.select(range(num_samples))
 
     # Create train/test split if needed
     if test_ratio > 0:
@@ -117,4 +124,3 @@ def get_chat_dataset(
         ds_train, ds_test = dataset, None
 
     return ds_train, ds_test
-

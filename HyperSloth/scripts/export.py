@@ -50,13 +50,23 @@ def merge_and_save_lora(
         model.save_pretrained_merged(output_path, tokenizer, save_method="merged_16bit")
 
     else:
+        from transformers import AutoModelForCausalLM
+
         logger.info("Using PeftModel for LoRA")
-        model = AutoPeftModelForCausalLM.from_pretrained(
-            lora_path, device_map="cpu", trust_remote_code=True
+        # model = AutoPeftModelForCausalLM.from_pretrained(
+        #     lora_path, device_map="auto", trust_remote_code=True
+        # ).eval()
+        model = AutoModelForCausalLM.from_pretrained(
+            lora_path,
+            device_map="auto",
+            trust_remote_code=True,
         ).eval()
+        from peft.peft_model import PeftModel
+
+        lora_model = PeftModel.from_pretrained(model, lora_path)
 
         # Merge the LoRA weights with the base model
-        merged_model = model.merge_and_unload()
+        merged_model = lora_model.merge_and_unload()
 
         # Save the merged model
         merged_model.save_pretrained(
