@@ -76,12 +76,7 @@ def get_chat_dataset(
         dataset = dataset.shuffle(seed=42)
         dataset = dataset.select(range(num_samples))
 
-    # Try to standardize data format
-    # dataset = standardize_data_formats(dataset)
-
-    # Apply chat template if tokenizer is provided
     if tokenizer:
-
         def apply_chat_template(examples):
             # Use custom message key if provided
             if message_key and message_key in examples:
