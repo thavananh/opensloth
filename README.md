@@ -25,6 +25,9 @@ pip install git+https://github.com/anhvth/HyperSloth.git
 ```
 
 ## Quick Start
+```kaggle
+https://www.kaggle.com/code/anhvth226/kaggle-mistral-7b-hypersloth-notebook?scriptVersionId=228204516
+```
 
 ### Train a model across multiple GPUs
 
