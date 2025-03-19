@@ -42,6 +42,7 @@ def get_chat_dataset(
             dataset = load_dataset(dataset_name_or_path, split=split)
             # Check if dataset is empty
             dataset[0]
+            dataset = standardize_data_formats(dataset)
 
         except IndexError:
             raise ValueError(
