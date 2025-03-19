@@ -4,7 +4,9 @@ Handles weight synchronization, model setup, and distributed training coordinati
 """
 
 import os
+import random
 from loguru import logger
+import numpy as np
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
 
@@ -61,10 +63,14 @@ def setup_model_and_training(
     max_len_ds = len(hyper_config.training.gpus) * (
         len(trainer.train_dataset) // len(hyper_config.training.gpus)
     )
+    
     trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
-    trainer.train_dataset = trainer.train_dataset.shard(
-        num_shards=len(hyper_config.training.gpus), index=gpu_ith
-    )
+    if hyper_config.data.group_by_length:
+        trainer = patch_sample_by_len(trainer, gpu_ith, len(hyper_config.training.gpus))
+    else:
+        trainer.train_dataset = trainer.train_dataset.shard(
+            num_shards=len(hyper_config.training.gpus), index=gpu_ith
+        )
 
     # Handle specific training loss type
     if hyper_config.training.loss_type == "response_only":
@@ -84,6 +90,38 @@ def setup_model_and_training(
         logger.info(f"Model setup complete for GPU {gpu_ith}")
         _debug_dataloader(trainer)
     return trainer
+
+
+
+
+
+
+def patch_sample_by_len(trainer, gpu_ith, num_gpus):
+    from fastcore.all import patch, chunked
+    from torch.utils.data import SequentialSampler
+    _TYPE = type(trainer)
+    @patch
+    def _get_train_sampler(self:_TYPE) -> SequentialSampler:
+        """Get a sequential sampler for the training dataset."""
+        return SequentialSampler(self.train_dataset)
+    
+    lens = [len(item["input_ids"]) for item in trainer.train_dataset]
+    ids_sorted = np.argsort(lens).tolist()
+    chunked_ids = list(chunked(ids_sorted, num_gpus))
+    # group by num gpus
+    random.Random(42).shuffle(chunked_ids)
+    # select coresponing chunk for each gpu
+    selected_ids = [group[gpu_ith] for group in chunked_ids]
+    trainer.train_dataset = trainer.train_dataset.select(selected_ids)
+    return trainer
+    
+    # select len evenly for each gpu
+    
+    
+    
+    
+    
+
 
 
 def _debug_dataloader(trainer, n_example=10):

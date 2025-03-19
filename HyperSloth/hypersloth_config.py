@@ -11,6 +11,7 @@ class DataConfig(BaseModel):
     instruction_part: str = "Instruction:"
     response_part: str = "Response:"
     num_samples: Optional[int] = None
+    group_by_length: bool = True
 
     class Config:
         """Pydantic configuration for DataConfig."""
