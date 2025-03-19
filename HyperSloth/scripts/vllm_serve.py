@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastcore.script import call_parse
 from ray import logger
 import argparse
-
+import requests
 from sqlalchemy import desc
 
 
@@ -63,6 +63,7 @@ def add_lora(
     assert url.startswith("http"), "URL must start with 'http'"
     headers = {"Content-Type": "application/json"}
     data = {"lora_name": lora_name, "lora_path": lora_path}
+    logger.info(f"Adding LoRA adapter: {lora_name} from {lora_path}")
 
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -82,6 +83,7 @@ def add_lora(
             }
 
     except requests.exceptions.RequestException as e:
+        logger.error(f"Request failed: {str(e)}")
         return {"error": f"Request failed: {str(e)}"}
 
 
@@ -250,13 +252,14 @@ def main():
         )
     elif args.mode == "kill":
         kill_existing_vllm(args.vllm_binary)
-    elif args.add_lora:
+    elif args.mode == "add_lora":
         # split by :
         assert (
-            "@" in args.add_lora
+            ":" in args.model
         ), "Invalid format for add_lora, should be lora_name@path:port"
-        path, port = args.add_lora.split("@")
-        add_lora(args.lora_name, path, port)
+        name, path, port = args.model.split(":")
+        path = os.path.abspath(path)
+        add_lora(name, path, port)
 
 
 if __name__ == "__main__":
