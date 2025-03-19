@@ -101,6 +101,7 @@ def serve(
     """Main function to start or kill vLLM containers."""
 
     """Start vLLM containers with dynamic args."""
+    print("Starting vLLM containers...,")
     gpu_groups_arr = gpu_groups.split(",")
     VLLM_BINARY = get_vllm()
     if enable_lora:
@@ -153,7 +154,9 @@ def serve(
             cmd.extend(["--fully-sharded-loras", "--enable-lora"])
         # add kwargs
         if extra_args:
-            cmd += extra_args
+            for name_param in extra_args:
+                name, param = name_param.split("=")
+                cmd.extend([f"{name}", param])
         final_cmd = " ".join(cmd)
         log_file = f"/tmp/vllm_{port}.txt"
         final_cmd_with_log = f'"{final_cmd} 2>&1 | tee {log_file}"'
@@ -221,7 +224,7 @@ def get_args():
     parser.add_argument("--vllm_binary", type=str, help="Path to the vLLM binary")
     parser.add_argument("--lora_name", type=str, help="Name of the LoRA adapter")
     parser.add_argument(
-        "extra_args", nargs=argparse.REMAINDER, help="Additional arguments for the serve command"
+        "--extra_args", nargs=argparse.REMAINDER, help="Additional arguments for the serve command"
     )
     return parser.parse_args()
 
