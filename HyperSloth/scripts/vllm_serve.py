@@ -183,7 +183,7 @@ def get_vllm():
 
 def get_args():
     """Parse command line arguments."""
-    example_args = ['svllm serve --model google/gemma-3-27b-it -g 0123 ',
+    example_args = ['svllm add_lora --model localization_pro:./saves/loras/250312/LC_EN_VI_TH_27B_233k/checkpoint-1736/:8155',
                     'svllm add_lora lora_name@path:port',
                     'svllm kill']
     
