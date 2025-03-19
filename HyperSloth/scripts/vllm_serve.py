@@ -49,20 +49,29 @@ def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
     print(f"Killed processes: {', '.join(pids)}")
 
 
-def start_vllm_containers(
+
+@call_parse
+def main(
     model: str,
     gpu_groups: str,
-    served_model_name: Optional[str],
-    port_start: int,
-    gpu_memory_utilization: float,
-    dtype: str,
-    max_model_len: int,
+    served_model_name: Optional[str] = None,
+    port_start: int = 8155,
+    gpu_memory_utilization: float = 0.95,
+    dtype: str = "bfloat16",
+    max_model_len: int = 8192,
     enable_lora: bool = False,
     enable_quantization: bool = False,
-) -> None:
+    not_verbose=True,
+    extra_args: Optional[List[str]] = []
+):
+    """Main function to start or kill vLLM containers."""
+
+
     """Start vLLM containers with dynamic args."""
     gpu_groups_arr = gpu_groups.split(",")
     VLLM_BINARY = get_vllm()
+    if enable_lora:
+        VLLM_BINARY = 'VLLM_ALLOW_RUNTIME_LORA_UPDATING=True ' + VLLM_BINARY
 
     # Auto-detect quantization based on model name if not explicitly set
     if (
@@ -80,11 +89,11 @@ def start_vllm_containers(
 
     for i, gpu_group in enumerate(gpu_groups_arr):
         port = port_start + i
-        gpus = gpu_group
-        tensor_parallel = len(gpus.split(","))
+        gpu_group = ",".join([str(x) for x in gpu_group])
+        tensor_parallel = len(gpu_group.split(","))
 
         cmd = [
-            f"CUDA_VISIBLE_DEVICES={gpus}",
+            f"CUDA_VISIBLE_DEVICES={gpu_group}",
             VLLM_BINARY,
             "serve",
             model,
@@ -98,11 +107,10 @@ def start_vllm_containers(
             dtype,
             "--max-model-len",
             str(max_model_len),
-            "--uvicorn-log-level critical",
-            "--enable-prefix-caching",
-            "--enforce-eager",
             "--disable-log-requests",
         ]
+        if not_verbose:
+            cmd += ["--uvicorn-log-level critical", "--enable-prefix-caching"]
 
         if served_model_name:
             cmd.extend(["--served-model-name", served_model_name])
@@ -114,7 +122,9 @@ def start_vllm_containers(
 
         if enable_lora:
             cmd.extend(["--fully-sharded-loras", "--enable-lora"])
-
+        # add kwargs
+        if extra_args:
+            cmd += extra_args
         final_cmd = " ".join(cmd)
         log_file = f"/tmp/vllm_{port}.txt"
         final_cmd_with_log = f'"{final_cmd} 2>&1 | tee {log_file}"'
@@ -126,38 +136,6 @@ def start_vllm_containers(
         print("Logging to", log_file)
         os.system(run_in_tmux)
 
-
-@call_parse
-def main(
-    model: str,
-    gpu_groups: str,
-    served_model_name: Optional[str] = None,
-    port_start: int = 8170,
-    gpu_memory_utilization: float = 0.9,
-    dtype: str = "auto",
-    max_model_len: int = 8192,
-    enable_lora: bool = False,
-    enable_quantization: bool = False,
-):
-    """Main function to start or kill vLLM containers."""
-
-    if not gpu_groups:
-        print(
-            "Usage: serve_vllm.py [--model path_to_model] GPU_GROUP_1[,GPU_GROUP_2,...]"
-        )
-        exit(1)
-
-    start_vllm_containers(
-        model,
-        gpu_groups,
-        served_model_name,
-        port_start,
-        gpu_memory_utilization,
-        dtype,
-        max_model_len,
-        enable_lora,
-        enable_quantization,
-    )
 
 
 def get_vllm():
