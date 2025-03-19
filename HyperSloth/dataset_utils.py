@@ -27,18 +27,9 @@ def get_chat_dataset(
     **kwargs,
 ) -> tuple[Dataset, Dataset | None]:
     """
-    Load and preprocess a chat dataset.
-
-    Args:
-        dataset_name_or_path (str): Path to a JSON file or name of a dataset in the HuggingFace Hub
-        split (str): The dataset split to load
-        num_samples (int): The number of samples to select from the dataset
-        test_ratio (float): Ratio to split into test set (0 means no test set)
-        tokenizer (Any): Tokenizer with apply_chat_template method
-        message_key (str): Optional custom key for accessing message data
-
-    Returns:
-        tuple: (train_dataset, test_dataset) - test_dataset may be None if test_ratio is 0
+    Load and preprocess a chat dataset from file or HuggingFace Hub.
+    
+    Returns train dataset and optional test dataset (if test_ratio > 0).
     """
     # Load dataset based on input type
     if os.path.exists(dataset_name_or_path):
