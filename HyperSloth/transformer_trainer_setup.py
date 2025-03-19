@@ -115,12 +115,6 @@ def patch_sample_by_len(trainer, gpu_ith, num_gpus):
     trainer.train_dataset = trainer.train_dataset.select(selected_ids)
     return trainer
     
-    # select len evenly for each gpu
-    
-    
-    
-    
-    
 
 
 
