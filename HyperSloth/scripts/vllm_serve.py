@@ -4,6 +4,9 @@ import time
 from typing import List, Optional
 from fastcore.script import call_parse
 from ray import logger
+import argparse
+
+from sqlalchemy import desc
 
 
 def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
@@ -49,37 +52,63 @@ def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
     print(f"Killed processes: {', '.join(pids)}")
 
 
+def add_lora(
+    lora_name: str,
+    lora_path: str,
+    port=None,
+    url: str = "http://localhost:8152/v1/load_lora_adapter",
+) -> dict:
+    if port:
+        url = f"http://localhost:{port}/v1/load_lora_adapter"
+    assert url.startswith("http"), "URL must start with 'http'"
+    headers = {"Content-Type": "application/json"}
+    data = {"lora_name": lora_name, "lora_path": lora_path}
 
-@call_parse
-def main(
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+
+        # Handle potential non-JSON responses
+        try:
+            return response.json()
+        except ValueError:
+            return {
+                "status": "success",
+                "message": (
+                    response.text
+                    if response.text.strip()
+                    else "Request completed with empty response"
+                ),
+            }
+
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Request failed: {str(e)}"}
+
+
+def serve(
     model: str,
     gpu_groups: str,
     served_model_name: Optional[str] = None,
     port_start: int = 8155,
-    gpu_memory_utilization: float = 0.95,
+    gpu_memory_utilization: float = 0.93 ,
     dtype: str = "bfloat16",
     max_model_len: int = 8192,
     enable_lora: bool = False,
-    enable_quantization: bool = False,
+    is_bnb: bool = False,
     not_verbose=True,
-    extra_args: Optional[List[str]] = []
+    extra_args: Optional[List[str]] = [],
 ):
     """Main function to start or kill vLLM containers."""
-
 
     """Start vLLM containers with dynamic args."""
     gpu_groups_arr = gpu_groups.split(",")
     VLLM_BINARY = get_vllm()
     if enable_lora:
-        VLLM_BINARY = 'VLLM_ALLOW_RUNTIME_LORA_UPDATING=True ' + VLLM_BINARY
+        VLLM_BINARY = "VLLM_ALLOW_RUNTIME_LORA_UPDATING=True " + VLLM_BINARY
 
     # Auto-detect quantization based on model name if not explicitly set
-    if (
-        not enable_quantization
-        and model
-        and ("bnb" in model.lower() or "4bit" in model.lower())
-    ):
-        enable_quantization = True
+    if not is_bnb and model and ("bnb" in model.lower() or "4bit" in model.lower()):
+        is_bnb = True
         print(f"Auto-detected quantization for model: {model}")
 
     # Set environment variables for LoRA if needed
@@ -115,7 +144,7 @@ def main(
         if served_model_name:
             cmd.extend(["--served-model-name", served_model_name])
 
-        if enable_quantization:
+        if is_bnb:
             cmd.extend(
                 ["--quantization", "bitsandbytes", "--load-format", "bitsandbytes"]
             )
@@ -137,7 +166,6 @@ def main(
         os.system(run_in_tmux)
 
 
-
 def get_vllm():
     VLLM_BINARY = subprocess.check_output("which vllm", shell=True, text=True).strip()
     VLLM_BINARY = os.getenv("VLLM_BINARY", VLLM_BINARY)
@@ -146,3 +174,87 @@ def get_vllm():
         VLLM_BINARY
     ), f"vLLM binary not found at {VLLM_BINARY}, please set VLLM_BINARY env variable"
     return VLLM_BINARY
+
+
+def get_args():
+    """Parse command line arguments."""
+    example_args = ['svllm serve --model google/gemma-3-27b-it -g 0123 ',
+                    'svllm add_lora lora_name@path:port',
+                    'svllm kill']
+    
+    parser = argparse.ArgumentParser(description="vLLM Serve Script", epilog="Example: " + " || ".join(example_args))
+    parser.add_argument(
+        "mode", choices=["serve", "kill", "add_lora"], help="Mode to run the script in"
+    )
+    parser.add_argument("--model", "-m", type=str, help="Model to serve")
+    parser.add_argument(
+        "--gpu_groups", "-g", type=str, help="Comma-separated list of GPU groups"
+    )
+    parser.add_argument(
+        "--served_model_name", type=str, help="Name of the served model"
+    )
+    parser.add_argument(
+        "--port_start", type=int, default=8155, help="Starting port number"
+    )
+    parser.add_argument(
+        "--gpu_memory_utilization",
+        type=float,
+        default=0.95,
+        help="GPU memory utilization",
+    )
+    parser.add_argument("--dtype", type=str, default="bfloat16", help="Data type")
+    parser.add_argument(
+        "--max_model_len", type=int, default=8192, help="Maximum model length"
+    )
+    # parser.add_argument("--enable_lora", action="store_true", help="Enable LoRA")
+    parser.add_argument(
+        "--disable_lora",
+        dest="enable_lora",
+        action="store_false",
+        help="Enable LoRA",
+        default=True,
+    )
+    parser.add_argument("--bnb", action="store_true", help="Enable quantization")
+    parser.add_argument(
+        "--not_verbose", action="store_true", help="Disable verbose logging"
+    )
+    parser.add_argument("--vllm_binary", type=str, help="Path to the vLLM binary")
+    parser.add_argument("--lora_name", type=str, help="Name of the LoRA adapter")
+    parser.add_argument(
+        "extra_args", nargs=argparse.REMAINDER, help="Additional arguments for the serve command"
+    )
+    return parser.parse_args()
+
+
+def main():
+    """Main entry point for the script."""
+
+    args = get_args()
+    # if help
+    if args.mode == "serve":
+        serve(
+            args.model,
+            args.gpu_groups,
+            args.served_model_name,
+            args.port_start,
+            args.gpu_memory_utilization,
+            args.dtype,
+            args.max_model_len,
+            args.enable_lora,
+            args.bnb,
+            args.not_verbose,
+            args.extra_args,
+        )
+    elif args.mode == "kill":
+        kill_existing_vllm(args.vllm_binary)
+    elif args.add_lora:
+        # split by :
+        assert (
+            "@" in args.add_lora
+        ), "Invalid format for add_lora, should be lora_name@path:port"
+        path, port = args.add_lora.split("@")
+        add_lora(args.lora_name, path, port)
+
+
+if __name__ == "__main__":
+    main()
