@@ -89,7 +89,8 @@ def select_dataset_by_length(
                 table_data.append([gpu, split["lengths"], split["total_len"]])
             # use tabulate to print the table
             from tabulate import tabulate
-            s = tabulate(table_data, headers=table_header)
+            s = 'Below is the table of the selected samples for each GPU\n'
+            s += tabulate(table_data, headers=table_header)
             logger.info(s)
             
         for gpu, split in splits.items():
