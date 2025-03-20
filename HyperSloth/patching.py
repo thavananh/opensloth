@@ -80,9 +80,18 @@ def select_dataset_by_length(
     for batch_indices in global_batches[:-1]:  # Exclude potentially smaller last batch
         batch_lengths = [id_to_length[i] for i in batch_indices]
         splits = split_batch_evenly(batch_lengths, batch_indices, num_gpus)
-        this_gpu_split = splits[gpu_index]
-        if len(selected_ids) == 0:
-            print(f"{splits=}")
+        if len(selected_ids) == 0 and gpu_index == 0:
+            # to print keys: lens, total_len
+            # create a table
+            table_header = ["GPU", "Lens", "Total Len"]
+            table_data = []
+            for gpu, split in splits.items():
+                table_data.append([gpu, split["lengths"], split["total_len"]])
+            # use tabulate to print the table
+            from tabulate import tabulate
+            s = tabulate(table_data, headers=table_header)
+            logger.info(s)
+            
         for gpu, split in splits.items():
             selected_ids[gpu].extend(split["global_ids"])
     # ensure all gpus have the same number of samples
