@@ -154,7 +154,7 @@ def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
             logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
             if time.time() - t > 5:
                 raise TimeoutError(f"Lock not released: {lock}")
-
+        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
         dataset = load_from_disk(dataset_cache_path)
         hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
         trainer = SFTTrainer(
