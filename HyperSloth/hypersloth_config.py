@@ -6,7 +6,7 @@ class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
     dataset_name_or_path: str = "data/cod_1k.json"
-    test_ratio: float = 0.05
+    test_ratio: float = 0.00
     dataset_num_proc: int = 4
     instruction_part: str = "Instruction:"
     response_part: str = "Response:"
