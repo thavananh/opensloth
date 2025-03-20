@@ -65,7 +65,7 @@ def setup_model_and_training(
     )
     
     trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
-    if hyper_config.data.group_by_length:
+    if hyper_config.data.group_by_length and False: # This currently hurts performance
         trainer = patch_sample_by_len(trainer, gpu_ith, len(hyper_config.training.gpus))
     else:
         trainer.train_dataset = trainer.train_dataset.shard(
