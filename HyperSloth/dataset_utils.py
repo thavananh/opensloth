@@ -93,23 +93,26 @@ def get_chat_dataset(
                     chat_template
                 ).chat_template
 
+
             texts = tokenizer.apply_chat_template(
                 examples[messages_key], tokenize=False
             )
             return {"text": texts}
 
-        try:
-            dataset = dataset.map(apply_chat_template, batched=True)
-        except Exception as e:
-            # Provide helpful error with dataset structure information
-            raise ValueError(
-                f"Failed to apply chat template: {str(e)}\n"
-                f"Dataset structure: Keys in first example = {dataset_keys}\n"
-                f"Make sure the dataset has conversation data in a recognized format."
-            ) from e
+        # try:
+        dataset = dataset.map(apply_chat_template, batched=True)
+        # except Exception as e:
+        #     # Provide helpful error with dataset structure information
+        #     raise ValueError(
+        #         f"Failed to apply chat template: {str(e)}\n"
+        #         f"Dataset structure: Keys in first example = {dataset_keys}\n"
+        #         f"Make sure the dataset has conversation data in a recognized format."
+        #     ) from e
 
-    # Sample dataset if requested
-
+    # import ipdb; ipdb.set_trace()
+    # def tokenize_function(text):
+    #     return tokenizer(text, return_tensors="pt")['input_ids']
+    
     # Create train/test split if needed
     if test_ratio > 0:
         ds = dataset.train_test_split(test_size=test_ratio, shuffle=True, seed=42)

@@ -1,4 +1,7 @@
+from collections import defaultdict
 import random
+
+from loguru import logger
 
 
 def patch_sampler(trainer):
@@ -73,13 +76,23 @@ def select_dataset_by_length(
     global_batch_size = grad_accum_steps * batch_size * num_gpus
     global_batches = list(chunked(dataset_indices, global_batch_size))
 
-    selected_ids = []
+    selected_ids = defaultdict(list)
     for batch_indices in global_batches[:-1]:  # Exclude potentially smaller last batch
         batch_lengths = [id_to_length[i] for i in batch_indices]
         splits = split_batch_evenly(batch_lengths, batch_indices, num_gpus)
         this_gpu_split = splits[gpu_index]
-        if len(selected_ids)==0:
+        if len(selected_ids) == 0:
             print(f"{splits=}")
-        selected_ids.extend(this_gpu_split["global_ids"])
-
-    return dataset.select(selected_ids)
+        for gpu, split in splits.items():
+            selected_ids[gpu].extend(split["global_ids"])
+    # ensure all gpus have the same number of samples
+    n1 = len(selected_ids[0])
+    for gpu in range(1, num_gpus):
+        n2 = len(selected_ids[gpu])
+        if n1 != n2:
+            raise ValueError(f"GPU {gpu} has {n2} samples, while GPU 0 has {n1}")
+    logger.info(f"GPU {gpu_index}: Selected {n1} samples for training")
+    selected_ids_flat = []
+    for gpu, ids in selected_ids.items():
+        selected_ids_flat.extend(ids)
+    return dataset.select(selected_ids_flat)
