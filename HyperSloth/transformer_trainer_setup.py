@@ -18,95 +18,83 @@ def setup_model_and_training(
 ):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
-
-    Args:
-        gpu: GPU index
-        hyper_config: Configuration arguments
-        hf_train_args: Training arguments
-
-    Returns:
-        Trainer object configured for multi-GPU training
     """
-    from unsloth import FastModel
 
     gpu_ith = hyper_config.training.gpus.index(gpu)
 
     # Initialize model and tokenizer
-    model, tokenizer = FastModel.from_pretrained(
-        **hyper_config.fast_model_args.model_dump()
-    )
-    if not hyper_config.fast_model_args.full_finetuning:
-        model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
+    model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
 
-    # Load dataset
-    trainer = _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
+    # Build trainer (loads/prepares dataset, sets up SFTTrainer)
+    trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
 
-    # Shard the dataset for multi-GPU training
+    # Shard dataset for multi-GPU
+    ds = trainer.train_dataset
+    global_bz = hf_train_args.per_device_train_batch_size * hf_train_args.gradient_accumulation_steps
+    
+    ds_shard0 = ds.shard(num_shards=2, index=0, contiguous=True, keep_in_memory=True)
+    ds_shard1 = ds.shard(num_shards=2, index=1, contiguous=True, keep_in_memory=True)
+    
+    
+    if gpu_ith == 0:
+        batch0 = [len(ds_shard0[i]['input_ids']) for i in range(global_bz)]
+        batch1 = [len(ds_shard1[i]['input_ids']) for i in range(global_bz)]   
+        print(f"Shard 0: {batch0}")
+        print(f"Shard 1: {batch1}")
+    
     trainer.train_dataset = trainer.train_dataset.shard(
-        num_shards=len(hyper_config.training.gpus), index=gpu_ith
+        num_shards=len(hyper_config.training.gpus),
+        index=gpu_ith,
+        contiguous=True,
+        keep_in_memory=True,# this will keep the dataset in memory
     )
 
-    # Handle specific training loss type
-    if hyper_config.training.loss_type == "response_only":
-        from unsloth.chat_templates import train_on_responses_only
+    # Optionally train on response-only
+    _maybe_train_on_responses_only(trainer, hyper_config)
 
-        first_text = trainer.train_dataset[0]["text"]
-        instruction_part = hyper_config.data.instruction_part
-        response_part = hyper_config.data.response_part
-        assert instruction_part in first_text, f"{instruction_part} not in {first_text}"
-        assert response_part in first_text, f"{response_part} not in {first_text}"
-        trainer = train_on_responses_only(
-            trainer,
-            instruction_part=instruction_part,
-            response_part=response_part,
-        )
-
+    # Debug info for the main GPU
     if gpu_ith == 0:
         logger.info(f"Model setup complete for GPU {gpu_ith}")
         from ._debug_dataloader import _debug_dataloader
 
         _debug_dataloader(trainer)
+
     return trainer
 
 
-def _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
+def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
+    """Initialize and optionally set up LoRA for the model."""
+    from unsloth import FastModel
+
+    model, tokenizer = FastModel.from_pretrained(
+        **hyper_config.fast_model_args.model_dump()
+    )
+    if not hyper_config.fast_model_args.full_finetuning:
+        model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
+    return model, tokenizer
+
+
+def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
+    """Load or prepare the dataset and create the SFTTrainer."""
     from trl import SFTTrainer
     from datasets import load_from_disk
     from speedy_utils import identify
+    from fastcore.all import Path
 
     tokenizer_name = identify(str(tokenizer))
-    dataset_cache_path = identify(hyper_config.data.dataset_name_or_path)
-
-    from fastcore.all import Path
-    is_file = Path(dataset_cache_path).is_file()
+    num_gpus = len(hyper_config.training.gpus)
+    dataset_cache_path = identify([hyper_config.data.dataset_name_or_path, num_gpus])
     dataset_name = identify(hyper_config.data.model_dump())
-    if is_file:
-        dataset_cache_path = (
-            hyper_config.data.dataset_name_or_path
-            + "_"
-            + tokenizer_name
-            + "_"
-            + dataset_name
-            + ".cache"
-        )
-        lock = dataset_cache_path + ".lock"
-    else:
-        dataset_cache_path = (
-            "/dev/shm/"
-            + hyper_config.data.dataset_name_or_path
-            + "_"
-            + tokenizer_name
-            + ".cache"
-        )
-        lock = dataset_cache_path + ".lock"
-
-    # Check if dataset cache already exists
+    dataset_cache_path = (
+        "/dev/shm/dataset_"+ tokenizer_name+"_"+dataset_name
+        + ".cache"
+    )
+    lock = dataset_cache_path + ".lock"
     dataset_cache_exists = os.path.exists(dataset_cache_path)
+
+    # CASE 1: Dataset cache already exists, just load it
     if dataset_cache_exists:
-        # Dataset already cached, load from disk
-        logger.info(
-            f"GPU {gpu_ith}: Loading dataset from cached file {dataset_cache_path}"
-        )
+        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
         dataset = load_from_disk(dataset_cache_path)
         hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
         trainer = SFTTrainer(
@@ -119,18 +107,16 @@ def _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
             dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
         )
+
+    # CASE 2: GPU 0 prepares the dataset and saves for others
     elif gpu_ith == 0:
         with filelock.FileLock(lock):
-            # GPU 0 needs to prepare the dataset
-            logger.info(
-                f"GPU {gpu_ith}: Preparing dataset and saving to {dataset_cache_path}"
-            )
+            logger.info(f"GPU {gpu_ith}: Preparing dataset -> {dataset_cache_path}")
             from HyperSloth.dataset_utils import get_chat_dataset
 
             ds_train, ds_test = get_chat_dataset(
                 tokenizer=tokenizer, **hyper_config.data.model_dump()
             )
-
             hf_train_args.dataset_kwargs = {"skip_prepare_dataset": False}
             trainer = SFTTrainer(
                 model=model,
@@ -143,42 +129,31 @@ def _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
                 args=hf_train_args,
             )
 
-            # Adjust dataset for multi-GPU training
+            # Adjust dataset for multi-GPU
             max_len_ds = len(hyper_config.training.gpus) * (
                 len(trainer.train_dataset) // len(hyper_config.training.gpus)
             )
-
             trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
-            if hyper_config.data.group_by_length:
-                from .patching import patch_sampler, select_dataset_by_length
 
-                trainer = patch_sampler(trainer)
-                trainer.train_dataset = select_dataset_by_length(
-                    trainer.train_dataset,
-                    gpu_ith,
-                    len(hyper_config.training.gpus),
-                    hf_train_args.gradient_accumulation_steps,
-                    hf_train_args.per_device_train_batch_size,
-                )
-            # Save dataset for other GPUs to use
+
             trainer.train_dataset.save_to_disk(dataset_cache_path)
+
+
+
         if os.path.exists(lock):
             os.remove(lock)
+
+    # CASE 3: Other GPUs wait for GPU 0
     else:
-        # Non-GPU 0 waits for GPU 0 to prepare dataset
-        # After the lock is acquired, the dataset should be available
         while not os.path.exists(dataset_cache_path):
             time.sleep(1)
             logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
-        # wait for the lock to be released
         t = time.time()
         while os.path.exists(lock):
             time.sleep(1)
-            logger.info(f"GPU {gpu_ith}: Waiting for lock to be released by GPU 0")
+            logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
             if time.time() - t > 5:
-                raise TimeoutError(
-                    f"The file is there but the lock is not released {lock}"
-                )
+                raise TimeoutError(f"Lock not released: {lock}")
 
         dataset = load_from_disk(dataset_cache_path)
         hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
@@ -191,5 +166,36 @@ def _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
             max_seq_length=hyper_config.fast_model_args.max_seq_length,
             dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
+        )
+
+
+    if hyper_config.data.group_by_length:
+        from .patching import patch_sampler, select_dataset_by_length
+        trainer = patch_sampler(trainer)
+        trainer.train_dataset = select_dataset_by_length(
+            trainer.train_dataset,
+            gpu_ith,
+            len(hyper_config.training.gpus),
+            hf_train_args.gradient_accumulation_steps,
+            hf_train_args.per_device_train_batch_size,
+        )
+    # Save for other GPUs
+    return trainer
+
+
+def _maybe_train_on_responses_only(trainer, hyper_config):
+    """Use a specialized approach if 'response_only' loss is desired."""
+    if hyper_config.training.loss_type == "response_only":
+        from unsloth.chat_templates import train_on_responses_only
+
+        first_text = trainer.train_dataset[0]["text"]
+        instruction_part = hyper_config.data.instruction_part
+        response_part = hyper_config.data.response_part
+        assert instruction_part in first_text, f"{instruction_part} not in {first_text}"
+        assert response_part in first_text, f"{response_part} not in {first_text}"
+        trainer = train_on_responses_only(
+            trainer,
+            instruction_part=instruction_part,
+            response_part=response_part,
         )
     return trainer
