@@ -6,7 +6,6 @@ Handles weight synchronization, model setup, and distributed training coordinati
 import os
 import random
 from loguru import logger
-import numpy as np
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
 
@@ -30,8 +29,8 @@ def setup_model_and_training(
     from unsloth import FastModel
     from HyperSloth.dataset_utils import get_chat_dataset
     from trl import SFTTrainer
+
     gpu_ith = hyper_config.training.gpus.index(gpu)
-    
 
     # Initialize model and tokenizer
     model, tokenizer = FastModel.from_pretrained(
@@ -63,10 +62,18 @@ def setup_model_and_training(
     max_len_ds = len(hyper_config.training.gpus) * (
         len(trainer.train_dataset) // len(hyper_config.training.gpus)
     )
-    
+
     trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
-    if hyper_config.data.group_by_length and False: # This currently hurts performance
-        trainer = patch_sample_by_len(trainer, gpu_ith, len(hyper_config.training.gpus))
+    if hyper_config.data.group_by_length:  # This currently hurts performance
+        from .patching import patch_sampler, select_dataset_by_length
+        trainer = patch_sampler(trainer)
+        trainer.train_dataset = select_dataset_by_length(
+            trainer.train_dataset,
+            gpu_ith,
+            len(hyper_config.training.gpus),
+            hf_train_args.gradient_accumulation_steps,
+            hf_train_args.per_device_train_batch_size,
+        )
     else:
         trainer.train_dataset = trainer.train_dataset.shard(
             num_shards=len(hyper_config.training.gpus), index=gpu_ith
@@ -86,36 +93,95 @@ def setup_model_and_training(
             instruction_part=instruction_part,
             response_part=response_part,
         )
+
     if gpu_ith == 0:
         logger.info(f"Model setup complete for GPU {gpu_ith}")
         _debug_dataloader(trainer)
     return trainer
 
 
+# def patch_sampler(trainer):
+#     from torch.utils.data import SequentialSampler
+#     from transformers import Trainer
+#     from fastcore.all import patch
+
+#     @patch
+#     def _get_train_sampler(self: Trainer) -> SequentialSampler:
+#         """Get a sequential sampler for the training dataset."""
+#         return SequentialSampler(self.train_dataset)
+
+#     return trainer
 
 
+# def select_dataset_by_length(
+#     dataset, gpu_index: int, num_gpus: int, grad_accum_steps: int, batch_size: int
+# ):
+#     from fastcore.all import chunked
+#     from typing import List, Dict
+#     import numpy as np
 
+#     def split_batch_evenly(
+#         lengths: List[int], global_ids: List[int], num_gpus: int
+#     ) -> Dict[int, Dict[str, List[int]]]:
+#         if len(lengths) % num_gpus != 0:
+#             raise ValueError("The list length must be divisible by num_gpus")
 
-def patch_sample_by_len(trainer, gpu_ith, num_gpus):
-    from fastcore.all import patch, chunked
-    from torch.utils.data import SequentialSampler
-    _TYPE = type(trainer)
-    @patch
-    def _get_train_sampler(self:_TYPE) -> SequentialSampler:
-        """Get a sequential sampler for the training dataset."""
-        return SequentialSampler(self.train_dataset)
-    
-    lens = [len(item["input_ids"]) for item in trainer.train_dataset]
-    ids_sorted = np.argsort(lens).tolist()
-    chunked_ids = list(chunked(ids_sorted, num_gpus))
-    # group by num gpus
-    random.Random(42).shuffle(chunked_ids)
-    # select coresponing chunk for each gpu
-    selected_ids = [group[gpu_ith] for group in chunked_ids]
-    trainer.train_dataset = trainer.train_dataset.select(selected_ids)
-    return trainer
-    
+#         indices_sorted = np.argsort(-np.array(lengths))
+#         splits = [[] for _ in range(num_gpus)]
+#         length_sums = [0] * num_gpus
+#         max_items_per_gpu = len(lengths) // num_gpus
 
+#         for idx in indices_sorted:
+#             gpu_candidates = sorted(
+#                 range(num_gpus),
+#                 key=lambda gpu: (
+#                     len(splits[gpu]) >= max_items_per_gpu,
+#                     length_sums[gpu],
+#                 ),
+#             )
+#             chosen_gpu = gpu_candidates[0]
+#             splits[chosen_gpu].append(idx)
+#             length_sums[chosen_gpu] += lengths[idx]
+
+#         splits = [sorted(split) for split in splits]
+
+#         gpu_batches = {
+#             gpu: {
+#                 "global_ids": [global_ids[i] for i in splits[gpu]],
+#                 "lengths": [lengths[i] for i in splits[gpu]],
+#             }
+#             for gpu in range(num_gpus)
+#         }
+#         for gpu in range(num_gpus):
+#             lens = gpu_batches[gpu]["lengths"]
+#             ids = gpu_batches[gpu]["global_ids"]
+#             new_lens, new_ids = zip(*sorted(zip(lens, ids), key=lambda x: x[0]))
+#             total_len = sum(new_lens)
+#             gpu_batches[gpu] = {
+#                 "global_ids": list(new_ids),
+#                 "lengths": list(new_lens),
+#                 "total_len": total_len,
+#             }
+
+#         return gpu_batches
+
+#     dataset_indices = list(range(len(dataset)))
+#     id_to_length = {idx: len(dataset[idx]["input_ids"]) for idx in dataset_indices}
+#     random.Random(42).shuffle(dataset_indices)
+
+#     global_batch_size = grad_accum_steps * batch_size * num_gpus
+#     global_batches = list(chunked(dataset_indices, global_batch_size))
+
+#     selected_ids = []
+#     for batch_indices in global_batches[:-1]:  # Exclude potentially smaller last batch
+#         batch_lengths = [id_to_length[i] for i in batch_indices]
+#         splits = split_batch_evenly(batch_lengths, batch_indices, num_gpus)
+#         this_gpu_split = splits[gpu_index]
+#         if gpu_index == 0:
+#             print(f"{splits=}")
+#         selected_ids.extend(this_gpu_split["global_ids"])
+
+#     return dataset.select(selected_ids)
 
 
 def _debug_dataloader(trainer, n_example=10):
@@ -130,10 +196,11 @@ def _debug_dataloader(trainer, n_example=10):
     g = iter(dl)
     html_path = ".log/dataloader_examples.html"
     os.makedirs(os.path.dirname(html_path), exist_ok=True)
-    
+
     # Create HTML file with CSS styling
     with open(html_path, "w") as html_file:
-        html_file.write("""<!DOCTYPE html>
+        html_file.write(
+            """<!DOCTYPE html>
     <html>
     <head>
         <title>Dataloader Examples</title>
@@ -165,51 +232,67 @@ def _debug_dataloader(trainer, n_example=10):
     <body>
         <h1>Dataloader Examples</h1>
         <p>This file contains examples of training data with context and trainable parts.</p>
-    """)
-        
+    """
+        )
+
         for i in range(n_example):
             batch = next(g)
             input_ids = batch["input_ids"][0]
             label_ids = batch["labels"][0]
-            parts_mask = (label_ids >= 0)  # True is trainable, False is context
+            parts_mask = label_ids >= 0  # True is trainable, False is context
 
             # Find split points where trainable/non-trainable sections change
-            split_points = [0] + [
-                i for i, val in enumerate(parts_mask)
-                if i > 0 and val != parts_mask[i - 1]
-            ] + [len(parts_mask)]
-            
+            split_points = (
+                [0]
+                + [
+                    i
+                    for i, val in enumerate(parts_mask)
+                    if i > 0 and val != parts_mask[i - 1]
+                ]
+                + [len(parts_mask)]
+            )
+
             colored_parts = []
             html_file.write(f"\n    <h2>Example {i+1}</h2>\n")
-            html_file.write("    <table>\n        <tr><th>Text</th><th>Label</th></tr>\n")
-            
+            html_file.write(
+                "    <table>\n        <tr><th>Text</th><th>Label</th></tr>\n"
+            )
+
             for a, b in zip(split_points[:-1], split_points[1:]):
                 text = tokenizer.decode(input_ids[a:b])
                 is_trainable = parts_mask[a]
-                
+
                 # Colored text for terminal
-                colored_text = f"\033[93m{text}\033[0m" if is_trainable else f"\033[92m{text}\033[0m"
+                colored_text = (
+                    f"\033[93m{text}\033[0m"
+                    if is_trainable
+                    else f"\033[92m{text}\033[0m"
+                )
                 colored_parts.append(colored_text)
-                
+
                 # HTML with CSS classes
                 css_class = "trainable" if is_trainable else "context"
                 label = "🟠 TRAIN" if is_trainable else "🟢 CONTEXT"
-                
+
                 # Escape HTML special characters
-                text_escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                
+                text_escaped = (
+                    text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                )
+
                 # Add row to HTML table
-                html_file.write(f"        <tr>\n            <td><span class=\"{css_class}\">{text_escaped}</span></td>\n"
-                               f"            <td>{label}</td>\n        </tr>\n")
-            
+                html_file.write(
+                    f'        <tr>\n            <td><span class="{css_class}">{text_escaped}</span></td>\n'
+                    f"            <td>{label}</td>\n        </tr>\n"
+                )
+
             html_file.write("    </table>\n")
-            
+
             # Colored text for terminal
             colored_output = "".join(colored_parts)
             terminal_msg = f"\n=== EXAMPLE #{i+1} ===\n" + colored_output + "\n"
             if i == 0:
                 print(terminal_msg)
-        
+
         html_file.write("</body>\n</html>")
-    
+
     print(f"More training debug examples written to {html_path}")
