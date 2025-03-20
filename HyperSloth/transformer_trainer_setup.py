@@ -76,12 +76,18 @@ def _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
 
     tokenizer_name = identify(str(tokenizer))
     dataset_cache_path = identify(hyper_config.data.dataset_name_or_path)
-    from fastcore.all import Path
 
+    from fastcore.all import Path
     is_file = Path(dataset_cache_path).is_file()
+    dataset_name = identify(hyper_config.data.model_dump())
     if is_file:
         dataset_cache_path = (
-            hyper_config.data.dataset_name_or_path + "_" + tokenizer_name + ".cache"
+            hyper_config.data.dataset_name_or_path
+            + "_"
+            + tokenizer_name
+            + "_"
+            + dataset_name
+            + ".cache"
         )
         lock = dataset_cache_path + ".lock"
     else:
@@ -114,7 +120,6 @@ def _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
             args=hf_train_args,
         )
     elif gpu_ith == 0:
-        # create the lock
         with filelock.FileLock(lock):
             # GPU 0 needs to prepare the dataset
             logger.info(
@@ -166,9 +171,14 @@ def _run(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
             time.sleep(1)
             logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
         # wait for the lock to be released
+        t = time.time()
         while os.path.exists(lock):
             time.sleep(1)
             logger.info(f"GPU {gpu_ith}: Waiting for lock to be released by GPU 0")
+            if time.time() - t > 5:
+                raise TimeoutError(
+                    f"The file is there but the lock is not released {lock}"
+                )
 
         dataset = load_from_disk(dataset_cache_path)
         hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
