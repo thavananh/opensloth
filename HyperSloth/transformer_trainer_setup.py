@@ -28,29 +28,17 @@ def setup_model_and_training(
     # Build trainer (loads/prepares dataset, sets up SFTTrainer)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
 
-    # Shard dataset for multi-GPU
-    # ds = trainer.train_dataset
-    # global_bz = hf_train_args.per_device_train_batch_size * hf_train_args.gradient_accumulation_steps
-    
-    # ds_shard0 = ds.shard(num_shards=2, index=0, contiguous=True, keep_in_memory=True)
-    # ds_shard1 = ds.shard(num_shards=2, index=1, contiguous=True, keep_in_memory=True)
-    
-    
-    # if gpu_ith == 0:
-    #     batch0 = [len(ds_shard0[i]['input_ids']) for i in range(global_bz)]
-    #     batch1 = [len(ds_shard1[i]['input_ids']) for i in range(global_bz)]   
-    #     print(f"Shard 0: {batch0}")
-    #     print(f"Shard 1: {batch1}")
-    
     trainer.train_dataset = trainer.train_dataset.shard(
         num_shards=len(hyper_config.training.gpus),
         index=gpu_ith,
         contiguous=True,
-        keep_in_memory=True,# this will keep the dataset in memory
+        keep_in_memory=True,  # this will keep the dataset in memory
     )
 
     # Optionally train on response-only
     _maybe_train_on_responses_only(trainer, hyper_config)
+    # Get the lengths
+    _debug_training_lengs(hf_train_args, gpu_ith, trainer)
 
     # Debug info for the main GPU
     if gpu_ith == 0:
@@ -60,6 +48,27 @@ def setup_model_and_training(
         _debug_dataloader(trainer)
 
     return trainer
+
+
+def _debug_training_lengs(hf_train_args, gpu_ith, trainer):
+    dataloader = trainer.get_train_dataloader()
+    generator = iter(dataloader)
+    with open(f"lengths_{gpu_ith}.txt", "w") as f:
+        num_grad_accum = hf_train_args.gradient_accumulation_steps
+        txt = ""
+        for i in range(10):
+            len_in_one_update = []
+            for i in range(num_grad_accum):
+                batch = next(generator)
+                s1, s2 = batch["input_ids"].shape[0], batch["input_ids"].shape[1]
+                len_in_one_update.append(s2)
+            total_len = sum([shape for shape in len_in_one_update])
+            txt += (
+                "|".join([str(x) for x in len_in_one_update])
+                + "Total len:{}".format(total_len)
+                + "\n"
+            )
+        f.write(txt)
 
 
 def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
@@ -86,8 +95,7 @@ def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
     dataset_cache_path = identify([hyper_config.data.dataset_name_or_path, num_gpus])
     dataset_name = identify(hyper_config.data.model_dump())
     dataset_cache_path = (
-        "/dev/shm/dataset_"+ tokenizer_name+"_"+dataset_name
-        + ".cache"
+        "/dev/shm/dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
     )
     lock = dataset_cache_path + ".lock"
     dataset_cache_exists = os.path.exists(dataset_cache_path)
@@ -135,10 +143,7 @@ def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
             )
             trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
 
-
             trainer.train_dataset.save_to_disk(dataset_cache_path)
-
-
 
         if os.path.exists(lock):
             os.remove(lock)
@@ -168,9 +173,9 @@ def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
             args=hf_train_args,
         )
 
-
     if hyper_config.data.group_by_length:
         from .patching import patch_sampler, select_dataset_by_length
+
         trainer = patch_sampler(trainer)
         trainer.train_dataset = select_dataset_by_length(
             trainer.train_dataset,
