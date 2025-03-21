@@ -8,8 +8,10 @@ import filelock
 import numpy as np
 import torch
 from loguru import logger
+from speedy_utils import Clock
 from speedy_utils.all import multi_thread
-from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
+from transformers.trainer_callback import (TrainerCallback, TrainerControl,
+                                           TrainerState)
 
 multi_thread = partial(multi_thread, report=False, progress=False)
 
@@ -313,9 +315,6 @@ class MmapGradientSync:
                 with UniversalLocker(rfile + ".lock"):
                     if os.path.exists(rfile):
                         os.remove(rfile)
-
-
-from speedy_utils import Clock
 
 
 class MmapGradSyncCallback(TrainerCallback):
