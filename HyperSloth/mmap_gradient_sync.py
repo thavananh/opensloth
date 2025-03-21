@@ -17,6 +17,8 @@ logger.remove()
 logger.add("mmap_gradient_sync.log", level="DEBUG")
 logger.add(sys.stdout, level="INFO")
 SLEEP_TIME = 0.1
+
+
 class UniversalLocker:
     """
     A context manager for handling file locks.
@@ -108,7 +110,6 @@ class MmapGradientSync:
     # -------------------------------------------------------
     # Internal single-parameter operations for multi_thread
     # -------------------------------------------------------
-
 
     def _accumulate_one_param(self, task: Tuple[str, int, np.ndarray]):
         """
@@ -202,14 +203,14 @@ class MmapGradientSync:
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
 
-        logger.debug("[GPU {}] All GPUs have accumulated gradients.", self.gpu)
+        logger.debug(f"[GPU {self.gpu}] All GPUs have accumulated gradients.")
 
     def _wait_for_all_read(self):
         """
         Wait until all GPUs have read gradients
         (presence of count_read_gpu{i}.txt for each i in self.gpus).
         """
-        logger.debug("[GPU {}] Waiting for all GPUs to read gradients..", self.gpu)
+        logger.debug(f"[GPU {self.gpu}] Waiting for all GPUs to read gradients..")
         while True:
             count = 0
             for gpu_id in self.gpus:
@@ -222,8 +223,7 @@ class MmapGradientSync:
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
 
-        logger.debug("[GPU {}] All GPUs have read gradients.", self.gpu)
-
+        logger.debug(f"[GPU {self.gpu}] All GPUs have read gradients.")
 
     def read_final_grad_into_model(self, model: torch.nn.Module, average: bool = True):
         """
@@ -261,7 +261,7 @@ class MmapGradientSync:
             shape = info["shape"]
             param.grad = torch.from_numpy(arr).view(shape).to(param.device)
 
-        logger.debug("[GPU {}] Read final gradients from memmaps into model.", self.gpu)
+        logger.debug(f"[GPU {self.gpu}] Read final gradients from memmaps into model.")
 
         # Write a "done reading" file for this GPU
         read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu}.txt"
@@ -314,7 +314,10 @@ class MmapGradientSync:
                     if os.path.exists(rfile):
                         os.remove(rfile)
 
+
 from speedy_utils import Clock
+
+
 class MmapGradSyncCallback(TrainerCallback):
     def __init__(self, model, grad_dir, gpu, gpus):
         self.model = model
