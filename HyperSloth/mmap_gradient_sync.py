@@ -126,17 +126,14 @@ class MmapGradientSync:
 
     def _read_one_param(self, task: Tuple[str, int]) -> np.ndarray:
         """
-        Reads the final sum from memmap into a NumPy array, returns it.
+        Reads the final sum from memmap into a NumPy array without using locks.
         'task' is a tuple: (filename, numel).
         """
         filename, numel = task
-        lockfile_path = self._lockfile(filename)
-
-        with UniversalLocker(lockfile_path):
-            mm = np.memmap(filename, dtype=np.float32, mode="r", shape=(numel,))
-            arr = np.copy(mm[:])  # copy out
-            del mm
-
+        # No lock needed for reading, since all writes have completed at this stage
+        mm = np.memmap(filename, dtype=np.float32, mode="r", shape=(numel,))
+        arr = np.copy(mm[:])  # copy data safely
+        del mm
         return arr
 
     def _zero_one_param(self, task: Tuple[str, int]):
@@ -227,9 +224,10 @@ class MmapGradientSync:
 
         logger.debug("[GPU {}] All GPUs have read gradients.", self.gpu)
 
+
     def read_final_grad_into_model(self, model: torch.nn.Module, average: bool = True):
         """
-        Reads the final gradient from memmaps into param.grad.
+        Reads the final gradient from memmaps into param.grad without locks for read operations.
         Optionally divides by the number of GPUs in self.gpus.
         """
         # Wait for *all* ranks to finish writing first
@@ -316,7 +314,7 @@ class MmapGradientSync:
                     if os.path.exists(rfile):
                         os.remove(rfile)
 
-
+from speedy_utils import Clock
 class MmapGradSyncCallback(TrainerCallback):
     def __init__(self, model, grad_dir, gpu, gpus):
         self.model = model
@@ -338,6 +336,7 @@ class MmapGradSyncCallback(TrainerCallback):
             mode="w+",
             shape=(len(self.gpus),),
         )
+        self.clock = Clock()
 
     def on_pre_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -346,7 +345,10 @@ class MmapGradSyncCallback(TrainerCallback):
         Event called before optimizer step.
         """
         self.grad_sync.accumulate_local_grad(self.model)
+        self.clock.update_task("accumulate_local_grad")
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
+        self.clock.update_task("read_final_grad_into_model")
+        self.clock.print_task_table(interval=10)
 
     def on_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs

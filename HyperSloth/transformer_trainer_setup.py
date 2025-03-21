@@ -29,18 +29,18 @@ def setup_model_and_training(
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
 
     # Shard dataset for multi-GPU
-    ds = trainer.train_dataset
-    global_bz = hf_train_args.per_device_train_batch_size * hf_train_args.gradient_accumulation_steps
+    # ds = trainer.train_dataset
+    # global_bz = hf_train_args.per_device_train_batch_size * hf_train_args.gradient_accumulation_steps
     
-    ds_shard0 = ds.shard(num_shards=2, index=0, contiguous=True, keep_in_memory=True)
-    ds_shard1 = ds.shard(num_shards=2, index=1, contiguous=True, keep_in_memory=True)
+    # ds_shard0 = ds.shard(num_shards=2, index=0, contiguous=True, keep_in_memory=True)
+    # ds_shard1 = ds.shard(num_shards=2, index=1, contiguous=True, keep_in_memory=True)
     
     
-    if gpu_ith == 0:
-        batch0 = [len(ds_shard0[i]['input_ids']) for i in range(global_bz)]
-        batch1 = [len(ds_shard1[i]['input_ids']) for i in range(global_bz)]   
-        print(f"Shard 0: {batch0}")
-        print(f"Shard 1: {batch1}")
+    # if gpu_ith == 0:
+    #     batch0 = [len(ds_shard0[i]['input_ids']) for i in range(global_bz)]
+    #     batch1 = [len(ds_shard1[i]['input_ids']) for i in range(global_bz)]   
+    #     print(f"Shard 0: {batch0}")
+    #     print(f"Shard 1: {batch1}")
     
     trainer.train_dataset = trainer.train_dataset.shard(
         num_shards=len(hyper_config.training.gpus),
