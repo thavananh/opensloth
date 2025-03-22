@@ -140,9 +140,10 @@ def serve(
             "--max-model-len",
             str(max_model_len),
             "--disable-log-requests",
+            "--enable-prefix-caching",
         ]
         if not_verbose:
-            cmd += ["--uvicorn-log-level critical", "--enable-prefix-caching"]
+            cmd += ["--uvicorn-log-level critical"]
 
         if served_model_name:
             cmd.extend(["--served-model-name", served_model_name])
@@ -204,7 +205,7 @@ def get_args():
     parser.add_argument(
         "--gpu_memory_utilization",
         type=float,
-        default=0.95,
+        default=0.9,
         help="GPU memory utilization",
     )
     parser.add_argument("--dtype", type=str, default="bfloat16", help="Data type")
