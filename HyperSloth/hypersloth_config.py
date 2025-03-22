@@ -6,11 +6,12 @@ class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
     dataset_name_or_path: str = "data/cod_1k.json"
-    test_ratio: float = 0.05
-    dataset_num_proc: int = 4
+    test_ratio: float = 0.00
+    dataset_num_proc: int = 32
     instruction_part: str = "Instruction:"
     response_part: str = "Response:"
     num_samples: Optional[int] = None
+    group_by_length: bool = True
 
     class Config:
         """Pydantic configuration for DataConfig."""
@@ -107,6 +108,7 @@ class TrainingArgsConfig(BaseModel):
     optim: str = "adamw_8bit"
     weight_decay: float = 0.01
     packing: bool = False
+    
 
     class Config:
         """Pydantic configuration for DataConfig."""

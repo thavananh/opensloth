@@ -8,8 +8,10 @@ import filelock
 import numpy as np
 import torch
 from loguru import logger
+from speedy_utils import Clock
 from speedy_utils.all import multi_thread
-from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
+from transformers.trainer_callback import (TrainerCallback, TrainerControl,
+                                           TrainerState)
 
 multi_thread = partial(multi_thread, report=False, progress=False)
 
@@ -17,6 +19,22 @@ logger.remove()
 logger.add("mmap_gradient_sync.log", level="DEBUG")
 logger.add(sys.stdout, level="INFO")
 SLEEP_TIME = 0.1
+
+
+class UniversalLocker:
+    """
+    A context manager for handling file locks.
+    """
+
+    def __init__(self, lockfile_path: str):
+        self.lockfile_path = lockfile_path
+        self.lock = filelock.FileLock(lockfile_path)
+
+    def __enter__(self):
+        self.lock.acquire()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.lock.release()
 
 
 # Transformers / Trainer imports
@@ -95,21 +113,6 @@ class MmapGradientSync:
     # Internal single-parameter operations for multi_thread
     # -------------------------------------------------------
 
-    class UniversalLocker:
-        """
-        A context manager for handling file locks.
-        """
-
-        def __init__(self, lockfile_path: str):
-            self.lockfile_path = lockfile_path
-            self.lock = filelock.FileLock(lockfile_path)
-
-        def __enter__(self):
-            self.lock.acquire()
-
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            self.lock.release()
-
     def _accumulate_one_param(self, task: Tuple[str, int, np.ndarray]):
         """
         Merges local_grad into the `memmap` for one parameter.
@@ -118,7 +121,7 @@ class MmapGradientSync:
         filename, numel, local_grad = task
         lockfile_path = self._lockfile(filename)
 
-        with self.UniversalLocker(lockfile_path):
+        with UniversalLocker(lockfile_path):
             mm = np.memmap(filename, dtype=np.float32, mode="r+", shape=(numel,))
             mm[:] += local_grad[:]
             mm.flush()
@@ -126,17 +129,14 @@ class MmapGradientSync:
 
     def _read_one_param(self, task: Tuple[str, int]) -> np.ndarray:
         """
-        Reads the final sum from memmap into a NumPy array, returns it.
+        Reads the final sum from memmap into a NumPy array without using locks.
         'task' is a tuple: (filename, numel).
         """
         filename, numel = task
-        lockfile_path = self._lockfile(filename)
-
-        with self.UniversalLocker(lockfile_path):
-            mm = np.memmap(filename, dtype=np.float32, mode="r", shape=(numel,))
-            arr = np.copy(mm[:])  # copy out
-            del mm
-
+        # No lock needed for reading, since all writes have completed at this stage
+        mm = np.memmap(filename, dtype=np.float32, mode="r", shape=(numel,))
+        arr = np.copy(mm[:])  # copy data safely
+        del mm
         return arr
 
     def _zero_one_param(self, task: Tuple[str, int]):
@@ -147,7 +147,7 @@ class MmapGradientSync:
         filename, numel = task
         lockfile_path = self._lockfile(filename)
 
-        with self.UniversalLocker(lockfile_path):
+        with UniversalLocker(lockfile_path):
             mm = np.memmap(filename, dtype=np.float32, mode="r+", shape=(numel,))
             mm[:] = 0.0
             mm.flush()
@@ -181,7 +181,7 @@ class MmapGradientSync:
 
         # Write a "done writing" file for this GPU
         write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu}.txt"
-        with self.UniversalLocker(write_file_path + ".lock"):
+        with UniversalLocker(write_file_path + ".lock"):
             with open(write_file_path, "w") as f:
                 f.write("1")
 
@@ -205,14 +205,14 @@ class MmapGradientSync:
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
 
-        logger.debug("[GPU {}] All GPUs have accumulated gradients.", self.gpu)
+        logger.debug(f"[GPU {self.gpu}] All GPUs have accumulated gradients.")
 
     def _wait_for_all_read(self):
         """
         Wait until all GPUs have read gradients
         (presence of count_read_gpu{i}.txt for each i in self.gpus).
         """
-        logger.debug("[GPU {}] Waiting for all GPUs to read gradients..", self.gpu)
+        logger.debug(f"[GPU {self.gpu}] Waiting for all GPUs to read gradients..")
         while True:
             count = 0
             for gpu_id in self.gpus:
@@ -225,11 +225,11 @@ class MmapGradientSync:
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
 
-        logger.debug("[GPU {}] All GPUs have read gradients.", self.gpu)
+        logger.debug(f"[GPU {self.gpu}] All GPUs have read gradients.")
 
     def read_final_grad_into_model(self, model: torch.nn.Module, average: bool = True):
         """
-        Reads the final gradient from memmaps into param.grad.
+        Reads the final gradient from memmaps into param.grad without locks for read operations.
         Optionally divides by the number of GPUs in self.gpus.
         """
         # Wait for *all* ranks to finish writing first
@@ -263,11 +263,11 @@ class MmapGradientSync:
             shape = info["shape"]
             param.grad = torch.from_numpy(arr).view(shape).to(param.device)
 
-        logger.debug("[GPU {}] Read final gradients from memmaps into model.", self.gpu)
+        logger.debug(f"[GPU {self.gpu}] Read final gradients from memmaps into model.")
 
         # Write a "done reading" file for this GPU
         read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu}.txt"
-        with self.UniversalLocker(read_file_path + ".lock"):
+        with UniversalLocker(read_file_path + ".lock"):
             with open(read_file_path, "w") as f:
                 f.write("1")
 
@@ -295,7 +295,7 @@ class MmapGradientSync:
                 time.sleep(SLEEP_TIME)
 
     def _clean(self):
-        with self.UniversalLocker(os.path.join(self.lock_dir, "zero.lock")):
+        with UniversalLocker(os.path.join(self.lock_dir, "zero.lock")):
             logger.debug(f"[GPU {self.gpu}] Zeroing all memmap files..")
             tasks = []
             for info in self.param_info:
@@ -308,11 +308,11 @@ class MmapGradientSync:
             # Clean up count files (both write and read signals)
             for gpu in self.gpus:
                 wfile = f"{self.grad_dir}/count_write_gpu{gpu}.txt"
-                with self.UniversalLocker(wfile + ".lock"):
+                with UniversalLocker(wfile + ".lock"):
                     if os.path.exists(wfile):
                         os.remove(wfile)
                 rfile = f"{self.grad_dir}/count_read_gpu{gpu}.txt"
-                with self.UniversalLocker(rfile + ".lock"):
+                with UniversalLocker(rfile + ".lock"):
                     if os.path.exists(rfile):
                         os.remove(rfile)
 
@@ -338,6 +338,7 @@ class MmapGradSyncCallback(TrainerCallback):
             mode="w+",
             shape=(len(self.gpus),),
         )
+        self.clock = Clock()
 
     def on_pre_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -346,7 +347,10 @@ class MmapGradSyncCallback(TrainerCallback):
         Event called before optimizer step.
         """
         self.grad_sync.accumulate_local_grad(self.model)
+        self.clock.update_task("accumulate_local_grad")
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
+        self.clock.update_task("read_final_grad_into_model")
+        self.clock.print_task_table(interval=10)
 
     def on_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs

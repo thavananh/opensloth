@@ -4,7 +4,9 @@ Handles weight synchronization, model setup, and distributed training coordinati
 """
 
 import os
+import time
 from loguru import logger
+import filelock
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
 
@@ -16,61 +18,182 @@ def setup_model_and_training(
 ):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
-
-    Args:
-        gpu: GPU index
-        hyper_config: Configuration arguments
-        hf_train_args: Training arguments
-
-    Returns:
-        Trainer object configured for multi-GPU training
     """
-    from unsloth import FastModel
-    from HyperSloth.dataset_utils import get_chat_dataset
-    from trl import SFTTrainer
+
     gpu_ith = hyper_config.training.gpus.index(gpu)
-    
 
     # Initialize model and tokenizer
+    model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
+
+    # Build trainer (loads/prepares dataset, sets up SFTTrainer)
+    trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
+
+    trainer.train_dataset = trainer.train_dataset.shard(
+        num_shards=len(hyper_config.training.gpus),
+        index=gpu_ith,
+        contiguous=True,
+        keep_in_memory=True,  # this will keep the dataset in memory
+    )
+
+    # Optionally train on response-only
+    _maybe_train_on_responses_only(trainer, hyper_config)
+    # Get the lengths
+    _debug_training_lengs(hf_train_args, gpu_ith, trainer)
+
+    # Debug info for the main GPU
+    if gpu_ith == 0:
+        logger.info(f"Model setup complete for GPU {gpu_ith}")
+        from ._debug_dataloader import _debug_dataloader
+
+        _debug_dataloader(trainer)
+
+    return trainer
+
+
+def _debug_training_lengs(hf_train_args, gpu_ith, trainer):
+    dataloader = trainer.get_train_dataloader()
+    generator = iter(dataloader)
+    with open(f"lengths_{gpu_ith}.txt", "w") as f:
+        num_grad_accum = hf_train_args.gradient_accumulation_steps
+        txt = ""
+        for i in range(10):
+            len_in_one_update = []
+            for i in range(num_grad_accum):
+                batch = next(generator)
+                s1, s2 = batch["input_ids"].shape[0], batch["input_ids"].shape[1]
+                len_in_one_update.append(s2)
+            total_len = sum([shape for shape in len_in_one_update])
+            txt += (
+                "|".join([str(x) for x in len_in_one_update])
+                + "Total len:{}".format(total_len)
+                + "\n"
+            )
+        f.write(txt)
+
+
+def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
+    """Initialize and optionally set up LoRA for the model."""
+    from unsloth import FastModel
+
     model, tokenizer = FastModel.from_pretrained(
         **hyper_config.fast_model_args.model_dump()
     )
     if not hyper_config.fast_model_args.full_finetuning:
         model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
+    return model, tokenizer
 
-    # Load dataset
-    ds_train, ds_test = get_chat_dataset(
-        tokenizer=tokenizer, **hyper_config.data.model_dump()
+
+def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
+    """Load or prepare the dataset and create the SFTTrainer."""
+    from trl import SFTTrainer
+    from datasets import load_from_disk
+    from speedy_utils import identify
+    from fastcore.all import Path
+
+    tokenizer_name = identify(str(tokenizer))
+    num_gpus = len(hyper_config.training.gpus)
+    dataset_cache_path = identify([hyper_config.data.dataset_name_or_path, num_gpus])
+    dataset_name = identify(hyper_config.data.model_dump())
+    dataset_cache_path = (
+        "/dev/shm/dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
     )
+    lock = dataset_cache_path + ".lock"
+    dataset_cache_exists = os.path.exists(dataset_cache_path)
 
-    # Apply PEFT model
+    # CASE 1: Dataset cache already exists, just load it
+    if dataset_cache_exists:
+        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
+        dataset = load_from_disk(dataset_cache_path)
+        hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
+        trainer = SFTTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            train_dataset=dataset,
+            eval_dataset=None if gpu_ith != 0 else dataset,
+            dataset_text_field="text",
+            max_seq_length=hyper_config.fast_model_args.max_seq_length,
+            dataset_num_proc=hyper_config.data.dataset_num_proc,
+            args=hf_train_args,
+        )
 
-    # Initialize trainer
-    trainer = SFTTrainer(
-        model=model,
-        tokenizer=tokenizer,
-        train_dataset=ds_train,
-        eval_dataset=ds_test if gpu_ith == 0 else None,
-        dataset_text_field="text",
-        max_seq_length=hyper_config.fast_model_args.max_seq_length,
-        dataset_num_proc=hyper_config.data.dataset_num_proc,
-        args=hf_train_args,
-    )
+    # CASE 2: GPU 0 prepares the dataset and saves for others
+    elif gpu_ith == 0:
+        with filelock.FileLock(lock):
+            logger.info(f"GPU {gpu_ith}: Preparing dataset -> {dataset_cache_path}")
+            from HyperSloth.dataset_utils import get_chat_dataset
 
-    # Adjust dataset for multi-GPU training
-    max_len_ds = len(hyper_config.training.gpus) * (
-        len(trainer.train_dataset) // len(hyper_config.training.gpus)
-    )
-    trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
-    trainer.train_dataset = trainer.train_dataset.shard(
-        num_shards=len(hyper_config.training.gpus), index=gpu_ith
-    )
+            ds_train, ds_test = get_chat_dataset(
+                tokenizer=tokenizer, **hyper_config.data.model_dump()
+            )
+            hf_train_args.dataset_kwargs = {"skip_prepare_dataset": False}
+            trainer = SFTTrainer(
+                model=model,
+                tokenizer=tokenizer,
+                train_dataset=ds_train,
+                eval_dataset=ds_test,
+                dataset_text_field="text",
+                max_seq_length=hyper_config.fast_model_args.max_seq_length,
+                dataset_num_proc=hyper_config.data.dataset_num_proc,
+                args=hf_train_args,
+            )
 
-    # Handle specific training loss type
+            # Adjust dataset for multi-GPU
+            max_len_ds = len(hyper_config.training.gpus) * (
+                len(trainer.train_dataset) // len(hyper_config.training.gpus)
+            )
+            trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
+
+            trainer.train_dataset.save_to_disk(dataset_cache_path)
+
+        if os.path.exists(lock):
+            os.remove(lock)
+
+    # CASE 3: Other GPUs wait for GPU 0
+    else:
+        while not os.path.exists(dataset_cache_path):
+            time.sleep(1)
+            logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
+        t = time.time()
+        while os.path.exists(lock):
+            time.sleep(1)
+            logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
+            if time.time() - t > 5:
+                raise TimeoutError(f"Lock not released: {lock}")
+        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
+        dataset = load_from_disk(dataset_cache_path)
+        hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
+        trainer = SFTTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            train_dataset=dataset,
+            eval_dataset=None,
+            dataset_text_field="text",
+            max_seq_length=hyper_config.fast_model_args.max_seq_length,
+            dataset_num_proc=hyper_config.data.dataset_num_proc,
+            args=hf_train_args,
+        )
+
+    if hyper_config.data.group_by_length:
+        from .patching import patch_sampler, select_dataset_by_length
+
+        trainer = patch_sampler(trainer)
+        trainer.train_dataset = select_dataset_by_length(
+            trainer.train_dataset,
+            gpu_ith,
+            len(hyper_config.training.gpus),
+            hf_train_args.gradient_accumulation_steps,
+            hf_train_args.per_device_train_batch_size,
+        )
+    # Save for other GPUs
+    return trainer
+
+
+def _maybe_train_on_responses_only(trainer, hyper_config):
+    """Use a specialized approach if 'response_only' loss is desired."""
     if hyper_config.training.loss_type == "response_only":
         from unsloth.chat_templates import train_on_responses_only
 
-        first_text = ds_train[0]["text"]
+        first_text = trainer.train_dataset[0]["text"]
         instruction_part = hyper_config.data.instruction_part
         response_part = hyper_config.data.response_part
         assert instruction_part in first_text, f"{instruction_part} not in {first_text}"
@@ -80,104 +203,4 @@ def setup_model_and_training(
             instruction_part=instruction_part,
             response_part=response_part,
         )
-    if gpu_ith == 0:
-        logger.info(f"Model setup complete for GPU {gpu_ith}")
-        _debug_dataloader(trainer)
     return trainer
-
-
-def _debug_dataloader(trainer, n_example=10):
-    """
-    Debug function to log samples from the training dataloader in an HTML format.
-    Outputs to both terminal (with colors) and an HTML file with CSS styling.
-    """
-    from copy import deepcopy
-
-    tokenizer = deepcopy(trainer.tokenizer)
-    dl = trainer.get_train_dataloader()
-    g = iter(dl)
-    html_path = ".log/dataloader_examples.html"
-    os.makedirs(os.path.dirname(html_path), exist_ok=True)
-    
-    # Create HTML file with CSS styling
-    with open(html_path, "w") as html_file:
-        html_file.write("""<!DOCTYPE html>
-    <html>
-    <head>
-        <title>Dataloader Examples</title>
-        <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        
-        @media (prefers-color-scheme: light) {
-            body { background-color: #ffffff; color: #333; }
-            .trainable { background-color: #FFEBCD; color: #333; }
-            .context { background-color: #E0FFE0; color: #333; }
-            th { background-color: #f2f2f2; }
-            th, td { border-color: #ddd; }
-        }
-        
-        @media (prefers-color-scheme: dark) {
-            body { background-color: #222; color: #f0f0f0; }
-            .trainable { background-color: #664a20; color: #f0f0f0; }
-            .context { background-color: #2a5a2a; color: #f0f0f0; }
-            th { background-color: #444; color: #f0f0f0; }
-            th, td { border-color: #555; }
-        }
-        
-        .trainable, .context { padding: 2px; border-radius: 3px; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-        th, td { border: 1px solid; padding: 8px; text-align: left; }
-        h2 { margin-top: 30px; }
-        </style>
-    </head>
-    <body>
-        <h1>Dataloader Examples</h1>
-        <p>This file contains examples of training data with context and trainable parts.</p>
-    """)
-        
-        for i in range(n_example):
-            batch = next(g)
-            input_ids = batch["input_ids"][0]
-            label_ids = batch["labels"][0]
-            parts_mask = (label_ids >= 0)  # True is trainable, False is context
-
-            # Find split points where trainable/non-trainable sections change
-            split_points = [0] + [
-                i for i, val in enumerate(parts_mask)
-                if i > 0 and val != parts_mask[i - 1]
-            ] + [len(parts_mask)]
-            
-            colored_parts = []
-            html_file.write(f"\n    <h2>Example {i+1}</h2>\n")
-            html_file.write("    <table>\n        <tr><th>Text</th><th>Label</th></tr>\n")
-            
-            for a, b in zip(split_points[:-1], split_points[1:]):
-                text = tokenizer.decode(input_ids[a:b])
-                is_trainable = parts_mask[a]
-                
-                # Colored text for terminal
-                colored_text = f"\033[93m{text}\033[0m" if is_trainable else f"\033[92m{text}\033[0m"
-                colored_parts.append(colored_text)
-                
-                # HTML with CSS classes
-                css_class = "trainable" if is_trainable else "context"
-                label = "🟠 TRAIN" if is_trainable else "🟢 CONTEXT"
-                
-                # Escape HTML special characters
-                text_escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                
-                # Add row to HTML table
-                html_file.write(f"        <tr>\n            <td><span class=\"{css_class}\">{text_escaped}</span></td>\n"
-                               f"            <td>{label}</td>\n        </tr>\n")
-            
-            html_file.write("    </table>\n")
-            
-            # Colored text for terminal
-            colored_output = "".join(colored_parts)
-            terminal_msg = f"\n=== EXAMPLE #{i+1} ===\n" + colored_output + "\n"
-            if i == 0:
-                print(terminal_msg)
-        
-        html_file.write("</body>\n</html>")
-    
-    print(f"More training debug examples written to {html_path}")

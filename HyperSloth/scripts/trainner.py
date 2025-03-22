@@ -106,7 +106,7 @@ def train(config_file: str):
                 hyper_config=hyper_config,
                 train_args=training_config.to_dict(),
             )
-            time.sleep(1)
+            time.sleep(0.3)
     else:
         run(
             gpu=hyper_config.training.gpus[0],

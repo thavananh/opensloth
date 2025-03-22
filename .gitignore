@@ -49,3 +49,5 @@ gemma-thinking-4bit/
 outputs/
 .log
 hs_training_config.py
+runs
+saves/
