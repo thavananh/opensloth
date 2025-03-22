@@ -51,3 +51,4 @@ outputs/
 hs_training_config.py
 runs
 saves/
+length*.txt

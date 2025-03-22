@@ -350,7 +350,8 @@ class MmapGradSyncCallback(TrainerCallback):
         self.clock.update_task("accumulate_local_grad")
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
         self.clock.update_task("read_final_grad_into_model")
-        self.clock.print_task_table(interval=10)
+        if self.is_main:
+            self.clock.print_task_table(interval=10)
 
     def on_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
