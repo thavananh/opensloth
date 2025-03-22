@@ -19,7 +19,7 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-hypersloth-train = "HyperSloth.scripts.trainner:train"
+hypersloth-train = "HyperSloth.scripts.trainer:train"
 hypersloth-init = "HyperSloth.scripts.get_example_config:main"
 hypersloth-prepare-unsloth-model = "HyperSloth.scripts.prepare_model:main"
 hypersloth-export = "HyperSloth.scripts.export:main"
