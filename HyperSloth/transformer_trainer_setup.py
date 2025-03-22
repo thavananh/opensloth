@@ -150,9 +150,9 @@ def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
 
     # CASE 3: Other GPUs wait for GPU 0
     else:
+        logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
         while not os.path.exists(dataset_cache_path):
             time.sleep(1)
-            logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
         t = time.time()
         while os.path.exists(lock):
             time.sleep(1)
