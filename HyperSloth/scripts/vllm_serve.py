@@ -3,10 +3,9 @@ import subprocess
 import time
 from typing import List, Optional
 from fastcore.script import call_parse
-from ray import logger
+from loguru import logger
 import argparse
 import requests
-from sqlalchemy import desc
 
 
 def kill_existing_vllm(vllm_binary: Optional[str] = None) -> None:
@@ -92,7 +91,7 @@ def serve(
     gpu_groups: str,
     served_model_name: Optional[str] = None,
     port_start: int = 8155,
-    gpu_memory_utilization: float = 0.93 ,
+    gpu_memory_utilization: float = 0.93,
     dtype: str = "bfloat16",
     max_model_len: int = 8192,
     enable_lora: bool = False,
@@ -184,11 +183,15 @@ def get_vllm():
 
 def get_args():
     """Parse command line arguments."""
-    example_args = ['svllm add_lora --model localization_pro:./saves/loras/250312/LC_EN_VI_TH_27B_233k/checkpoint-1736/:8155',
-                    'svllm add_lora lora_name@path:port',
-                    'svllm kill']
-    
-    parser = argparse.ArgumentParser(description="vLLM Serve Script", epilog="Example: " + " || ".join(example_args))
+    example_args = [
+        "svllm add_lora --model localization_pro:./saves/loras/250312/LC_EN_VI_TH_27B_233k/checkpoint-1736/:8155",
+        "svllm add_lora lora_name@path:port",
+        "svllm kill",
+    ]
+
+    parser = argparse.ArgumentParser(
+        description="vLLM Serve Script", epilog="Example: " + " || ".join(example_args)
+    )
     parser.add_argument(
         "mode", choices=["serve", "kill", "add_lora"], help="Mode to run the script in"
     )
@@ -227,7 +230,16 @@ def get_args():
     parser.add_argument("--vllm_binary", type=str, help="Path to the vLLM binary")
     parser.add_argument("--lora_name", type=str, help="Name of the LoRA adapter")
     parser.add_argument(
-        "--extra_args", nargs=argparse.REMAINDER, help="Additional arguments for the serve command"
+        "--pipeline-parallel",
+        "-pp",
+        default=1,
+        type=int,
+        help="Number of pipeline parallel stages",
+    )
+    parser.add_argument(
+        "--extra_args",
+        nargs=argparse.REMAINDER,
+        help="Additional arguments for the serve command",
     )
     return parser.parse_args()
 

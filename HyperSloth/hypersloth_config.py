@@ -15,7 +15,6 @@ class DataConfig(BaseModel):
 
     class Config:
         """Pydantic configuration for DataConfig."""
-
         extra = "allow"
 
 
