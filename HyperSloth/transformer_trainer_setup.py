@@ -8,6 +8,7 @@ import time
 from loguru import logger
 import filelock
 
+
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
 
 
@@ -19,6 +20,7 @@ def setup_model_and_training(
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
     """
+    
 
     gpu_ith = hyper_config.training.gpus.index(gpu)
     if not gpu_ith == 0:
@@ -138,6 +140,10 @@ def _create_trainer(
                 tokenizer=tokenizer, **hyper_config.data.model_dump()
             )
             hf_train_args.dataset_kwargs = {"skip_prepare_dataset": False}
+            from HyperSloth.patching import patch_grad_clip
+            logger.info(f'[Hypersloth] Patching grad clip')
+            patch_grad_clip()
+            
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,

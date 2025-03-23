@@ -113,7 +113,7 @@ from transformers.trainer import Trainer
 from fastcore.all import patch
 
 
-def patch_grad_clip(trainer:Trainer):
+def patch_grad_clip():
     import os
     import time
     import torch
