@@ -11,7 +11,7 @@ hyper_config_model = HyperConfig(
         num_samples=100*16,
     ),
     training=TrainingConfig(
-        gpus=[0],  # Change this to the number of GPUs you have
+        gpus=[0,1,2,3],  # Change this to the number of GPUs you have
         loss_type="all",  # all or response_only, the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
@@ -26,9 +26,8 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-4b-it/evaluate_translation-bz4-1card",
-    per_device_train_batch_size=4,  #
-    # gradient_accumulation_steps=4,  # More GA help to reduce total communication time
+    output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-4b-it/alpaca-cleaned-4gpus",
+    per_device_train_batch_size=4,  
     gradient_accumulation_steps=1,  # More GA help to reduce total communication time
     learning_rate=2e-4,
     per_device_eval_batch_size=4,
