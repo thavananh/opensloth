@@ -21,21 +21,22 @@ from transformers.trainer import (TRAINER_STATE_NAME, DebugOption,
                                   get_model_param_count,
                                   is_accelerate_available,
                                   is_sagemaker_mp_enabled,
-                                  is_torch_xla_available,
-                                  skip_first_batches, speed_metrics,
-                                  tpu_spmd_dataloader, unwrap_model)
+                                  is_torch_xla_available, skip_first_batches,
+                                  speed_metrics, tpu_spmd_dataloader,
+                                  unwrap_model)
 
 if is_torch_xla_available():
-    import torch_xla.core.xla_model as xm
-    import torch_xla.debug.metrics as met
-    from torch_xla import __version__ as XLA_VERSION
+    import torch_xla.core.xla_model as xm  # type: ignore
+    import torch_xla.debug.metrics as met  # type: ignore
+    from torch_xla import __version__ as XLA_VERSION  # type: ignore
 
-    IS_XLA_FSDPV2_POST_2_2 = version.parse(XLA_VERSION) >= version.parse(XLA_FSDPV2_MIN_VERSION)
-    if IS_XLA_FSDPV2_POST_2_2:
-        import torch_xla.distributed.spmd as xs
-        import torch_xla.runtime as xr
+    IS_XLA_FSDPV2_POST_2_2 = version.parse(XLA_VERSION) >= version.parse(XLA_FSDPV2_MIN_VERSION)  # type: ignore
+    if IS_XLA_FSDPV2_POST_2_2:  # type: ignore
+        import torch_xla.distributed.spmd as xs  # type: ignore
+        import torch_xla.runtime as xr  # type: ignore
 else:
     IS_XLA_FSDPV2_POST_2_2 = False
+
 
 def patch_sampler(trainer):
     from fastcore.all import patch
@@ -143,25 +144,19 @@ def select_dataset_by_length(
     return dataset.select(selected_ids_flat)
 
 
-
-
 def patch_grad_clip(trainer):
     # Copy from /home/anhvth5/miniconda3/envs/training/lib/python3.12/site-packages/transformers/trainer.py
-
-
 
     # Patch the Trainer class
     @patch
     def _inner_training_loop(
-        self: type(trainer), # type: ignore
+        self: type(trainer),  # type: ignore
         batch_size=None,
         args=None,
         resume_from_checkpoint=None,
         trial=None,
         ignore_keys_for_eval=None,
     ):
-
-
 
         self.accelerator.free_memory()
         self._train_batch_size = batch_size
@@ -176,13 +171,15 @@ def patch_grad_clip(trainer):
                 if self.is_deepspeed_enabled:
                     # Temporarily unset `self.args.train_batch_size`
                     original_bs = self.args.per_device_train_batch_size
-                    self.args.per_device_train_batch_size = self._train_batch_size // max(
-                        1, self.args.n_gpu
+                    self.args.per_device_train_batch_size = (
+                        self._train_batch_size // max(1, self.args.n_gpu)
                     )
                     self.propagate_args_to_deepspeed(True)
                     self.args.per_device_train_batch_size = original_bs
             self.state.train_batch_size = self._train_batch_size
-        logger.debug(f"Currently training with a batch size of: {self._train_batch_size}")
+        logger.debug(
+            f"Currently training with a batch size of: {self._train_batch_size}"
+        )
         # Data loader and number of training steps
         train_dataloader = self.get_train_dataloader()
         if self.is_fsdp_xla_v2_enabled:
@@ -203,7 +200,9 @@ def patch_grad_clip(trainer):
             epoch_based,
             len_dataloader,
             max_steps,
-        ) = self.set_initial_training_values(args, train_dataloader, total_train_batch_size)
+        ) = self.set_initial_training_values(
+            args, train_dataloader, total_train_batch_size
+        )
 
         num_train_tokens = None
         if self.args.include_tokens_per_second:
@@ -229,7 +228,9 @@ def patch_grad_clip(trainer):
                 debug_overflow = DebugUnderflowOverflow(self.model)  # noqa
 
         delay_optimizer_creation = (
-            is_sagemaker_mp_enabled() or self.is_fsdp_xla_enabled or self.is_fsdp_enabled
+            is_sagemaker_mp_enabled()
+            or self.is_fsdp_xla_enabled
+            or self.is_fsdp_enabled
         )
 
         # We need to reset the scheduler, as its parameters may be different on subsequent calls
@@ -348,7 +349,9 @@ def patch_grad_clip(trainer):
         logger.info(
             f"  Total train batch size (w. parallel, distributed & accumulation) = {total_train_batch_size:,}"
         )
-        logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
+        logger.info(
+            f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}"
+        )
         logger.info(f"  Total optimization steps = {max_steps:,}")
         logger.info(
             f"  Number of trainable parameters = {get_model_param_count(model, trainable_only=True):,}"
@@ -382,7 +385,9 @@ def patch_grad_clip(trainer):
                 "  Continuing training from checkpoint, will skip to saved global_step"
             )
             logger.info(f"  Continuing training from epoch {epochs_trained}")
-            logger.info(f"  Continuing training from global step {self.state.global_step}")
+            logger.info(
+                f"  Continuing training from global step {self.state.global_step}"
+            )
             if not args.ignore_data_skip:
                 logger.info(
                     f"  Will skip the first {epochs_trained} epochs then the first"
@@ -403,7 +408,9 @@ def patch_grad_clip(trainer):
         self._globalstep_last_logged = self.state.global_step
         model.zero_grad()
         grad_norm: Optional[float] = None
-        self.control = self.callback_handler.on_train_begin(args, self.state, self.control)
+        self.control = self.callback_handler.on_train_begin(
+            args, self.state, self.control
+        )
 
         if args.eval_on_start:
             self._evaluate(trial, ignore_keys_for_eval, skip_scheduler=True)
@@ -465,7 +472,9 @@ def patch_grad_clip(trainer):
                 )
                 for i, inputs in enumerate(batch_samples):
                     step += 1
-                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (
+                    do_sync_step = (
+                        step + 1
+                    ) % args.gradient_accumulation_steps == 0 or (
                         step + 1
                     ) == steps_in_epoch
                     # Since we perform prefetching, we need to manually set sync_gradients
@@ -514,11 +523,14 @@ def patch_grad_clip(trainer):
                     context = (
                         functools.partial(self.accelerator.no_sync, model=model)
                         if i != len(batch_samples) - 1
-                        and self.accelerator.distributed_type != DistributedType.DEEPSPEED
+                        and self.accelerator.distributed_type
+                        != DistributedType.DEEPSPEED
                         else contextlib.nullcontext
                     )
                     with context():
-                        tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+                        tr_loss_step = self.training_step(
+                            model, inputs, num_items_in_batch
+                        )
 
                     if (
                         args.logging_nan_inf_filter
@@ -554,7 +566,7 @@ def patch_grad_clip(trainer):
                             elif self.use_apex:
                                 # Revert to normal clipping otherwise, handling Apex or full precision
                                 _grad_norm = nn.utils.clip_grad_norm_(
-                                amp.master_params(self.optimizer),
+                                    amp.master_params(self.optimizer),
                                     args.max_grad_norm,
                                 )
                             else:
@@ -574,7 +586,7 @@ def patch_grad_clip(trainer):
                                     grad_norm = grad_norm.item()
                             else:
                                 grad_norm = _grad_norm
-                        
+
                         logger.debug(f"Gradient norm: {grad_norm}")
                         self.optimizer.step()
 
@@ -615,7 +627,10 @@ def patch_grad_clip(trainer):
                     # PyTorch/XLA relies on the data loader to insert the mark_step for
                     # each step. Since we are breaking the loop early, we need to manually
                     # insert the mark_step here.
-                    if self.control.should_epoch_stop or self.control.should_training_stop:
+                    if (
+                        self.control.should_epoch_stop
+                        or self.control.should_training_stop
+                    ):
                         if is_torch_xla_available():
                             xm.mark_step()
                         break
@@ -636,7 +651,13 @@ def patch_grad_clip(trainer):
                 args, self.state, self.control
             )
             self._maybe_log_save_evaluate(
-                tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time
+                tr_loss,
+                grad_norm,
+                model,
+                trial,
+                epoch,
+                ignore_keys_for_eval,
+                start_time,
             )
 
             if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
@@ -694,7 +715,9 @@ def patch_grad_clip(trainer):
         self.log(metrics)
 
         run_dir = self._get_output_dir(trial)
-        checkpoints_sorted = self._sorted_checkpoints(use_mtime=False, output_dir=run_dir)
+        checkpoints_sorted = self._sorted_checkpoints(
+            use_mtime=False, output_dir=run_dir
+        )
 
         # Delete the last checkpoint when save_total_limit=1 if it's different from the best checkpoint and process allowed to save.
         if (
@@ -709,7 +732,9 @@ def patch_grad_clip(trainer):
                     )
                     shutil.rmtree(checkpoint, ignore_errors=True)
 
-        self.control = self.callback_handler.on_train_end(args, self.state, self.control)
+        self.control = self.callback_handler.on_train_end(
+            args, self.state, self.control
+        )
 
         # Wait for the checkpoint to be uploaded.
         self._finish_current_push()

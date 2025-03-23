@@ -365,6 +365,7 @@ class MmapGradSyncCallback(TrainerCallback):
         self.grad_sync.zero_mmaps()
 
     def on_log(self, args, state, control, **kwargs):
+        self.clock.tick()
         if "loss" in state.log_history[-1]:
             
             gputh = self.gpus.index(self.gpu_index)
