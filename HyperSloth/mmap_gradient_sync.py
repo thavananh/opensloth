@@ -55,10 +55,9 @@ class MmapGradientSync:
     def __init__(
         self,
         model: torch.nn.Module,
-        grad_dir: str,
         gpu: int,
         gpus: List[int],
-        lock_dir: str = "/dev/shm",
+        grad_dir: str = "/dev/shm/hypersloth/",
     ):
         """
         Args:
@@ -73,11 +72,10 @@ class MmapGradientSync:
         self.grad_dir = grad_dir
         self.gpu = gpu
         self.gpus = gpus  # store the entire list for synchronization checks
-        self.lock_dir = lock_dir if lock_dir is not None else grad_dir
 
         # Create directories if needed
         os.makedirs(self.grad_dir, exist_ok=True)
-        os.makedirs(self.lock_dir, exist_ok=True)
+        os.makedirs(self.grad_dir, exist_ok=True)
 
         # Gather info for each parameter
         self.param_info = []
@@ -107,7 +105,7 @@ class MmapGradientSync:
     def _lockfile(self, filename: str) -> str:
         """Return the path to a .lock file corresponding to filename."""
         basename = os.path.basename(filename)
-        return os.path.join(self.lock_dir, basename + ".lock")
+        return os.path.join(self.grad_dir, basename + ".lock")
 
     # -------------------------------------------------------
     # Internal single-parameter operations for multi_thread
@@ -295,7 +293,7 @@ class MmapGradientSync:
                 time.sleep(SLEEP_TIME)
 
     def _clean(self):
-        with UniversalLocker(os.path.join(self.lock_dir, "zero.lock")):
+        with UniversalLocker(os.path.join(self.grad_dir, "zero.lock")):
             logger.debug(f"[GPU {self.gpu}] Zeroing all memmap files..")
             tasks = []
             for info in self.param_info:
@@ -319,7 +317,9 @@ class MmapGradientSync:
 
 class MmapGradSyncCallback(TrainerCallback):
     def __init__(self, model, grad_dir, gpu, gpus):
+        grad_dir = '/dev/shm'
         self.model = model
+        os.makedirs(grad_dir, exist_ok=True)
         self.grad_dir = grad_dir
         self.gpu_index = gpu
         self.gpus = gpus
@@ -327,9 +327,9 @@ class MmapGradSyncCallback(TrainerCallback):
 
         self.grad_sync = MmapGradientSync(
             model,
-            grad_dir,
             gpu,
             gpus,
+            grad_dir,
         )
         os.makedirs(self.grad_dir, exist_ok=True)
         self.loss_file = np.memmap(

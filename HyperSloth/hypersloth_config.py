@@ -107,6 +107,7 @@ class TrainingArgsConfig(BaseModel):
     optim: str = "adamw_8bit"
     weight_decay: float = 0.01
     packing: bool = False
+    save_only_model: bool = True
     
 
     class Config:

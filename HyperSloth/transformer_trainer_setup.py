@@ -47,7 +47,7 @@ def setup_model_and_training(
 
         _debug_dataloader(trainer)
 
-    return trainer
+    return trainer, model, tokenizer
 
 
 def _debug_training_lengs(hf_train_args, gpu_ith, trainer):
@@ -83,12 +83,25 @@ def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
     return model, tokenizer
 
 
-def _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model):
+def _create_trainer(
+    tokenizer,
+    hyper_config: HyperConfig,
+    hf_train_args: TrainingArgsConfig,
+    gpu_ith: int,
+    model: any,
+):
     """Load or prepare the dataset and create the SFTTrainer."""
     from trl import SFTTrainer
     from datasets import load_from_disk
     from speedy_utils import identify
     from fastcore.all import Path
+
+    if gpu_ith != 0:
+        # disable reporting for all GPUs except the first one
+        hf_train_args.report_to = None
+        # disable evaluation for all GPUs except the first one
+        hf_train_args.do_eval = False
+        hf_train_args.save_strategy = "no"
 
     tokenizer_name = identify(str(tokenizer))
     num_gpus = len(hyper_config.training.gpus)

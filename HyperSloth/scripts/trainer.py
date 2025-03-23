@@ -10,22 +10,21 @@ from HyperSloth.hypersloth_config import TrainingArgsConfig
 def run(
     gpu: int,
     hyper_config,
-    train_args: Union[Dict[str, Any], TrainingArgsConfig],
+    hf_train_args:  TrainingArgsConfig,
 ):
     import os
-
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
     # Convert dictionary to TrainingArguments if needed
-    if isinstance(train_args, dict):
-        hf_train_args = TrainingArgsConfig(**train_args)
-    else:
-        hf_train_args = train_args
+    # if isinstance(train_args, dict):
+    #     hf_train_args = TrainingArgsConfig(**train_args)
+    # else:
+    #     hf_train_args = train_args
 
-    trainer = setup_model_and_training(
+    trainer, model, tokenizer = setup_model_and_training(
         gpu=gpu,
         hyper_config=hyper_config,
         hf_train_args=hf_train_args,
@@ -34,7 +33,7 @@ def run(
     if len(hyper_config.training.gpus) > 1:
         grad_sync_cb = MmapGradSyncCallback(
             model=trainer.model,
-            grad_dir=hyper_config.grad_dir,
+            grad_dir=os.path.join(hf_train_args.output_dir, "grads"),
             gpu=gpu,
             gpus=hyper_config.training.gpus,
         )
@@ -42,6 +41,10 @@ def run(
         trainer.add_callback(grad_sync_cb)
 
     trainer.train()
+    if gpu == hyper_config.training.gpus[0]:
+        logger.info(f"Save model to {hf_train_args.output_dir}")
+        model.save_pretrained(hf_train_args.output_dir)
+        tokenizer.save_pretrained(hf_train_args.output_dir)
 
 
 run_in_process = threaded(process=True)(run)
@@ -104,12 +107,12 @@ def train(config_file: str):
             run_in_process(
                 gpu_index,
                 hyper_config=hyper_config,
-                train_args=training_config.to_dict(),
+                hf_train_args=training_config,
             )
-            time.sleep(0.3)
+            time.sleep(0.2)
     else:
         run(
             gpu=hyper_config.training.gpus[0],
             hyper_config=hyper_config,
-            train_args=training_config.to_dict(),
+            hf_train_args=training_config,
         )
