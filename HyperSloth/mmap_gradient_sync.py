@@ -18,7 +18,7 @@ multi_thread = partial(multi_thread, report=False, progress=False)
 logger.remove()
 logger.add("mmap_gradient_sync.log", level="DEBUG")
 logger.add(sys.stdout, level="INFO")
-SLEEP_TIME = 0.01
+SLEEP_TIME = 0.1
 
 
 class UniversalLocker:
@@ -191,14 +191,17 @@ class MmapGradientSync:
         logger.debug(
             "[GPU {}] Waiting for all GPUs to accumulate gradients..", self.gpu
         )
+        start_time = time.time()
+        warned = False
         while True:
             count = 0
             for i in self.gpus:
                 cf = f"{self.grad_dir}/count_write_gpu{i}.txt"
                 if os.path.exists(cf):
                     count += 1
-                # else:
-                #     logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
+                elif time.time() - start_time > 30 and not warned:
+                    logger.warning(f"[GPU {self.gpu}] File {cf} is taking too long to appear.")
+                    warned = True
             if count == len(self.gpus):
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
@@ -211,14 +214,17 @@ class MmapGradientSync:
         (presence of count_read_gpu{i}.txt for each i in self.gpus).
         """
         logger.debug(f"[GPU {self.gpu}] Waiting for all GPUs to read gradients..")
+        start_time = time.time()
+        warned = False
         while True:
             count = 0
             for gpu_id in self.gpus:
                 cf = f"{self.grad_dir}/count_read_gpu{gpu_id}.txt"
                 if os.path.exists(cf):
                     count += 1
-                # else:
-                # logger.debug("[GPU {}] Missing file: {}", self.gpu_index, cf)
+                elif time.time() - start_time > 30 and not warned:
+                    logger.warning(f"[GPU {self.gpu}] File {cf} is taking too long to appear.")
+                    warned = True
             if count == len(self.gpus):
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting

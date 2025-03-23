@@ -554,7 +554,7 @@ def patch_grad_clip(trainer):
                             elif self.use_apex:
                                 # Revert to normal clipping otherwise, handling Apex or full precision
                                 _grad_norm = nn.utils.clip_grad_norm_(
-                                    amp.master_params(self.optimizer),
+                                amp.master_params(self.optimizer),
                                     args.max_grad_norm,
                                 )
                             else:
@@ -575,7 +575,7 @@ def patch_grad_clip(trainer):
                             else:
                                 grad_norm = _grad_norm
                         
-                        logger.info(f"Gradient norm: {grad_norm}")
+                        logger.debug(f"Gradient norm: {grad_norm}")
                         self.optimizer.step()
 
                         self.control = self.callback_handler.on_optimizer_step(
