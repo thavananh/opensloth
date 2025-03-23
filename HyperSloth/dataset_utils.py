@@ -37,6 +37,15 @@ def get_chat_dataset(
             dataset = Dataset.from_json(dataset_name_or_path)
         elif dataset_name_or_path.endswith(".csv"):
             dataset = Dataset.from_csv(dataset_name_or_path)
+        #is folder
+        elif os.path.isdir(dataset_name_or_path):
+            dataset = Dataset.load_from_disk(dataset_name_or_path)
+        else:
+            raise ValueError(
+                f"Unsupported dataset file format: {dataset_name_or_path}. "
+                "Supported formats: .json, .csv, or directory. "
+                "Example notebook preparing dataset: https://github.com/anhvth/hypersloth/blob/main/nbs/prepare_dataset_example.ipynb"
+            )
     else:
         try:
             dataset = load_dataset(dataset_name_or_path, split=split)
