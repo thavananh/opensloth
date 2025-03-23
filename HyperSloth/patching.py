@@ -5,25 +5,37 @@ import random
 import shutil
 import time
 from collections import defaultdict
-from typing import Optional
+from typing import Dict, Optional
 
 import torch
 from fastcore.all import patch
 from loguru import logger
 from torch import nn
 from torch.cuda import amp
-from transformers.trainer import (TRAINER_STATE_NAME, DebugOption,
-                                  DebugUnderflowOverflow, DistributedType,
-                                  ExportableState, OptimizerNames,
-                                  ParallelMode, Trainer, TrainerState,
-                                  TrainOutput, _is_peft_model, deepspeed_init,
-                                  deepspeed_load_checkpoint, dist,
-                                  get_model_param_count,
-                                  is_accelerate_available,
-                                  is_sagemaker_mp_enabled,
-                                  is_torch_xla_available, skip_first_batches,
-                                  speed_metrics, tpu_spmd_dataloader,
-                                  unwrap_model)
+from transformers.trainer import (
+    TRAINER_STATE_NAME,
+    DebugOption,
+    DebugUnderflowOverflow,
+    DistributedType,
+    ExportableState,
+    OptimizerNames,
+    ParallelMode,
+    Trainer,
+    TrainerState,
+    TrainOutput,
+    _is_peft_model,
+    deepspeed_init,
+    deepspeed_load_checkpoint,
+    dist,
+    get_model_param_count,
+    is_accelerate_available,
+    is_sagemaker_mp_enabled,
+    is_torch_xla_available,
+    skip_first_batches,
+    speed_metrics,
+    tpu_spmd_dataloader,
+    unwrap_model,
+)
 
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm  # type: ignore
@@ -144,13 +156,15 @@ def select_dataset_by_length(
     return dataset.select(selected_ids_flat)
 
 
-def patch_grad_clip(trainer):
+def patch_grad_clip():
     # Copy from /home/anhvth5/miniconda3/envs/training/lib/python3.12/site-packages/transformers/trainer.py
 
     # Patch the Trainer class
+    from transformers import Trainer
+
     @patch
     def _inner_training_loop(
-        self: type(trainer),  # type: ignore
+        self: Trainer,  # type: ignore
         batch_size=None,
         args=None,
         resume_from_checkpoint=None,
@@ -253,6 +267,8 @@ def patch_grad_clip(trainer):
                 if isinstance(cb, ExportableState)
             ]
         )
+        self.state.num_trained_tokens_seen = 0
+
         self.state.is_hyper_param_search = trial is not None
         self.state.train_batch_size = self._train_batch_size
 
@@ -480,7 +496,10 @@ def patch_grad_clip(trainer):
                     # Since we perform prefetching, we need to manually set sync_gradients
                     self.accelerator.gradient_state._set_sync_gradients(do_sync_step)
 
-                    if self.args.include_num_input_tokens_seen:
+                    if (
+                        self.args.include_num_input_tokens_seen or True
+                    ):  # HYPER SLOTH: Always include num_input_tokens_seen for debugging
+                        # === Track the number of tokens seen and how many of them have been trained ===
                         main_input_name = getattr(
                             self.model, "main_input_name", "input_ids"
                         )
@@ -497,6 +516,15 @@ def patch_grad_clip(trainer):
                             )
                             self.state.num_input_tokens_seen += (
                                 self.accelerator.gather(input_tokens).sum().cpu().item()
+                            )
+
+                            # === Compute the actual ratio of trained tokens to input tokens ===
+                            trained_mask_tokens = inputs["attention_mask"].sum()
+
+                            self.state.num_trained_tokens_seen += trained_mask_tokens
+                            self.state.trained_token_ratio = (
+                                self.state.num_trained_tokens_seen
+                                / self.state.num_input_tokens_seen
                             )
                     if rng_to_sync:
                         self._load_rng_state(resume_from_checkpoint)
@@ -551,10 +579,12 @@ def patch_grad_clip(trainer):
                     self.current_flos += float(self.floating_point_ops(inputs))
 
                     if do_sync_step:
+                        # =====HYPER SLOTH >>>>
                         # This pre optim step is used to sync the gradients of the model by hypersloth
                         self.control = self.callback_handler.on_pre_optimizer_step(
                             args, self.state, self.control
                         )
+                        # <<<<< HYPER SLOTH=====
                         self.accelerator.gradient_state._set_sync_gradients(True)
                         # Perform allreduce before gradient update
                         # Gradient clipping
@@ -745,3 +775,36 @@ def patch_grad_clip(trainer):
             self._deactivate_neftune(self.model)
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
+
+    @patch
+    def log(
+        self: Trainer, logs: Dict[str, float], start_time: Optional[float] = None
+    ) -> None:
+        """
+        Log `logs` on the various objects watching training.
+
+        Subclass and override this method to inject custom behavior.
+
+        Args:
+            logs (`Dict[str, float]`):
+                The values to log.
+            start_time (`Optional[float]`):
+                The start of training.
+        """
+        if self.state.epoch is not None:
+            logs["epoch"] = self.state.epoch
+        if self.args.include_num_input_tokens_seen:
+            logs["num_input_tokens_seen"] = self.state.num_input_tokens_seen
+            if start_time is not None:
+                speed_metrics(
+                    "train", start_time, num_tokens=self.state.num_input_tokens_seen
+                )
+        # ===HYPER SLOTH >>>>
+        if hasattr(self.state, "trained_token_ratio"):
+            logs["trained_token_ratio"] = self.state.trained_token_ratio
+        # <<<<< HYPER SLOTH====
+        output = {**logs, **{"step": self.state.global_step}}
+        self.state.log_history.append(output)
+        self.control = self.callback_handler.on_log(
+            self.args, self.state, self.control, logs
+        )

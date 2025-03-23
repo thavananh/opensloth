@@ -379,17 +379,17 @@ class MmapGradSyncCallback(TrainerCallback):
                 gn = state.log_history[-1].get('grad_norm', 0)
                 logger.info(f"Loss: {mean_loss:0.2f}, grad_norm: {gn:0.2f}")
                 self.loss_file[:] = 0
-            else:
-                # if not main gpu, then wait for the main gpu to reset the losses
-                warned = False
-                t = time.time()
-                while True:
-                    losses = self.loss_file[:]
-                    if np.all(losses == 0):
-                        break
-                    time.sleep(0.01)
-                    if time.time() - t > 5 and not warned:
-                        logger.warning(f"Losses are not reset by main GPU after 5 seconds.")
-                        warned = True
+            # else:
+            #     # if not main gpu, then wait for the main gpu to reset the losses
+            #     warned = False
+            #     t = time.time()
+            #     while True:
+            #         losses = self.loss_file[:]
+            #         if np.all(losses == 0):
+            #             break
+            #         time.sleep(0.01)
+            #         if time.time() - t > 5 and not warned:
+            #             logger.warning(f"Losses are not reset by main GPU after 5 seconds.")
+            #             warned = True
             t = time.time() - t
         self.clock.update_task("on_log")

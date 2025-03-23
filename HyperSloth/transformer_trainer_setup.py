@@ -29,7 +29,6 @@ def setup_model_and_training(
         # disable evaluation for all GPUs except the first one
         hf_train_args.do_eval = False
         logger.debug(f"GPU {gpu_ith}: Disabling evaluation and reporting")
-    hf_train_args.logging_steps = int(1e12)
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
 
     # Build trainer (loads/prepares dataset, sets up SFTTrainer)
@@ -204,7 +203,7 @@ def _create_trainer(
         )
     # Save for other GPUs
     from HyperSloth.patching import patch_grad_clip
-    patch_grad_clip(trainer)
+    patch_grad_clip()
     return trainer
 
 
