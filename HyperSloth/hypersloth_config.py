@@ -15,6 +15,7 @@ class DataConfig(BaseModel):
 
     class Config:
         """Pydantic configuration for DataConfig."""
+
         extra = "allow"
 
 
@@ -108,7 +109,6 @@ class TrainingArgsConfig(BaseModel):
     weight_decay: float = 0.01
     packing: bool = False
     save_only_model: bool = True
-    
 
     class Config:
         """Pydantic configuration for DataConfig."""
