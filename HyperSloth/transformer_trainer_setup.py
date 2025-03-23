@@ -28,7 +28,9 @@ def setup_model_and_training(
         hf_train_args.report_to = "none"
         # disable evaluation for all GPUs except the first one
         hf_train_args.do_eval = False
-        logger.warning(f"GPU {gpu_ith}: Disabling evaluation and reporting")
+        logger.debug(f"GPU {gpu_ith}: Disabling evaluation and reporting")
+        # disable logging for all GPUs except the first one
+        hf_train_args.logging_steps = int(1e12)
     # Initialize model and tokenizer
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
 
@@ -45,7 +47,7 @@ def setup_model_and_training(
     # Optionally train on response-only
     _maybe_train_on_responses_only(trainer, hyper_config)
     # Get the lengths
-    _debug_training_lengs(hf_train_args, gpu_ith, trainer)
+    _debug_training_lengths(hf_train_args, gpu_ith, trainer)
 
     # Debug info for the main GPU
     if gpu_ith == 0:
@@ -57,7 +59,7 @@ def setup_model_and_training(
     return trainer, model, tokenizer
 
 
-def _debug_training_lengs(hf_train_args, gpu_ith, trainer):
+def _debug_training_lengths(hf_train_args, gpu_ith, trainer):
     dataloader = trainer.get_train_dataloader()
     generator = iter(dataloader)
     with open(f"lengths_{gpu_ith}.txt", "w") as f:
@@ -140,9 +142,8 @@ def _create_trainer(
                 tokenizer=tokenizer, **hyper_config.data.model_dump()
             )
             hf_train_args.dataset_kwargs = {"skip_prepare_dataset": False}
-            from HyperSloth.patching import patch_grad_clip
+
             logger.info(f'[Hypersloth] Patching grad clip')
-            patch_grad_clip()
             
             trainer = SFTTrainer(
                 model=model,
@@ -154,6 +155,7 @@ def _create_trainer(
                 dataset_num_proc=hyper_config.data.dataset_num_proc,
                 args=hf_train_args,
             )
+            
 
             # Adjust dataset for multi-GPU
             max_len_ds = len(hyper_config.training.gpus) * (
@@ -203,6 +205,8 @@ def _create_trainer(
             hf_train_args.per_device_train_batch_size,
         )
     # Save for other GPUs
+    from HyperSloth.patching import patch_grad_clip
+    patch_grad_clip(trainer)
     return trainer
 
 

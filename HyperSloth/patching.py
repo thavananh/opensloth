@@ -1,13 +1,46 @@
-from collections import defaultdict
+import contextlib
+import functools
+import os
 import random
+import shutil
+import time
+from collections import defaultdict
+from typing import Optional
 
+import torch
+from fastcore.all import patch
 from loguru import logger
+from torch import nn
+from torch.cuda import amp
+from transformers.trainer import (TRAINER_STATE_NAME, DebugOption,
+                                  DebugUnderflowOverflow, DistributedType,
+                                  ExportableState, OptimizerNames,
+                                  ParallelMode, Trainer, TrainerState,
+                                  TrainOutput, _is_peft_model, deepspeed_init,
+                                  deepspeed_load_checkpoint, dist,
+                                  get_model_param_count,
+                                  is_accelerate_available,
+                                  is_sagemaker_mp_enabled,
+                                  is_torch_xla_available,
+                                  skip_first_batches, speed_metrics,
+                                  tpu_spmd_dataloader, unwrap_model)
 
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
+    import torch_xla.debug.metrics as met
+    from torch_xla import __version__ as XLA_VERSION
+
+    IS_XLA_FSDPV2_POST_2_2 = version.parse(XLA_VERSION) >= version.parse(XLA_FSDPV2_MIN_VERSION)
+    if IS_XLA_FSDPV2_POST_2_2:
+        import torch_xla.distributed.spmd as xs
+        import torch_xla.runtime as xr
+else:
+    IS_XLA_FSDPV2_POST_2_2 = False
 
 def patch_sampler(trainer):
+    from fastcore.all import patch
     from torch.utils.data import SequentialSampler
     from transformers import Trainer
-    from fastcore.all import patch
 
     @patch
     def _get_train_sampler(self: Trainer) -> SequentialSampler:
@@ -20,9 +53,10 @@ def patch_sampler(trainer):
 def select_dataset_by_length(
     dataset, gpu_index: int, num_gpus: int, grad_accum_steps: int, batch_size: int
 ):
-    from fastcore.all import chunked
-    from typing import List, Dict
+    from typing import Dict, List
+
     import numpy as np
+    from fastcore.all import chunked
 
     def split_batch_evenly(
         lengths: List[int], global_ids: List[int], num_gpus: int
@@ -109,56 +143,17 @@ def select_dataset_by_length(
     return dataset.select(selected_ids_flat)
 
 
-from transformers.trainer import Trainer
-from fastcore.all import patch
 
 
-def patch_grad_clip():
-    import os
-    import time
-    import torch
-    import shutil
-    import functools
-    import contextlib
-    from typing import Optional
-
-    from loguru import logger
-    from torch import nn
-    from torch.cuda import amp
-    from transformers.trainer import (
-        tpu_spmd_dataloader,
-        DebugOption,
-        TrainerState,
-        TRAINER_STATE_NAME,
-        ExportableState,
-        xm,
-        met,
-        dist,
-        smp,
-        OptimizerNames,
-        _is_peft_model,
-        get_model_param_count,
-        is_sagemaker_mp_enabled,
-        deepspeed_init,
-        deepspeed_load_checkpoint,
-        unwrap_model,
-        get_model_param_count,
-        is_torch_xla_available,
-        is_accelerate_available,
-        speed_metrics,
-        TrainOutput,
-        DebugUnderflowOverflow,
-        DistributedType,
-        ParallelMode,
-        skip_first_batches,
-    )
+def patch_grad_clip(trainer):
+    # Copy from /home/anhvth5/miniconda3/envs/training/lib/python3.12/site-packages/transformers/trainer.py
 
 
 
     # Patch the Trainer class
     @patch
     def _inner_training_loop(
-        self: Trainer,
+        self: type(trainer), # type: ignore
         batch_size=None,
         args=None,
         resume_from_checkpoint=None,
@@ -579,7 +574,8 @@ def patch_grad_clip():
                                     grad_norm = grad_norm.item()
                             else:
                                 grad_norm = _grad_norm
-
+                        
+                        logger.info(f"Gradient norm: {grad_norm}")
                         self.optimizer.step()
 
                         self.control = self.callback_handler.on_optimizer_step(
