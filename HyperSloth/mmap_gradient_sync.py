@@ -15,9 +15,7 @@ from transformers.trainer_callback import (TrainerCallback, TrainerControl,
 
 multi_thread = partial(multi_thread, report=False, progress=False)
 
-logger.remove()
-logger.add("mmap_gradient_sync.log", level="DEBUG")
-logger.add(sys.stdout, level="INFO")
+TIME_OUT = 10
 SLEEP_TIME = 0.1
 
 
@@ -160,6 +158,8 @@ class MmapGradientSync:
         For each parameter, add its local gradient to the memmap.
         Must be called *after* loss.backward().
         """
+        write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu}.txt"
+        logger.debug(f"[GPU {self.gpu}] Writing to {write_file_path}")
         tasks = []
         named_params = dict(model.named_parameters())
 
@@ -174,14 +174,11 @@ class MmapGradientSync:
 
         # Parallelize across parameters
         multi_thread(self._accumulate_one_param, tasks)
-
-        logger.debug("[GPU {}] Accumulated local gradients into memmaps.", self.gpu)
-
         # Write a "done writing" file for this GPU
-        write_file_path = f"{self.grad_dir}/count_write_gpu{self.gpu}.txt"
         with UniversalLocker(write_file_path + ".lock"):
             with open(write_file_path, "w") as f:
                 f.write("1")
+        logger.debug(f"[GPU {self.gpu}] Wrote to {write_file_path}")
 
     def _wait_for_all_write(self):
         """
@@ -199,7 +196,7 @@ class MmapGradientSync:
                 cf = f"{self.grad_dir}/count_write_gpu{i}.txt"
                 if os.path.exists(cf):
                     count += 1
-                elif time.time() - start_time > 30 and not warned:
+                elif time.time() - start_time > TIME_OUT and not warned:
                     logger.warning(f"[GPU {self.gpu}] File {cf} is taking too long to appear.")
                     warned = True
             if count == len(self.gpus):
@@ -324,13 +321,10 @@ class MmapGradientSync:
 class MmapGradSyncCallback(TrainerCallback):
     def __init__(self, model, grad_dir, gpu, gpus):
         self.model = model
-        # clear the directory
-
         self.grad_dir = grad_dir
         self.gpu_index = gpu
         self.gpus = gpus
         self.is_main = gpu == gpus[0]
-
         self.grad_sync = MmapGradientSync(
             model,
             gpu,
@@ -351,6 +345,7 @@ class MmapGradSyncCallback(TrainerCallback):
         """
         Event called before optimizer step.
         """
+        self.clock.tick()
         self.grad_sync.accumulate_local_grad(self.model)
         self.clock.update_task("accumulate_local_grad")
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
@@ -371,12 +366,11 @@ class MmapGradSyncCallback(TrainerCallback):
 
     def on_log(self, args, state, control, **kwargs):
         if "loss" in state.log_history[-1]:
+            
             gputh = self.gpus.index(self.gpu_index)
             self.loss_file[gputh] = np.float32(state.log_history[-1]["loss"])
             t = time.time()
             if self.is_main:
-                # if main gpu, then read all the losses
-                # wait for all the losses to be written
                 while any(self.loss_file == 0):
                     time.sleep(SLEEP_TIME)
                 losses = self.loss_file[:]
@@ -386,9 +380,15 @@ class MmapGradSyncCallback(TrainerCallback):
                 self.loss_file[:] = 0
             else:
                 # if not main gpu, then wait for the main gpu to reset the losses
+                warned = False
+                t = time.time()
                 while True:
                     losses = self.loss_file[:]
                     if np.all(losses == 0):
                         break
                     time.sleep(0.01)
+                    if time.time() - t > 5 and not warned:
+                        logger.warning(f"Losses are not reset by main GPU after 5 seconds.")
+                        warned = True
             t = time.time() - t
+        self.clock.update_task("on_log")

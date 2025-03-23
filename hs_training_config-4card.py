@@ -11,7 +11,7 @@ hyper_config_model = HyperConfig(
         num_samples=100*16,
     ),
     training=TrainingConfig(
-        gpus=[4,5,6,7],  # Change this to the number of GPUs you have
+        gpus=[4,5],  # Change this to the number of GPUs you have
         # gpus=[0,1,2,3],  # Change this to the number of GPUs you have
         loss_type="all",  # all or response_only, the loss will only be calculated on the response part of the input
     ),

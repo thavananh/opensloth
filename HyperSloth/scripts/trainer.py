@@ -69,7 +69,7 @@ def train(config_file: str):
     config_module = load_config_from_path(config_file)
     import tabulate
     from speedy_utils import setup_logger
-    setup_logger('I')
+    setup_logger('D')
 
     # Get configurations from the module
     from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
