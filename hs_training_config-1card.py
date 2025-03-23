@@ -2,9 +2,9 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    grad_dir="/dev/shm/hypersloth",
     data=DataConfig(
-        dataset_name_or_path="/data-4090/anhvth5/sharegpt/evaluate_translation.json",
+        dataset_name_or_path="yahma/alpaca-cleaned",
+        split="train",
         group_by_length=False,
         instruction_part='<start_of_turn>user\n',
         response_part="<start_of_turn>model\n",
