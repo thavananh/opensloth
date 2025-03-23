@@ -29,7 +29,7 @@ def setup_model_and_training(
         # disable evaluation for all GPUs except the first one
         hf_train_args.do_eval = False
         logger.debug(f"GPU {gpu_ith}: Disabling evaluation and reporting")
-    # hf_train_args.logging_steps = int(1e12)
+    hf_train_args.logging_steps = int(1e12)
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
 
     # Build trainer (loads/prepares dataset, sets up SFTTrainer)
@@ -101,16 +101,16 @@ def _create_trainer(
     from trl import SFTTrainer
     from datasets import load_from_disk
     from speedy_utils import identify
-    from fastcore.all import Path
+
 
 
     tokenizer_name = identify(str(tokenizer))
-    num_gpus = len(hyper_config.training.gpus)
-    dataset_cache_path = identify([hyper_config.data.dataset_name_or_path, num_gpus])
     dataset_name = identify(hyper_config.data.model_dump())
-    dataset_cache_path = (
-        "/dev/shm/dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
+    dataset_cache_name = (
+        "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
     )
+    dataset_cache_path = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], dataset_cache_name)
+    
     lock = dataset_cache_path + ".lock"
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 
