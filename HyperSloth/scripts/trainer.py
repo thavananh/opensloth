@@ -115,7 +115,7 @@ def train(config_file: str):
                 hf_train_args=training_config,
                 run_id=run_id,
             )
-            time.sleep(0.5)
+            time.sleep(1)
     else:
         run(
             gpu=hyper_config.training.gpus[0],
