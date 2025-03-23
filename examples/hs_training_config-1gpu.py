@@ -3,8 +3,7 @@ from HyperSloth.hypersloth_config import *
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
     data=DataConfig(
-        dataset_name_or_path="yahma/alpaca-cleaned",
-        split="train",
+        dataset_name_or_path="data/alpaca-cleaned",
         group_by_length=False,
         instruction_part='<start_of_turn>user\n',
         response_part="<start_of_turn>model\n",
