@@ -8,10 +8,10 @@ hyper_config_model = HyperConfig(
         group_by_length=False,
         instruction_part='<start_of_turn>user\n',
         response_part="<start_of_turn>model\n",
-        num_samples=48_000,
+        num_samples=16_000,
     ),
     training=TrainingConfig(
-        gpus=[4],  # Change this to the number of GPUs you have
+        gpus=[7],  # Change this to the number of GPUs you have
         loss_type="all",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
@@ -34,7 +34,7 @@ training_config_model = TrainingArgsConfig(
     eval_steps=100000,
     logging_steps=1,
     report_to="tensorboard",
-    num_train_epochs=1,
+    num_train_epochs=3,
     lr_scheduler_type="linear",
     warmup_steps=5,
     seed=42,

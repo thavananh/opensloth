@@ -551,7 +551,7 @@ def patch_grad_clip(trainer):
                     self.current_flos += float(self.floating_point_ops(inputs))
 
                     if do_sync_step:
-                        # Since we perform prefetching, we need to manually set sync_gradients to True
+                        # This pre optim step is used to sync the gradients of the model by hypersloth
                         self.control = self.callback_handler.on_pre_optimizer_step(
                             args, self.state, self.control
                         )
