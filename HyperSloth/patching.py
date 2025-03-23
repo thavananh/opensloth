@@ -525,7 +525,7 @@ def patch_grad_clip():
                             self.state.trained_token_ratio = (
                                 self.state.num_trained_tokens_seen
                                 / self.state.num_input_tokens_seen
-                            )
+                            ).item()
                     if rng_to_sync:
                         self._load_rng_state(resume_from_checkpoint)
                         rng_to_sync = False
