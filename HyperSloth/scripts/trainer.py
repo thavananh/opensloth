@@ -29,7 +29,7 @@ def run(
     if len(hyper_config.training.gpus) > 1:
         grad_sync_cb = MmapGradSyncCallback(
             model=trainer.model,
-            grad_dir=f"/dev/shm/hypersloth/{run_id}",
+            grad_dir=_get_grad_dir(run_id),
             gpu=gpu,
             gpus=hyper_config.training.gpus,
         )
@@ -69,7 +69,7 @@ def train(config_file: str):
     config_module = load_config_from_path(config_file)
     import tabulate
     from speedy_utils import setup_logger
-    setup_logger('D')
+    setup_logger('I')
 
     # Get configurations from the module
     from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
@@ -99,6 +99,10 @@ def train(config_file: str):
         from speedy_utils import identify
 
         run_id = identify(combined_config)
+        
+        # Hardcoed need fix
+        _prepare_grad_dir(run_id)
+        
         for gpu_index in hyper_config.training.gpus:
             logger.debug(f"Running on GPU {gpu_index} with run_id {run_id}")
             run_in_process(
@@ -114,3 +118,14 @@ def train(config_file: str):
             hyper_config=hyper_config,
             hf_train_args=training_config,
         )
+
+def _prepare_grad_dir(run_id):
+    import shutil, os
+    grad_dir = _get_grad_dir(run_id)
+    shutil.rmtree(grad_dir, ignore_errors=True)
+    os.makedirs(grad_dir, exist_ok=True)
+    return grad_dir
+
+def _get_grad_dir(run_id):
+    grad_dir = f"/dev/shm/hypersloth/{run_id}"
+    return grad_dir

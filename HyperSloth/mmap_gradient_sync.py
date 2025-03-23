@@ -324,7 +324,8 @@ class MmapGradientSync:
 class MmapGradSyncCallback(TrainerCallback):
     def __init__(self, model, grad_dir, gpu, gpus):
         self.model = model
-        os.makedirs(grad_dir, exist_ok=True)
+        # clear the directory
+
         self.grad_dir = grad_dir
         self.gpu_index = gpu
         self.gpus = gpus
@@ -336,7 +337,6 @@ class MmapGradSyncCallback(TrainerCallback):
             gpus,
             grad_dir,
         )
-        os.makedirs(self.grad_dir, exist_ok=True)
         self.loss_file = np.memmap(
             os.path.join(self.grad_dir, "loss.mmap"),
             dtype="float32",
@@ -381,10 +381,9 @@ class MmapGradSyncCallback(TrainerCallback):
                     time.sleep(SLEEP_TIME)
                 losses = self.loss_file[:]
                 mean_loss = np.mean(losses)
-                logger.info(f"Mean loss: {mean_loss}")
-                # if all losses are not zero, then reset all the losses
-                if np.all(losses != 0):
-                    self.loss_file[:] = 0
+                gn = state.log_history[-1].get('grad_norm', 0)
+                logger.info(f"Loss: {mean_loss:0.2f}, grad_norm: {gn:0.2f}")
+                self.loss_file[:] = 0
             else:
                 # if not main gpu, then wait for the main gpu to reset the losses
                 while True:
