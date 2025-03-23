@@ -21,7 +21,12 @@ def setup_model_and_training(
     """
 
     gpu_ith = hyper_config.training.gpus.index(gpu)
-
+    if not gpu_ith == 0:
+        # disable reporting for all GPUs except the first one
+        hf_train_args.report_to = "none"
+        # disable evaluation for all GPUs except the first one
+        hf_train_args.do_eval = False
+        logger.warning(f"GPU {gpu_ith}: Disabling evaluation and reporting")
     # Initialize model and tokenizer
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
 
@@ -96,12 +101,6 @@ def _create_trainer(
     from speedy_utils import identify
     from fastcore.all import Path
 
-    if gpu_ith != 0:
-        # disable reporting for all GPUs except the first one
-        hf_train_args.report_to = None
-        # disable evaluation for all GPUs except the first one
-        hf_train_args.do_eval = False
-        hf_train_args.save_strategy = "no"
 
     tokenizer_name = identify(str(tokenizer))
     num_gpus = len(hyper_config.training.gpus)

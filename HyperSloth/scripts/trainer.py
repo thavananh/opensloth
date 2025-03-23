@@ -4,25 +4,21 @@ from fastcore.all import threaded
 from loguru import logger
 from typing import Union, Dict, Any
 
-from HyperSloth.hypersloth_config import TrainingArgsConfig
+from HyperSloth.hypersloth_config import TrainingArgsConfig, HyperConfig
 
 
 def run(
     gpu: int,
-    hyper_config,
-    hf_train_args:  TrainingArgsConfig,
+    hyper_config: HyperConfig,
+    hf_train_args: TrainingArgsConfig,
+    run_id=None,
 ):
     import os
+
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-
-    # Convert dictionary to TrainingArguments if needed
-    # if isinstance(train_args, dict):
-    #     hf_train_args = TrainingArgsConfig(**train_args)
-    # else:
-    #     hf_train_args = train_args
 
     trainer, model, tokenizer = setup_model_and_training(
         gpu=gpu,
@@ -33,7 +29,7 @@ def run(
     if len(hyper_config.training.gpus) > 1:
         grad_sync_cb = MmapGradSyncCallback(
             model=trainer.model,
-            grad_dir=os.path.join(hf_train_args.output_dir, "grads"),
+            grad_dir=f"/dev/shm/hypersloth/{run_id}",
             gpu=gpu,
             gpus=hyper_config.training.gpus,
         )
@@ -96,18 +92,18 @@ def train(config_file: str):
     config_table = tabulate.tabulate(combined_config.items(), headers=["Key", "Value"])
     logger.info("\n" + config_table)
 
-    # Clean up previous runs
-    logger.info("Cleaning up previous runs")
-    os.system(f"rm -rf {hyper_config.grad_dir}/*")
-
     # Run training
     if len(hyper_config.training.gpus) > 1:
+        from speedy_utils import identify
+
+        run_id = identify(combined_config)
         for gpu_index in hyper_config.training.gpus:
-            logger.debug(f"Running on GPU {gpu_index}")
+            logger.debug(f"Running on GPU {gpu_index} with run_id {run_id}")
             run_in_process(
                 gpu_index,
                 hyper_config=hyper_config,
                 hf_train_args=training_config,
+                run_id=run_id,
             )
             time.sleep(0.2)
     else:

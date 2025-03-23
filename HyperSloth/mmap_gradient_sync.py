@@ -18,7 +18,7 @@ multi_thread = partial(multi_thread, report=False, progress=False)
 logger.remove()
 logger.add("mmap_gradient_sync.log", level="DEBUG")
 logger.add(sys.stdout, level="INFO")
-SLEEP_TIME = 0.1
+SLEEP_TIME = 0.01
 
 
 class UniversalLocker:
@@ -317,7 +317,6 @@ class MmapGradientSync:
 
 class MmapGradSyncCallback(TrainerCallback):
     def __init__(self, model, grad_dir, gpu, gpus):
-        grad_dir = '/dev/shm'
         self.model = model
         os.makedirs(grad_dir, exist_ok=True)
         self.grad_dir = grad_dir
@@ -350,6 +349,8 @@ class MmapGradSyncCallback(TrainerCallback):
         self.clock.update_task("accumulate_local_grad")
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
         self.clock.update_task("read_final_grad_into_model")
+        
+        # periodically print the task table
         if self.is_main:
             self.clock.print_task_table(interval=10)
 
@@ -371,7 +372,7 @@ class MmapGradSyncCallback(TrainerCallback):
                 # if main gpu, then read all the losses
                 # wait for all the losses to be written
                 while any(self.loss_file == 0):
-                    time.sleep(0.01)
+                    time.sleep(SLEEP_TIME)
                 losses = self.loss_file[:]
                 mean_loss = np.mean(losses)
                 logger.info(f"Mean loss: {mean_loss}")
