@@ -156,7 +156,7 @@ def select_dataset_by_length(
     return dataset.select(selected_ids_flat)
 
 
-def patch_grad_clip():
+def patch_hf_trainer():
     # Copy from /home/anhvth5/miniconda3/envs/training/lib/python3.12/site-packages/transformers/trainer.py
 
     # Patch the Trainer class
@@ -816,3 +816,11 @@ def patch_grad_clip():
         self.control = self.callback_handler.on_log(
             self.args, self.state, self.control, logs
         )
+
+    from transformers.trainer_callback import PrinterCallback
+    # patch to use loguru logger
+    @patch
+    def on_log(self:PrinterCallback, args, state, control, logs=None, **kwargs):
+        _ = logs.pop("total_flos", None)
+        if state.is_local_process_zero:
+            logger.info(logs)
