@@ -337,7 +337,7 @@ class MmapGradSyncCallback(TrainerCallback):
             mode="w+",
             shape=(len(self.gpus),),
         )
-        self.clock = Clock()
+        # self.clock = Clock()
 
     def on_pre_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -345,15 +345,15 @@ class MmapGradSyncCallback(TrainerCallback):
         """
         Event called before optimizer step.
         """
-        self.clock.tick()
+        # self.clock.tick()
         self.grad_sync.accumulate_local_grad(self.model)
-        self.clock.update_task("accumulate_local_grad")
+        # self.clock.update_task("accumulate_local_grad")
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
-        self.clock.update_task("read_final_grad_into_model")
+        # self.clock.update_task("read_final_grad_into_model")
         
         # periodically print the task table
-        if self.is_main:
-            self.clock.print_task_table(interval=10)
+        # if self.is_main:
+            # self.clock.print_task_table(interval=10)
 
     def on_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -365,7 +365,7 @@ class MmapGradSyncCallback(TrainerCallback):
         self.grad_sync.zero_mmaps()
 
     def on_log(self, args, state, control, **kwargs):
-        self.clock.tick()
+        # self.clock.tick()
         if "loss" in state.log_history[-1]:
             
             gputh = self.gpus.index(self.gpu_index)
@@ -392,4 +392,4 @@ class MmapGradSyncCallback(TrainerCallback):
             #             logger.warning(f"Losses are not reset by main GPU after 5 seconds.")
             #             warned = True
             t = time.time() - t
-        self.clock.update_task("on_log")
+        # self.clock.update_task("on_log")

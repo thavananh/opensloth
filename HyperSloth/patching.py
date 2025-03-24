@@ -431,6 +431,7 @@ def patch_grad_clip():
         if args.eval_on_start:
             self._evaluate(trial, ignore_keys_for_eval, skip_scheduler=True)
 
+
         for epoch in range(epochs_trained, num_train_epochs):
             epoch_dataloader = train_dataloader
             if hasattr(epoch_dataloader, "set_epoch"):
@@ -476,6 +477,8 @@ def patch_grad_clip():
             total_updates = steps_in_epoch // args.gradient_accumulation_steps + 1
             if args.gradient_accumulation_steps == 1:
                 total_updates -= 1
+            from speedy_utils import Clock
+            clock = Clock()
             for _ in range(total_updates):
                 update_step += 1
                 num_batches = (
@@ -486,6 +489,7 @@ def patch_grad_clip():
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
+                clock.update_task("1. get_batch_samples")
                 for i, inputs in enumerate(batch_samples):
                     step += 1
                     do_sync_step = (
@@ -581,9 +585,11 @@ def patch_grad_clip():
                     if do_sync_step:
                         # =====HYPER SLOTH >>>>
                         # This pre optim step is used to sync the gradients of the model by hypersloth
+                        clock.update_task("2. forward")
                         self.control = self.callback_handler.on_pre_optimizer_step(
                             args, self.state, self.control
                         )
+                        clock.update_task("3. sync gradients")
                         # <<<<< HYPER SLOTH=====
                         self.accelerator.gradient_state._set_sync_gradients(True)
                         # Perform allreduce before gradient update
@@ -617,7 +623,6 @@ def patch_grad_clip():
                             else:
                                 grad_norm = _grad_norm
 
-                        logger.debug(f"Gradient norm: {grad_norm}")
                         self.optimizer.step()
 
                         self.control = self.callback_handler.on_optimizer_step(
@@ -649,6 +654,9 @@ def patch_grad_clip():
                             ignore_keys_for_eval,
                             start_time,
                         )
+                        
+                        clock.update_task("4. optimizer step")
+                        clock.print_task_table(interval=10)
                     else:
                         self.control = self.callback_handler.on_substep_end(
                             args, self.state, self.control
