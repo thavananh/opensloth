@@ -268,6 +268,7 @@ def patch_hf_trainer():
             ]
         )
         self.state.num_trained_tokens_seen = 0
+        # Just to improve logging, so only one process logs the steps
         self.state.is_world_process_zero = os.getenv("HYPERSLOTH_PROCESS_RANK", "0") == "0"
 
         self.state.is_hyper_param_search = trial is not None
@@ -655,9 +656,9 @@ def patch_hf_trainer():
                             ignore_keys_for_eval,
                             start_time,
                         )
-                        
                         clock.update_task("4. optimizer step")
-                        clock.print_task_table(interval=10)
+                        if os.getenv("HYPERSLOTH_PROCESS_RANK", "0") == "0":
+                            clock.print_task_table(interval=10)
                     else:
                         self.control = self.callback_handler.on_substep_end(
                             args, self.state, self.control
@@ -814,14 +815,7 @@ def patch_hf_trainer():
         # <<<<< HYPER SLOTH====
         output = {**logs, **{"step": self.state.global_step}}
         self.state.log_history.append(output)
-        import ipdb; ipdb.set_trace()
         self.control = self.callback_handler.on_log(
             self.args, self.state, self.control, logs
         )
 
-    from transformers.trainer_callback import PrinterCallback
-    @patch
-    def on_log(self:PrinterCallback, args, state, control, logs=None, **kwargs):
-        _ = logs.pop("total_flos", None)
-        if state.is_local_process_zero:
-            logger.info(logs)
