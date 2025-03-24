@@ -10,14 +10,14 @@ if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
 
 
-def run(
+def _train(
     gpu: int,
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
     run_id=None,
 ):
     import os
-
+    os.environ["HYPERSLOTH_PROCESS_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
@@ -46,7 +46,7 @@ def run(
         tokenizer.save_pretrained(hf_train_args.output_dir)
 
 
-run_in_process = threaded(process=True)(run)
+run_in_process = threaded(process=True)(_train)
 
 import importlib.util
 
@@ -117,7 +117,7 @@ def train(config_file: str):
             )
             time.sleep(1)
     else:
-        run(
+        _train(
             gpu=hyper_config.training.gpus[0],
             hyper_config=hyper_config,
             hf_train_args=training_config,

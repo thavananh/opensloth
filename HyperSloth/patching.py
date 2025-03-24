@@ -268,6 +268,7 @@ def patch_hf_trainer():
             ]
         )
         self.state.num_trained_tokens_seen = 0
+        self.state.is_world_process_zero = os.getenv("HYPERSLOTH_PROCESS_RANK", "0") == "0"
 
         self.state.is_hyper_param_search = trial is not None
         self.state.train_batch_size = self._train_batch_size
@@ -813,12 +814,12 @@ def patch_hf_trainer():
         # <<<<< HYPER SLOTH====
         output = {**logs, **{"step": self.state.global_step}}
         self.state.log_history.append(output)
+        import ipdb; ipdb.set_trace()
         self.control = self.callback_handler.on_log(
             self.args, self.state, self.control, logs
         )
 
     from transformers.trainer_callback import PrinterCallback
-    # patch to use loguru logger
     @patch
     def on_log(self:PrinterCallback, args, state, control, logs=None, **kwargs):
         _ = logs.pop("total_flos", None)
