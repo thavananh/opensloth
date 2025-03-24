@@ -60,10 +60,14 @@ def add_lora(
     if port:
         url = f"http://localhost:{port}/v1/load_lora_adapter"
     assert url.startswith("http"), "URL must start with 'http'"
+    try:
+        unload_lora(lora_name, port)
+    except Exception as e:
+        pass
     headers = {"Content-Type": "application/json"}
     data = {"lora_name": lora_name, "lora_path": lora_path}
     logger.info(f"Adding LoRA adapter: {lora_name} from {lora_path}")
-
+        # logger.warning(f"Failed to unload LoRA adapter: {str(e)}")
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
@@ -84,6 +88,16 @@ def add_lora(
     except requests.exceptions.RequestException as e:
         logger.error(f"Request failed: {str(e)}")
         return {"error": f"Request failed: {str(e)}"}
+
+
+def unload_lora(lora_name, port):
+    url = f"http://localhost:{port}/v1/unload_lora_adapter"
+    headers = {"Content-Type": "application/json"}
+    data = {"lora_name": lora_name}
+    logger.info(f"Unloading LoRA adapter: {lora_name}")
+    response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()
+    return response.json()
 
 
 def serve(
