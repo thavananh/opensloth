@@ -14,7 +14,7 @@ hyper_config_model = HyperConfig(
     ),
     fast_model_args=FastModelArgs(
         model_name="unsloth/gemma-3-27b-it-bnb-4bit",
-        max_seq_length=16_000,
+        max_seq_length=32_000,
     ),
     lora_args=LoraArgs(
         r=16,
@@ -24,17 +24,19 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="/data-4090/anhvth5/hypersloth_output/loras/openo1",
+    output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-27b-it/openo1",
     per_device_train_batch_size=1,  
-    gradient_accumulation_steps=32,  # Meaing 8*4*4=128 examples per step
+    gradient_accumulation_steps=16,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,
     logging_steps=1,
     report_to="tensorboard",
-    num_train_epochs=3,
+    num_train_epochs=1,
     lr_scheduler_type="linear",
-    warmup_steps=5,
+    warmup_steps=100,
+    save_only_model=True,
+    save_steps=200,
     seed=42,
     save_total_limit=2,
     bf16=True,

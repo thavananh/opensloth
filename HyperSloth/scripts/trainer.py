@@ -128,7 +128,7 @@ def _prepare_grad_dir(run_id):
     import shutil, os
 
     grad_dir = _get_grad_dir(run_id)
-    shutil.rmtree(grad_dir, ignore_errors=True)
+    # shutil.rmtree(grad_dir, ignore_errors=True)
     os.makedirs(grad_dir, exist_ok=True)
     return grad_dir
 
