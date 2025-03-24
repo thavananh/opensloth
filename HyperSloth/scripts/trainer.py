@@ -19,6 +19,7 @@ def _train(
     import os
     os.environ["HYPERSLOTH_PROCESS_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    _setup_loger(gpu)
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
@@ -136,3 +137,11 @@ def _prepare_grad_dir(run_id):
 def _get_grad_dir(run_id):
     grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], "grad_sync", run_id)
     return grad_dir
+
+
+def _setup_loger(gpu_id):
+    # create a file logger for this specific gpu store at /dev/shm/hypersloth/log_gpu{gpu}.log
+    from loguru import logger
+    logger.remove()
+    logger.add(f".log/process_{gpu_id}.log")
+    
