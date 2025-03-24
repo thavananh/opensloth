@@ -52,3 +52,5 @@ hs_training_config.py
 runs
 saves/
 length*.txt
+train_config.py
+train_cfg.py
