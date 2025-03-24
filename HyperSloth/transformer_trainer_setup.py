@@ -22,7 +22,7 @@ def setup_model_and_training(
     """
     
 
-    gpu_ith = hyper_config.training.gpus.index(gpu)
+    gpu_ith = int(os.environ["HYPERSLOTH_PROCESS_RANK"])
     if not gpu_ith == 0:
         # disable reporting for all GPUs except the first one
         hf_train_args.report_to = "none"
