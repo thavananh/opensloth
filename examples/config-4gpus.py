@@ -45,5 +45,4 @@ training_config_model = TrainingArgsConfig(
     weight_decay=0.01,
     packing=False,
     include_num_input_tokens_seen=True
-    # dataset_kwargs={"skip_prepare_dataset": True},
 )
