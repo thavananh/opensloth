@@ -10,10 +10,9 @@ import torch
 from loguru import logger
 from speedy_utils import Clock
 from speedy_utils.all import multi_thread
-from transformers.trainer_callback import (TrainerCallback, TrainerControl,
-                                           TrainerState)
+from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 
-multi_thread = partial(multi_thread, report=False, progress=False)
+multi_thread = partial(multi_thread, report=False, progress=False, workers=64)
 
 TIME_OUT = 10
 SLEEP_TIME = 0.1
@@ -172,9 +171,7 @@ class MmapGradientSync:
                 local_grad = param.grad.detach().cpu().numpy().reshape(-1)
                 tasks.append((filename, numel, local_grad))
 
-        # Parallelize across parameters
         multi_thread(self._accumulate_one_param, tasks)
-        # Write a "done writing" file for this GPU
         with UniversalLocker(write_file_path + ".lock"):
             with open(write_file_path, "w") as f:
                 f.write("1")
@@ -197,7 +194,9 @@ class MmapGradientSync:
                 if os.path.exists(cf):
                     count += 1
                 elif time.time() - start_time > TIME_OUT and not warned:
-                    logger.warning(f"[GPU {self.gpu}] File {cf} is taking too long to appear.")
+                    logger.warning(
+                        f"[GPU {self.gpu}] File {cf} is taking too long to appear."
+                    )
                     warned = True
             if count == len(self.gpus):
                 break
@@ -220,7 +219,9 @@ class MmapGradientSync:
                 if os.path.exists(cf):
                     count += 1
                 elif time.time() - start_time > 30 and not warned:
-                    logger.warning(f"[GPU {self.gpu}] File {cf} is taking too long to appear.")
+                    logger.warning(
+                        f"[GPU {self.gpu}] File {cf} is taking too long to appear."
+                    )
                     warned = True
             if count == len(self.gpus):
                 break
@@ -345,15 +346,8 @@ class MmapGradSyncCallback(TrainerCallback):
         """
         Event called before optimizer step.
         """
-        # self.clock.tick()
         self.grad_sync.accumulate_local_grad(self.model)
-        # self.clock.update_task("accumulate_local_grad")
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
-        # self.clock.update_task("read_final_grad_into_model")
-        
-        # periodically print the task table
-        # if self.is_main:
-            # self.clock.print_task_table(interval=10)
 
     def on_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -363,33 +357,3 @@ class MmapGradSyncCallback(TrainerCallback):
         """
 
         self.grad_sync.zero_mmaps()
-
-    def on_log(self, args, state, control, **kwargs):
-        # self.clock.tick()
-        if "loss" in state.log_history[-1]:
-            
-            gputh = self.gpus.index(self.gpu_index)
-            self.loss_file[gputh] = np.float32(state.log_history[-1]["loss"])
-            t = time.time()
-            if self.is_main:
-                while any(self.loss_file == 0):
-                    time.sleep(SLEEP_TIME)
-                losses = self.loss_file[:]
-                mean_loss = np.mean(losses)
-                gn = state.log_history[-1].get('grad_norm', 0)
-                logger.info(f"Loss: {mean_loss:0.2f}, grad_norm: {gn:0.2f}")
-                self.loss_file[:] = 0
-            # else:
-            #     # if not main gpu, then wait for the main gpu to reset the losses
-            #     warned = False
-            #     t = time.time()
-            #     while True:
-            #         losses = self.loss_file[:]
-            #         if np.all(losses == 0):
-            #             break
-            #         time.sleep(0.01)
-            #         if time.time() - t > 5 and not warned:
-            #             logger.warning(f"Losses are not reset by main GPU after 5 seconds.")
-            #             warned = True
-            t = time.time() - t
-        # self.clock.update_task("on_log")
