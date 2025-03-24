@@ -26,7 +26,7 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-27b-it/alpaca-cleaned-4gpus",
+    output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-4b-it/alpaca-cleaned-4gpus",
     per_device_train_batch_size=1,  
     gradient_accumulation_steps=32,  # Meaing 8*4*4=128 examples per step
     learning_rate=2e-4,

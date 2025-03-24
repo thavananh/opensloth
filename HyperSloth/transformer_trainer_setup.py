@@ -201,7 +201,7 @@ def _create_trainer(
             hf_train_args.gradient_accumulation_steps,
             hf_train_args.per_device_train_batch_size,
         )
-    # Save for other GPUs
+    
     from HyperSloth.patching import patch_hf_trainer
     patch_hf_trainer()
     return trainer
