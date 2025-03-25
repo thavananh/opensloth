@@ -16,7 +16,7 @@ def _train(
     hf_train_args: TrainingArgsConfig,
     run_id=None,
 ):
-    _setup_loger(gpu)
+    _setup_loger(f'{run_id}_{gpu}')
     import os
     os.environ["HYPERSLOTH_PROCESS_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
@@ -24,7 +24,12 @@ def _train(
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
     # from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-    from HyperSloth.mmap_gradient_sync_v2 import MmapGradSyncCallback
+    if hyper_config.hps_version == 2:
+        from HyperSloth.mmap_gradient_sync_v2 import MmapGradSyncCallback
+        logger.info("Using gradient sync callback v2")
+    else:
+        logger.info("Using gradient sync callback v1")
+        from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
     trainer, model, tokenizer = setup_model_and_training(
         gpu=gpu,
@@ -146,4 +151,5 @@ def _setup_loger(gpu_id):
     file = f".log/process_{gpu_id}.log"
     if os.path.exists(file): os.remove(file)
     logger.add(file)
+    print(f"Logging to {file}")
     

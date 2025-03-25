@@ -178,17 +178,6 @@ class Memap:
 
 
 class MmapGradientSyncV2:
-    """
-    A single-file gradient sync using one large memmap.
-    
-    Each parameter is assigned a contiguous region of size:
-        param.numel * len(self.gpus)
-    so that each GPU can write its local gradients into a distinct sub-slice
-    (no locking needed, since there's no overlap).
-    
-    We also store "flags" in the same file for simple read/write barriers.
-    """
-
     def __init__(
         self,
         model: torch.nn.Module,
@@ -196,33 +185,23 @@ class MmapGradientSyncV2:
         gpus: List[int],
         grad_dir: str = "/dev/shm/hypersloth_v2/",
     ):
-        """
-        Args:
-          model: The local nn.Module.
-          gpu:   Local GPU index (this process).
-          gpus:  List of *all* GPU indices in the job (for array sizing).
-          grad_dir: Directory to store the single memmap file.
-        """
+        # The actual GPU ID used by the system:
         self.gpu = gpu
+        # The list of all GPU IDs (could be [4,5,6,7])
         self.gpus = gpus
+        # The local rank (0..num_gpus-1) in that list:
+        self.local_rank = gpus.index(gpu)
         self.num_gpus = len(gpus)
-        self.is_main = (gpu == gpus[0])
+        # "Main" GPU is the one with local_rank == 0
+        self.is_main = (self.local_rank == 0)
 
         os.makedirs(grad_dir, exist_ok=True)
         self.buffer_path = os.path.join(grad_dir, "grad_buffer_v2.dat")
 
-        # -------------------------------------------------------
-        # Build param info: [offset, numel, shape] for each param
-        # We will store param slices in a single contiguous array:
-        # total needed = sum( param.numel * num_gpus ) across all params.
-        # Then we store a "flag array" of length (2 * num_gpus)
-        #  - [0 .. num_gpus-1] = "write" flags (1=done, 0=not done)
-        #  - [num_gpus .. 2*num_gpus-1] = "read" flags
-        # -------------------------------------------------------
+        # Build param info and figure out total_size
         self.param_info = []
         current_offset = 0
         named_params = list(model.named_parameters())
-
         for name, param in named_params:
             if not param.requires_grad:
                 continue
@@ -230,54 +209,89 @@ class MmapGradientSyncV2:
             shape = param.shape
             self.param_info.append({
                 "name": name,
-                "offset": current_offset,   # start for this parameter's slices
+                "offset": current_offset,
                 "numel": numel,
                 "shape": shape
             })
-            # Reserve param.numel * num_gpus for this param
             current_offset += numel * self.num_gpus
 
-        # Now define space for flags
+        # Reserve space for flags
         self.flags_offset = current_offset
-        self.flags_size = 2 * self.num_gpus  # "write" + "read" for each GPU
+        self.flags_size = 2 * self.num_gpus
         total_size = self.flags_offset + self.flags_size
 
-        # -------------------------------------------------------
-        # Create/open the memmap
-        # If the file doesn't exist, we create with zero-filled "w+"
-        # Otherwise open in "r+" to preserve existing data.
-        # -------------------------------------------------------
-        if not os.path.exists(self.buffer_path):
-            # Create from scratch with zeros
-            tmp = np.memmap(self.buffer_path, dtype="float32", mode="w+", shape=(total_size,))
+        # We'll store a "magic header" in the very first float (index=0),
+        # then put the parameter data after that. So let's shift everything by +1.
+        #    [0] = magic header
+        #    [1.. total_size] = param slices + flags
+        self.magic_offset = 0
+        self.data_offset = 1  # the actual start for param slices
+        total_size_with_header = total_size + self.data_offset
+
+        if self.is_main:
+            # 1) Remove any stale file
+            if os.path.exists(self.buffer_path):
+                logger.info(f"[GPU {self.gpu}] Removing stale {self.buffer_path}")
+                os.remove(self.buffer_path)
+
+            # 2) Create with zeros
+            logger.info(f"[GPU {self.gpu}] Creating {self.buffer_path} w/ size={total_size_with_header}")
+            tmp = np.memmap(self.buffer_path, dtype="float32", mode="w+", shape=(total_size_with_header,))
             tmp[:] = 0.0
+
+            # 3) Write a "magic" marker into the first element to indicate "fresh file"
+            tmp[self.magic_offset] = 1234.0  # any distinct float
             tmp.flush()
             del tmp
 
-        # Now open in read+write mode
-        self.mem = np.memmap(self.buffer_path, dtype="float32", mode="r+", shape=(total_size,))
-        logger.info(f"[GPU {self.gpu}] MmapGradientSyncV2: total_size={total_size}")
+        else:
+            # Wait until the main GPU finishes creating the file properly
+            start_time = time.time()
+            while True:
+                if os.path.exists(self.buffer_path):
+                    # Also check that the file is big enough
+                    # and that the magic header is set
+                    sz = os.path.getsize(self.buffer_path)
+                    # size in bytes, so compare to total_size_with_header * sizeof(float)
+                    needed_bytes = total_size_with_header * 4
+                    if sz >= needed_bytes:
+                        # Now open in read mode quickly and check the header
+                        test_map = np.memmap(self.buffer_path, dtype="float32", mode="r", shape=(total_size_with_header,))
+                        if test_map[self.magic_offset] == 1234.0:
+                            # Good. The main GPU must have created it for THIS run
+                            del test_map
+                            break
+                        del test_map
+                if (time.time() - start_time) > TIME_OUT:
+                    raise RuntimeError(f"[GPU {self.gpu}] Timeout waiting for {self.buffer_path} to be created with magic header.")
+                time.sleep(SLEEP_TIME)
+        # Everyone now opens in r+ mode for reading/writing
+        self.mem = np.memmap(self.buffer_path, dtype="float32", mode="r+", shape=(total_size_with_header,))
+        logger.info(f"[GPU {self.gpu}] Mmap opened: total_size_with_header={total_size_with_header}")
 
+        # Adjust offsets: param data + flags is after the header
+        self.total_size = total_size
+        # The param slices, flags_offset, etc. need to be shifted by self.data_offset:
+        self.flags_offset += self.data_offset
+        for info in self.param_info:
+            info["offset"] += self.data_offset
+
+        # Now you can do the rest of your logic as before
+        # (accumulate_local_grad, read_final_grad_into_model, etc.)
     # -----------------------------------------------------------------
     # Helper methods for barrier flags
     # -----------------------------------------------------------------
 
     def _set_flag(self, stage: str):
-        """
-        stage: 'write' or 'read'
-        We'll store:
-          - index = self.gpu if stage == 'write'
-          - index = self.gpu + self.num_gpus if stage == 'read'
-        and set mem[flags_offset + index] = 1.0.
-        """
         if stage == "write":
-            idx = self.gpu
+            idx = self.local_rank
         elif stage == "read":
-            idx = self.gpu + self.num_gpus
+            idx = self.local_rank + self.num_gpus
         else:
-            raise ValueError(f"Unknown stage={stage}, must be 'write' or 'read'.")
+            raise ValueError(...)
         self.mem[self.flags_offset + idx] = 1.0
         self.mem.flush()
+
 
     def _wait_for_all(self, stage: str, timeout=TIME_OUT):
         """
@@ -315,28 +329,22 @@ class MmapGradientSyncV2:
     # -----------------------------------------------------------------
 
     def accumulate_local_grad(self, model: torch.nn.Module):
-        """
-        Each GPU writes its param.grad into the memmap slice [offset + gpu*numel : offset+(gpu+1)*numel].
-        Then sets its "write" flag.
-        """
         for info in self.param_info:
             name = info["name"]
             offset = info["offset"]
             numel = info["numel"]
-
             param = dict(model.named_parameters())[name]
             if param.grad is None:
                 continue
 
-            # The sub-slice for this GPU
-            sub_offset = offset + self.gpu * numel
+            # Write local grad into the slice for local_rank
+            sub_offset = offset + self.local_rank * numel
             flat_grad = param.grad.detach().cpu().numpy().ravel()
             self.mem[sub_offset : sub_offset + numel] = flat_grad
 
         self.mem.flush()
-        # Mark this GPU's write as done
         self._set_flag("write")
-
+        
     def read_final_grad_into_model(self, model: torch.nn.Module, average: bool = True):
         """
         Wait for all GPUs to finish writing, then sum across each GPU slice for every param.
