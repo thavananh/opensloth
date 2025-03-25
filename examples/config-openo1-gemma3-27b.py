@@ -5,7 +5,7 @@ hyper_config_model = HyperConfig(
     data=DataConfig(
         dataset_name_or_path="data/OpenO1-SFT",
         group_by_length=True,
-        instruction_part='<start_of_turn>user\n',
+        instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
     ),
     training=TrainingConfig(
@@ -19,14 +19,14 @@ hyper_config_model = HyperConfig(
     lora_args=LoraArgs(
         r=16,
         lora_alpha=16,
-    )
+    ),
 )
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-27b-it/openo1",
-    per_device_train_batch_size=1,  
-    gradient_accumulation_steps=16,  # Meaing 8*4*4=128 examples per step
+    per_device_train_batch_size=2,
+    gradient_accumulation_steps=16,
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,
@@ -44,5 +44,5 @@ training_config_model = TrainingArgsConfig(
     optim="adamw_8bit",
     weight_decay=0.01,
     packing=False,
-    include_num_input_tokens_seen=True
+    include_num_input_tokens_seen=True,
 )
