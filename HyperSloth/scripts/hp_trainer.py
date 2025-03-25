@@ -94,7 +94,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
     import tabulate
     from speedy_utils import setup_logger
 
-    # setup_logger(os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO"))
+    setup_logger(os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO"))
     # Get configurations from the module
     from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 
