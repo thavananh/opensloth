@@ -69,8 +69,9 @@ def select_dataset_by_length(
     
 
     n_samples = len(dataset)
-    new_n_samples = n_samples - n_samples % num_gpus
-    ids = random.sample(range(n_samples), new_n_samples)    
+    new_n_samples = (n_samples//num_gpus) * num_gpus
+    ids = range(new_n_samples)
+    dataset = dataset.select(ids)
     from typing import Dict, List
     import numpy as np
     from fastcore.all import chunked

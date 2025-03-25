@@ -382,7 +382,7 @@ class MmapGradSyncCallback(TrainerCallback):
          - Step 1: Each GPU accumulates/writes its gradient => set 'write=1'
          - Step 2: Wait for all writes, read & average => set 'read=1'
         """
-        logger.info("=" * 80)
+        logger.debug("=" * 80)
         local_step = state.global_step  # Our "iteration" index
         logger.debug(
             f"[GPU={self.gpu_index}] on_pre_optimizer_step => Step1 accumulate_local_grad"

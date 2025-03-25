@@ -111,7 +111,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
     elif hasattr(config_module, "training_config"):
         training_config = TrainingArgsConfig(**config_module.training_config)
     else:
-        training_config = TrainingArgsConfig()
+        raise ValueError("No training configuration found")
 
     # Display configuration
     combined_config = {**hyper_config.model_dump(), **training_config.model_dump()}
