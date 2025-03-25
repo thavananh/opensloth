@@ -12,8 +12,34 @@ if not "HYPERSLOTH_CACHE_DIR" in os.environ:
 # turn off user warnings
 # Too verbose -> turn off
 import warnings
+
 warnings.filterwarnings("ignore")
-os.environ['UNSLOTH_ENABLE_LOGGING'] = '0'
+os.environ["UNSLOTH_ENABLE_LOGGING"] = "0"
+
+
+def _prepare_grad_dir(run_id):
+    import os
+
+    grad_dir = _get_grad_dir(run_id)
+    os.makedirs(grad_dir, exist_ok=True)
+    return grad_dir
+
+
+def _get_grad_dir(run_id):
+    grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], "grad_sync", run_id)
+    return grad_dir
+
+
+def _setup_loger(gpu_id):
+    # create a file logger for this specific gpu store at /dev/shm/hypersloth/log_gpu{gpu}.log
+    from loguru import logger
+
+    file = f".log/process_{gpu_id}.log"
+    if os.path.exists(file):
+        os.remove(file)
+    logger.add(file)
+    print(f"Logging to {file}")
+
 
 def _train(
     gpu: int,
@@ -30,22 +56,21 @@ def _train(
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
 
     # from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-    if hyper_config.hps_version == 2:
-        from HyperSloth.mmap_gradient_sync_v2 import MmapGradSyncCallback
 
-        logger.info("Using gradient sync callback v2")
-    else:
-        logger.info("Using gradient sync callback v1")
-        from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-        
-    
     trainer, model, tokenizer = setup_model_and_training(
         gpu=gpu,
         hyper_config=hyper_config,
         hf_train_args=hf_train_args,
     )
 
-    if len(hyper_config.training.gpus) > 1:
+    if len(hyper_config.training.gpus) > 0 and hyper_config.hps_version is not None:
+        if hyper_config.hps_version == 2:
+            from HyperSloth.mmap_gradient_sync_v2 import MmapGradSyncCallback
+
+            logger.info("Using gradient sync callback v2")
+        else:
+            logger.info("Using gradient sync callback v1")
+            from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
         grad_sync_cb = MmapGradSyncCallback(
             model=trainer.model,
             grad_dir=_get_grad_dir(run_id),
@@ -150,7 +175,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
                     run_id=run_id,
                 )
                 processes.append(p)
-                
+
             # check proc if exit code == 1 then .terminate all
             while True:
                 for proc in processes:
@@ -158,7 +183,9 @@ def train(config_file: str, rank: int = None, world_size: int = None):
                         if proc.exitcode == 1:
                             for p in processes:
                                 p.terminate()
-                            logger.error("Error in training, now terminating all processes")
+                            logger.error(
+                                "Error in training, now terminating all processes"
+                            )
                             raise Exception("Error in training")
                         else:
                             processes.remove(proc)
@@ -166,7 +193,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
                 if not processes:
                     logger.success("All processes finished")
                     break
-                
+
         else:
             _train(
                 gpu=hyper_config.training.gpus[0],
@@ -174,26 +201,3 @@ def train(config_file: str, rank: int = None, world_size: int = None):
                 hf_train_args=training_config,
                 run_id="single_gpu",
             )
-
-
-def _prepare_grad_dir(run_id):
-    import os
-    grad_dir = _get_grad_dir(run_id)
-    os.makedirs(grad_dir, exist_ok=True)
-    return grad_dir
-
-
-def _get_grad_dir(run_id):
-    grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], "grad_sync", run_id)
-    return grad_dir
-
-
-def _setup_loger(gpu_id):
-    # create a file logger for this specific gpu store at /dev/shm/hypersloth/log_gpu{gpu}.log
-    from loguru import logger
-
-    file = f".log/process_{gpu_id}.log"
-    if os.path.exists(file):
-        os.remove(file)
-    logger.add(file)
-    print(f"Logging to {file}")

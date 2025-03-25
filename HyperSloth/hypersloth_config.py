@@ -1,13 +1,14 @@
 from typing import List, Literal, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
+from multiprocessing import cpu_count
 
-
+CPU_COUNT = 16
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
     dataset_name_or_path: str = "data/cod_1k.json"
     test_ratio: float = 0.00
-    dataset_num_proc: int = 32
+    dataset_num_proc: int = CPU_COUNT
     instruction_part: str = "Instruction:"
     response_part: str = "Response:"
     num_samples: Optional[int] = None

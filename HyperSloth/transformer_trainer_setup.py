@@ -31,6 +31,7 @@ def setup_model_and_training(
     # Unsloth uses monkey patching thus it might have race conditions so we need to try until it works
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
+    
     trainer.train_dataset = trainer.train_dataset.shard(
         num_shards=len(hyper_config.training.gpus),
         index=gpu_ith,
@@ -38,14 +39,13 @@ def setup_model_and_training(
         keep_in_memory=True,  # this will keep the dataset in memory
     )
     _maybe_train_on_responses_only(trainer, hyper_config)
-    _debug_training_lengths(hf_train_args, gpu_ith, trainer)
-
+    
     # Debug info for the main GPU
     if gpu_ith == 0:
         logger.info(f"Model setup complete for GPU {gpu_ith}")
         from ._debug_dataloader import _debug_dataloader
-
         _debug_dataloader(trainer)
+        _debug_training_lengths(hf_train_args, gpu_ith, trainer)
 
     return trainer, model, tokenizer
 
@@ -149,10 +149,10 @@ def _create_trainer(
             )
 
             # Adjust dataset for multi-GPU
-            max_len_ds = len(hyper_config.training.gpus) * (
-                len(trainer.train_dataset) // len(hyper_config.training.gpus)
-            )
-            trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
+            # max_len_ds = len(hyper_config.training.gpus) * (
+            #     len(trainer.train_dataset) // len(hyper_config.training.gpus)
+            # )
+            # trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
 
             trainer.train_dataset.save_to_disk(dataset_cache_path)
 
@@ -188,9 +188,7 @@ def _create_trainer(
         from .patching import patch_sampler, select_dataset_by_length
 
         trainer = patch_sampler(trainer)
-        # ids must devisble by the number of GPUs
 
-        
         trainer.train_dataset = select_dataset_by_length(
             trainer.train_dataset,
             gpu_ith,

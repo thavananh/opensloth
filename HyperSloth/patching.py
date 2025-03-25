@@ -51,6 +51,7 @@ else:
 
 
 def patch_sampler(trainer):
+    # Simply use the SequentialSampler for the training dataset
     from fastcore.all import patch
     from torch.utils.data import SequentialSampler
     from transformers import Trainer
@@ -72,6 +73,7 @@ def select_dataset_by_length(
     new_n_samples = (n_samples//num_gpus) * num_gpus
     ids = range(new_n_samples)
     dataset = dataset.select(ids)
+    
     from typing import Dict, List
     import numpy as np
     from fastcore.all import chunked
