@@ -188,6 +188,9 @@ def _create_trainer(
         from .patching import patch_sampler, select_dataset_by_length
 
         trainer = patch_sampler(trainer)
+        # ids must devisble by the number of GPUs
+
+        
         trainer.train_dataset = select_dataset_by_length(
             trainer.train_dataset,
             gpu_ith,

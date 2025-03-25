@@ -66,8 +66,12 @@ def patch_sampler(trainer):
 def select_dataset_by_length(
     dataset, gpu_index: int, num_gpus: int, grad_accum_steps: int, batch_size: int
 ):
-    from typing import Dict, List
+    
 
+    n_samples = len(dataset)
+    new_n_samples = n_samples - n_samples % num_gpus
+    ids = random.sample(range(n_samples), new_n_samples)    
+    from typing import Dict, List
     import numpy as np
     from fastcore.all import chunked
 
@@ -77,7 +81,7 @@ def select_dataset_by_length(
         if len(lengths) % num_gpus != 0:
             raise ValueError("The list length must be divisible by num_gpus")
 
-        indices_sorted = np.argsort(-np.array(lengths))
+        indices_sorted = np.argsort(-np.array(lengths)) # largest number will be at the beginning
         splits = [[] for _ in range(num_gpus)]
         length_sums = [0] * num_gpus
         max_items_per_gpu = len(lengths) // num_gpus
