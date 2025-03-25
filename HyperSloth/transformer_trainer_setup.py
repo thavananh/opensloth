@@ -4,6 +4,7 @@ Handles weight synchronization, model setup, and distributed training coordinati
 """
 
 import os
+import random
 import time
 from loguru import logger
 import filelock
@@ -28,8 +29,17 @@ def setup_model_and_training(
         hf_train_args.report_to = "none"
         # disable evaluation for all GPUs except the first one
         hf_train_args.do_eval = False
+    # Unsloth uses monkey patching thus it might have race conditions so we need to try until it works
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
-
+    # for i in range(10):
+        # try:
+        # except Exception as e:
+        #     t = random.choice([1, 2, 3, 4, 5])
+        #     logger.warning(f"Error initializing model and tokenizer: {e}, sleeping for {t} seconds")
+        #     time.sleep(t)
+        #     continue
+    # if i > 0:
+    #     logger.success(f"Model and tokenizer initialized after {i} retries")
     # Build trainer (loads/prepares dataset, sets up SFTTrainer)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
 

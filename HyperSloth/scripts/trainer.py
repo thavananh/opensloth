@@ -137,7 +137,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
                     hf_train_args=training_config,
                     run_id=run_id,
                 )
-                time.sleep(1)
+                # time.sleep(1)
         else:
             _train(
                 gpu=hyper_config.training.gpus[0],
