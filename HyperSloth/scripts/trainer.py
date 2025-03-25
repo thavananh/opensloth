@@ -1,11 +1,10 @@
-import argparse
 import os
 import time
+
 from fastcore.all import threaded
 from loguru import logger
-from typing import Union, Dict, Any
 
-from HyperSloth.hypersloth_config import TrainingArgsConfig, HyperConfig
+from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
@@ -17,9 +16,7 @@ def _train(
     hf_train_args: TrainingArgsConfig,
     run_id,
 ):
-    _setup_loger(f"debug_{gpu}")
-    # _setup_loger(f'debug')
-    #
+    _setup_loger(f"{gpu}")
     import os
 
     os.environ["HYPERSLOTH_PROCESS_RANK"] = str(hyper_config.training.gpus.index(gpu))
@@ -87,7 +84,6 @@ def train(config_file: str, rank: int = None, world_size: int = None):
     from speedy_utils import setup_logger
 
     # setup_logger(os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO"))
-
     # Get configurations from the module
     from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 
@@ -113,6 +109,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
 
     # Run training
     from speedy_utils import identify
+
     if rank is not None and world_size is not None:
         logger.warning(f"Running on rank {rank} with world size {world_size}")
         hyper_config.training.gpus = range(world_size)
@@ -151,7 +148,8 @@ def train(config_file: str, rank: int = None, world_size: int = None):
 
 
 def _prepare_grad_dir(run_id):
-    import shutil, os
+    import os
+    import shutil
 
     grad_dir = _get_grad_dir(run_id)
     # shutil.rmtree(grad_dir, ignore_errors=True)

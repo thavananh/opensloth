@@ -80,6 +80,7 @@ class HyperConfig(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
+    hps_version = 2
 
     class Config:
         """Pydantic configuration for DataConfig."""
