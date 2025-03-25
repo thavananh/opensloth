@@ -23,12 +23,12 @@ def get_chat_dataset(
     tokenizer: Any = None,
     message_key: str = None,
     chat_template=None,
-    dataset_already_formated=False, # when there already a "text" key in the dataset 
+    dataset_already_formated=False,  # when there already a "text" key in the dataset
     **kwargs,
 ) -> tuple[Dataset, Dataset | None]:
     """
     Load and preprocess a chat dataset from file or HuggingFace Hub.
-    
+
     Returns train dataset and optional test dataset (if test_ratio > 0).
     """
     # Load dataset based on input type
@@ -37,7 +37,7 @@ def get_chat_dataset(
             dataset = Dataset.from_json(dataset_name_or_path)
         elif dataset_name_or_path.endswith(".csv"):
             dataset = Dataset.from_csv(dataset_name_or_path)
-        #is folder
+        # is folder
         elif os.path.isdir(dataset_name_or_path):
             dataset = Dataset.load_from_disk(dataset_name_or_path)
         else:
@@ -78,6 +78,7 @@ def get_chat_dataset(
         dataset = dataset.select(range(num_samples))
 
     if tokenizer:
+
         def apply_chat_template(examples):
             # Use custom message key if provided
             if message_key and message_key in examples:
@@ -102,26 +103,23 @@ def get_chat_dataset(
                     chat_template
                 ).chat_template
 
-
             texts = tokenizer.apply_chat_template(
                 examples[messages_key], tokenize=False
             )
             return {"text": texts}
 
-        # try:
-        dataset = dataset.map(apply_chat_template, batched=True)
-        # except Exception as e:
-        #     # Provide helpful error with dataset structure information
-        #     raise ValueError(
-        #         f"Failed to apply chat template: {str(e)}\n"
-        #         f"Dataset structure: Keys in first example = {dataset_keys}\n"
-        #         f"Make sure the dataset has conversation data in a recognized format."
-        #     ) from e
+        try:
+            dataset = dataset.map(apply_chat_template, batched=True)
+        except Exception as e:
+            import traceback
 
-    # import ipdb; ipdb.set_trace()
-    # def tokenize_function(text):
-    #     return tokenizer(text, return_tensors="pt")['input_ids']
-    
+            traceback.print_exc()
+            raise ValueError(
+                f"Failed to apply chat template: {str(e)}\n"
+                f"Dataset structure: Keys in first example = {dataset_keys}\n"
+                f"Make sure the dataset has conversation data in a recognized format."
+            ) from e
+
     # Create train/test split if needed
     if test_ratio > 0:
         ds = dataset.train_test_split(test_size=test_ratio, shuffle=True, seed=42)
