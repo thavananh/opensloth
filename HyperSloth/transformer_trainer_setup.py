@@ -28,7 +28,6 @@ def setup_model_and_training(
         hf_train_args.report_to = "none"
         # disable evaluation for all GPUs except the first one
         hf_train_args.do_eval = False
-        logger.debug(f"GPU {gpu_ith}: Disabling evaluation and reporting")
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
 
     # Build trainer (loads/prepares dataset, sets up SFTTrainer)

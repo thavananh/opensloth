@@ -54,3 +54,5 @@ train_cfg.py
 .log/
 
 *.log
+test.mmap
+.gitignore
