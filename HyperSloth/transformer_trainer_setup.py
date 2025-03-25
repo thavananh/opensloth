@@ -88,7 +88,12 @@ def _debug_training_lengths(hf_train_args, gpu_ith, trainer):
 def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
-
+    #====== Patching the compiler location to avoid race conditions as it is shared between GPUs
+    gpu_idx = int(os.environ["HYPERSLOTH_PROCESS_RANK"])
+    from unsloth_zoo import compiler
+    compiler.UNSLOTH_COMPILE_LOCATION = '.cache/{}_{}'.format(compiler.UNSLOTH_COMPILE_LOCATION, gpu_idx)
+    logger.info(f"Using compiler location: {compiler.UNSLOTH_COMPILE_LOCATION}")
+    
     model, tokenizer = FastModel.from_pretrained(
         **hyper_config.fast_model_args.model_dump()
     )

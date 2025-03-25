@@ -9,6 +9,11 @@ from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
 
+# turn off user warnings
+# Too verbose -> turn off
+import warnings
+warnings.filterwarnings("ignore")
+os.environ['UNSLOTH_ENABLE_LOGGING'] = '0'
 
 def _train(
     gpu: int,
@@ -32,7 +37,8 @@ def _train(
     else:
         logger.info("Using gradient sync callback v1")
         from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-
+        
+    
     trainer, model, tokenizer = setup_model_and_training(
         gpu=gpu,
         hyper_config=hyper_config,
@@ -56,7 +62,12 @@ def _train(
         tokenizer.save_pretrained(hf_train_args.output_dir)
 
 
-run_in_process = threaded(process=True)(_train)
+# run_in_process = threaded(process=True)(_train)
+@threaded(process=True)
+def run_in_process(*args, **kwargs):
+    # for i in range(5):
+    _train(*args, **kwargs)
+
 
 import importlib.util
 
@@ -128,16 +139,34 @@ def train(config_file: str, rank: int = None, world_size: int = None):
 
             # Hardcoed need fix
             _prepare_grad_dir(run_id)
+            processes = []
             for gpu_index in hyper_config.training.gpus:
                 logger.debug(f"Running on GPU {gpu_index} with run_id {run_id}")
 
-                run_in_process(
+                p = run_in_process(
                     gpu_index,
                     hyper_config=hyper_config,
                     hf_train_args=training_config,
                     run_id=run_id,
                 )
-                # time.sleep(1)
+                processes.append(p)
+                
+            # check proc if exit code == 1 then .terminate all
+            while True:
+                for proc in processes:
+                    if not proc.is_alive():
+                        if proc.exitcode == 1:
+                            for p in processes:
+                                p.terminate()
+                            logger.error("Error in training, now terminating all processes")
+                            raise Exception("Error in training")
+                        else:
+                            processes.remove(proc)
+                            break
+                if not processes:
+                    logger.success("All processes finished")
+                    break
+                
         else:
             _train(
                 gpu=hyper_config.training.gpus[0],
@@ -149,10 +178,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
 
 def _prepare_grad_dir(run_id):
     import os
-    import shutil
-
     grad_dir = _get_grad_dir(run_id)
-    # shutil.rmtree(grad_dir, ignore_errors=True)
     os.makedirs(grad_dir, exist_ok=True)
     return grad_dir
 

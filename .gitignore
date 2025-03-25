@@ -40,7 +40,7 @@ coverage.xml
 
 # Project specific
 model_training_outputs
-unsloth_compiled_cache
+.cache/
 data
 grads/
 gemma-thinking-4bit/
@@ -56,3 +56,4 @@ train_cfg.py
 *.log
 test.mmap
 .gitignore
+*unsloth_compiled_cache*
