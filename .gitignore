@@ -39,18 +39,18 @@ coverage.xml
 .env.local
 
 # Project specific
-logs/
-*.log
 model_training_outputs
 unsloth_compiled_cache
 data
 grads/
 gemma-thinking-4bit/
 outputs/
-.log
 hs_training_config.py
 runs
 saves/
 length*.txt
 train_config.py
 train_cfg.py
+.log/
+
+*.log

@@ -16,7 +16,8 @@ def _train(
     hf_train_args: TrainingArgsConfig,
     run_id=None,
 ):
-    _setup_loger(f'{run_id}_{gpu}')
+    # _setup_loger(f'{run_id}_{gpu}')
+    _setup_loger(f'debug')
     import os
     os.environ["HYPERSLOTH_PROCESS_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
