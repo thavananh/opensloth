@@ -30,28 +30,14 @@ def setup_model_and_training(
         hf_train_args.do_eval = False
     # Unsloth uses monkey patching thus it might have race conditions so we need to try until it works
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
-    # for i in range(10):
-    # try:
-    # except Exception as e:
-    #     t = random.choice([1, 2, 3, 4, 5])
-    #     logger.warning(f"Error initializing model and tokenizer: {e}, sleeping for {t} seconds")
-    #     time.sleep(t)
-    #     continue
-    # if i > 0:
-    #     logger.success(f"Model and tokenizer initialized after {i} retries")
-    # Build trainer (loads/prepares dataset, sets up SFTTrainer)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
-
     trainer.train_dataset = trainer.train_dataset.shard(
         num_shards=len(hyper_config.training.gpus),
         index=gpu_ith,
         contiguous=True,
         keep_in_memory=True,  # this will keep the dataset in memory
     )
-
-    # Optionally train on response-only
     _maybe_train_on_responses_only(trainer, hyper_config)
-    # Get the lengths
     _debug_training_lengths(hf_train_args, gpu_ith, trainer)
 
     # Debug info for the main GPU
@@ -117,9 +103,7 @@ def _create_trainer(
     tokenizer_name = identify(str(tokenizer))
     dataset_name = identify(hyper_config.data.model_dump())
     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
-    dataset_cache_path = os.path.join(
-        os.environ["HYPERSLOTH_CACHE_DIR"], dataset_cache_name
-    )
+    dataset_cache_path = os.path.join('.cache/', dataset_cache_name)
 
     lock = dataset_cache_path + ".lock"
     dataset_cache_exists = os.path.exists(dataset_cache_path)
