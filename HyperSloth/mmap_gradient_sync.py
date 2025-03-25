@@ -95,12 +95,6 @@ class MmapGradientSync:
                         "filename": filename,
                     }
                 )
-        
-        logger.debug(
-            "Initialized MmapGradientSync with {} parameters.", len(self.param_info)
-        )
-
-        
 
     def _lockfile(self, filename: str) -> str:
         """Return the path to a .lock file corresponding to filename."""
@@ -201,13 +195,11 @@ class MmapGradientSync:
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
 
-
     def _wait_for_all_read(self):
         """
         Wait until all GPUs have read gradients
         (presence of count_read_gpu{i}.txt for each i in self.gpus).
         """
-        logger.debug(f"[GPU {self.gpu}] Waiting for all GPUs to read gradients..")
         start_time = time.time()
         warned = False
         while True:
@@ -224,8 +216,6 @@ class MmapGradientSync:
             if count == len(self.gpus):
                 break
             time.sleep(SLEEP_TIME)  # reduce busy waiting
-
-        logger.debug(f"[GPU {self.gpu}] All GPUs have read gradients.")
 
     def read_final_grad_into_model(self, model: torch.nn.Module, average: bool = True):
         """
@@ -263,8 +253,6 @@ class MmapGradientSync:
             shape = info["shape"]
             param.grad = torch.from_numpy(arr).view(shape).to(param.device)
 
-        logger.debug(f"[GPU {self.gpu}] Read final gradients from memmaps into model.")
-
         # Write a "done reading" file for this GPU
         read_file_path = f"{self.grad_dir}/count_read_gpu{self.gpu}.txt"
         with UniversalLocker(read_file_path + ".lock"):
@@ -296,7 +284,6 @@ class MmapGradientSync:
 
     def _clean(self):
         with UniversalLocker(os.path.join(self.grad_dir, "zero.lock")):
-            logger.debug(f"[GPU {self.gpu}] Zeroing all memmap files..")
             tasks = []
             for info in self.param_info:
                 filename = info["filename"]
@@ -344,10 +331,17 @@ class MmapGradSyncCallback(TrainerCallback):
         """
         Event called before optimizer step.
         """
-        logger.debug(f"[GPU {self.gpu_index}] Step 1: Accumulating local gradients.. Next step: read_final_grad_into_model")
+        logger.debug(
+            f"[GPU {self.gpu_index}] >>>> Step 1: Accumulating local gradients.. Next step: read_final_grad_into_model"
+        )
         self.grad_sync.accumulate_local_grad(self.model)
-        logger.debug(f"[GPU {self.gpu_index}] Step 2: Reading final gradients.. Next step: zero_mmaps")
+        logger.debug(
+            f"[GPU {self.gpu_index}] >>>> Step 2: Reading final gradients.. Next step: zero_mmaps"
+        )
         self.grad_sync.read_final_grad_into_model(self.model, average=True)
+        logger.debug(
+            f"[GPU {self.gpu_index}] <<<< Step 2: Completed reading final gradients.. Next step: zero_mmaps"
+        )
 
     def on_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
@@ -355,5 +349,10 @@ class MmapGradSyncCallback(TrainerCallback):
         """
         Event called after optimizer step.
         """
-        logger.debug(f"[GPU {self.gpu_index}] Step 3: Zeroing memmaps.. Next step: accumulate_local_grad")
+        logger.debug(
+            f"[GPU {self.gpu_index}] >>>> Step 3: Zeroing memmaps.. Next step: accumulate_local_grad"
+        )
         self.grad_sync.zero_mmaps()
+        logger.debug(
+            f"[GPU {self.gpu_index}] <<<< Step 3: Completed zeroing memmaps.. Next step: accumulate_local_grad"
+        )
