@@ -57,3 +57,4 @@ train_cfg.py
 test.mmap
 .gitignore
 *unsloth_compiled_cache*
+HyperSloth/_patch_log.py

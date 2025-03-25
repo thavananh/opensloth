@@ -22,7 +22,7 @@ def setup_model_and_training(
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
     """
 
-    gpu_ith = int(os.environ["HYPERSLOTH_PROCESS_RANK"])
+    gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     if not gpu_ith == 0:
         # disable reporting for all GPUs except the first one
         hf_train_args.report_to = "none"
@@ -32,20 +32,17 @@ def setup_model_and_training(
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
     
-    trainer.train_dataset = trainer.train_dataset.shard(
-        num_shards=len(hyper_config.training.gpus),
-        index=gpu_ith,
-        contiguous=True,
-        keep_in_memory=True,  # this will keep the dataset in memory
-    )
+
     _maybe_train_on_responses_only(trainer, hyper_config)
     
     # Debug info for the main GPU
     if gpu_ith == 0:
         logger.info(f"Model setup complete for GPU {gpu_ith}")
-        from ._debug_dataloader import _debug_dataloader
-        _debug_dataloader(trainer)
-        _debug_training_lengths(hf_train_args, gpu_ith, trainer)
+        try:
+            from ._debug_dataloader import _debug_dataloader
+            _debug_dataloader(trainer)
+            _debug_training_lengths(hf_train_args, gpu_ith, trainer)
+        except:pass
 
     return trainer, model, tokenizer
 
@@ -75,7 +72,7 @@ def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
     #====== Patching the compiler location to avoid race conditions as it is shared between GPUs
-    gpu_idx = int(os.environ["HYPERSLOTH_PROCESS_RANK"])
+    gpu_idx = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     from unsloth_zoo import compiler
     compiler.UNSLOTH_COMPILE_LOCATION = '.cache/{}_{}'.format(compiler.UNSLOTH_COMPILE_LOCATION, gpu_idx)
     logger.info(f"Using compiler location: {compiler.UNSLOTH_COMPILE_LOCATION}")
@@ -200,6 +197,13 @@ def _create_trainer(
     from HyperSloth.patching import patch_hf_trainer
 
     patch_hf_trainer()
+    
+    # trainer.train_dataset = trainer.train_dataset.shard(
+    #     num_shards=len(hyper_config.training.gpus),
+    #     index=gpu_ith,
+    #     contiguous=False,
+    #     keep_in_memory=True,  # this will keep the dataset in memory
+    # )
     return trainer
 
 

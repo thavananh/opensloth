@@ -98,35 +98,12 @@ class MmapGradientSyncV2:
             f"[Init GPU={self.gpu}] local_rank={self.local_rank}, gpus={self.gpus}, is_main={self.is_main}, starting global_step={self._get_current_step()}"
         )
 
-        self.current_state = None
 
     def _init_values(self):
         """Force global_step=0 at the beginning."""
         self.mem[:] = 0.0
         self.mem.flush()
 
-    # def _barrier_wait_for_step0(self):
-    #     """
-    #     Ensure that all GPUs see the global_step=0 before continuing.
-    #     The main GPU sets it to 0 if not already; others wait.
-    #     """
-    #     start_time = time.time()
-    #     while True:
-    #         if self.is_main:
-    #             # Just ensure it's written as 0
-    #             self._set_current_step(0)
-
-    #         step_val = self._get_current_step()
-    #         if step_val == 0:
-    #             break
-
-    #         if (time.time() - start_time) > TIME_OUT:
-    #             raise RuntimeError(
-    #                 f"[GPU={self.gpu}] Timeout waiting for global_step=0"
-    #             )
-    #         time.sleep(SLEEP_TIME)
-
-    #     logger.info(f"[GPU={self.gpu}] Synced on global_step=0")
 
     def _get_current_step(self) -> int:
         return int(self.mem[self.step_offset])
@@ -204,13 +181,12 @@ class MmapGradientSyncV2:
                 break
             else:
                 elapsed = time.time() - start_time
-                printed = {}
-                t = int(elapsed)
-                if t % 5 == 0 and not printed.get(t, False):
+                printed = False
+                if not printed and elapsed > 5:
                     logger.opt(depth=1).debug(
                         f"[GPU={self.gpu}] waiting for {stage}, step={local_step}, flags={done_slice.tolist()}"
                     )
-                    printed[t] = True
+                    printed = True
 
                 if (time.time() - start_time) > timeout:
                     raise RuntimeError(
@@ -236,7 +212,6 @@ class MmapGradientSyncV2:
         Step 1: Each GPU writes its local gradient into the memmap => set write=1
         """
         # Make sure the file global_step matches local_step
-        self.current_state = "accumulate_local_grad"
         if not self._check_step_matches_local(local_step):
             raise RuntimeError(
                 f"[GPU={self.gpu}] accumulate_local_grad mismatch: "
@@ -261,7 +236,6 @@ class MmapGradientSyncV2:
             f"[GPU={self.gpu}] accumulate_local_grad done, wrote_any_grad={wrote_grad}, step={local_step}"
         )
         self._set_flag("write")
-        self.current_state = "done accumulate_local_grad"
 
     def read_final_grad_into_model(
         self, model: torch.nn.Module, local_step: int, average=True
@@ -273,9 +247,7 @@ class MmapGradientSyncV2:
         logger.debug(
             f"[GPU={self.gpu}] read_final_grad => waiting for write, step={local_step}"
         )
-        self.current_state = "waiting for write"
         self._wait_for_all("write", local_step)
-        self.current_state = "summing"
 
         named_params = dict(model.named_parameters())
         for info in self.param_info:
@@ -299,7 +271,6 @@ class MmapGradientSyncV2:
 
         logger.debug(f"[GPU={self.gpu}] done summing => set read=1, step={local_step}")
         self._set_flag("read")
-        self.current_state = "done summing"
 
     def zero_mmaps(self, local_step: int):
         """
@@ -309,7 +280,6 @@ class MmapGradientSyncV2:
         logger.debug(
             f"[GPU={self.gpu}] zero_mmaps => waiting for read, step={local_step}"
         )
-        self.current_state = "waiting for read"
         self._wait_for_all("read", local_step)
 
         # Only main GPU zeros out param region
@@ -370,8 +340,11 @@ class MmapGradSyncCallback(TrainerCallback):
     def __init__(self, model, grad_dir, gpu, gpus):
         self.model = model
         self.grad_dir = grad_dir
-        self.gpu_index = gpu
+        self.gpu = gpu
+        self.local_rank = gpus.index(gpu)
         self.gpus = gpus
+
+
         self.grad_sync = MmapGradientSyncV2(model, gpu, gpus, grad_dir)
 
     def on_pre_optimizer_step(
@@ -383,15 +356,15 @@ class MmapGradSyncCallback(TrainerCallback):
          - Step 2: Wait for all writes, read & average => set 'read=1'
         """
         logger.debug("=" * 80)
+        # set local loss
+
         local_step = state.global_step  # Our "iteration" index
         logger.debug(
-            f"[GPU={self.gpu_index}] on_pre_optimizer_step => Step1 accumulate_local_grad"
+            f"[GPU={self.gpu}] on_pre_optimizer_step => Step1 accumulate_local_grad"
         )
         self.grad_sync.accumulate_local_grad(self.model, local_step)
 
-        logger.debug(
-            f"[GPU={self.gpu_index}] on_pre_optimizer_step => Step2 read_final_grad"
-        )
+        logger.debug(f"[GPU={self.gpu}] on_pre_optimizer_step => Step2 read_final_grad")
         self.grad_sync.read_final_grad_into_model(self.model, local_step, average=True)
 
     def on_optimizer_step(
@@ -404,15 +377,25 @@ class MmapGradSyncCallback(TrainerCallback):
         """
         local_step = state.global_step
         logger.debug(
-            f"[GPU={self.gpu_index}] on_optimizer_step => zero memmaps, step={local_step}"
+            f"[GPU={self.gpu}] on_optimizer_step => zero memmaps, step={local_step}"
         )
         self.grad_sync.zero_mmaps(local_step)
 
         logger.debug(
-            f"[GPU={self.gpu_index}] on_optimizer_step => iteration_done, step={local_step}"
+            f"[GPU={self.gpu}] on_optimizer_step => iteration_done, step={local_step}"
         )
+
+        # this is a barrier
         self.grad_sync.iteration_done(local_step)
+        # now we can do the next step
 
         logger.debug(
-            f"[GPU={self.gpu_index}] on_optimizer_step => complete => next step will be {local_step + 1}"
+            f"[GPU={self.gpu}] on_optimizer_step => complete => next step will be {local_step + 1}"
         )
+
+    # def on_log(self, args, state, control, **kwargs):
+    #     if 'loss' in state.log_history[-1]:
+    #         self.losses[self.local_rank] = state.log_history[-1]['loss']
+    #         if (self.losses!=0).all():
+    #             logger.success(f"Step: {state.global_step}, Losses: {self.losses}, Mean Loss: {np.mean(self.losses)}")
+    #             self.losses[:] = 0.0

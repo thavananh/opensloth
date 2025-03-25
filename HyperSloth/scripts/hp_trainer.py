@@ -17,16 +17,11 @@ warnings.filterwarnings("ignore")
 os.environ["UNSLOTH_ENABLE_LOGGING"] = "0"
 
 
-def _prepare_grad_dir(run_id):
-    import os
 
-    grad_dir = _get_grad_dir(run_id)
+def _get_run_dir(run_id):
+    grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], f"run_{run_id}")
+    #mnkdir
     os.makedirs(grad_dir, exist_ok=True)
-    return grad_dir
-
-
-def _get_grad_dir(run_id):
-    grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], "grad_sync", run_id)
     return grad_dir
 
 
@@ -45,12 +40,12 @@ def _train(
     gpu: int,
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
-    run_id,
 ):
     _setup_loger(f"{gpu}")
     import os
 
-    os.environ["HYPERSLOTH_PROCESS_RANK"] = str(hyper_config.training.gpus.index(gpu))
+
+    os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training
@@ -71,9 +66,10 @@ def _train(
         else:
             logger.info("Using gradient sync callback v1")
             from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
+        
         grad_sync_cb = MmapGradSyncCallback(
             model=trainer.model,
-            grad_dir=_get_grad_dir(run_id),
+            grad_dir=os.environ["HYPERSLOTH_RUN_DIR"],
             gpu=gpu,
             gpus=hyper_config.training.gpus,
         )
@@ -146,24 +142,30 @@ def train(config_file: str, rank: int = None, world_size: int = None):
     # Run training
     from speedy_utils import identify
 
+    ## setup params
+
+    os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
+    
+    
+    # DEBUG MODE TMUX
     if rank is not None and world_size is not None:
         logger.warning(f"Running on rank {rank} with world size {world_size}")
         hyper_config.training.gpus = range(world_size)
         run_id = identify(combined_config)
+        os.environ["HYPERSLOTH_RUN_DIR"] = _get_run_dir(run_id)
+
         _train(
             gpu=hyper_config.training.gpus[rank],
             hyper_config=hyper_config,
             hf_train_args=training_config,
-            run_id=run_id,
         )
-
+    # NORMAL MULTI PROCESS MODE
     else:
         if len(hyper_config.training.gpus) > 1:
 
             run_id = identify(combined_config)
+            os.environ["HYPERSLOTH_RUN_DIR"] = _get_run_dir(run_id)
 
-            # Hardcoed need fix
-            _prepare_grad_dir(run_id)
             processes = []
             for gpu_index in hyper_config.training.gpus:
                 logger.debug(f"Running on GPU {gpu_index} with run_id {run_id}")
@@ -172,7 +174,6 @@ def train(config_file: str, rank: int = None, world_size: int = None):
                     gpu_index,
                     hyper_config=hyper_config,
                     hf_train_args=training_config,
-                    run_id=run_id,
                 )
                 processes.append(p)
 
@@ -195,9 +196,10 @@ def train(config_file: str, rank: int = None, world_size: int = None):
                     break
 
         else:
+            run_id = "single_gpu"
+            os.environ["HYPERSLOTH_RUN_DIR"] = _get_run_dir(run_id)
             _train(
                 gpu=hyper_config.training.gpus[0],
                 hyper_config=hyper_config,
                 hf_train_args=training_config,
-                run_id="single_gpu",
             )

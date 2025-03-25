@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 from typing import Dict, Optional
 
+import numpy as np
 import torch
 from fastcore.all import patch
 from loguru import logger
@@ -67,13 +68,21 @@ def patch_sampler(trainer):
 def select_dataset_by_length(
     dataset, gpu_index: int, num_gpus: int, grad_accum_steps: int, batch_size: int
 ):
-    
+    if num_gpus == 1:
+        return dataset.select(range(len(dataset)))
+    else:
+        if gpu_index == 0:
+            ids = list(range(0, len(dataset), 2))
+        elif gpu_index == 1:
+            ids = list(range(1, len(dataset), 2))
+        print(f"GPU {gpu_index}: Selected {ids=} samples for training")
+        return dataset.select(ids)
 
     n_samples = len(dataset)
-    new_n_samples = (n_samples//num_gpus) * num_gpus
+    new_n_samples = (n_samples // num_gpus) * num_gpus
     ids = range(new_n_samples)
     dataset = dataset.select(ids)
-    
+
     from typing import Dict, List
     import numpy as np
     from fastcore.all import chunked
@@ -84,7 +93,9 @@ def select_dataset_by_length(
         if len(lengths) % num_gpus != 0:
             raise ValueError("The list length must be divisible by num_gpus")
 
-        indices_sorted = np.argsort(-np.array(lengths)) # largest number will be at the beginning
+        indices_sorted = np.argsort(
+            -np.array(lengths)
+        )  # largest number will be at the beginning
         splits = [[] for _ in range(num_gpus)]
         length_sums = [0] * num_gpus
         max_items_per_gpu = len(lengths) // num_gpus
@@ -168,6 +179,21 @@ def patch_hf_trainer():
 
     # Patch the Trainer class
     from transformers import Trainer
+
+    HYPERSLOTH_LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
+    HYPERSLOTH_RUN_DIR = os.environ["HYPERSLOTH_RUN_DIR"]
+    HYPERSLOTH_NUM_GPUS = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    # support_keys = ['num_items_in_batch']
+    # # for key in support_keys:
+    NUM_ITEMS_IN_BATCH = np.memmap(
+        f"{HYPERSLOTH_RUN_DIR}/num_items_in_batch.mmap",
+        dtype="float32",
+        mode="w+",
+        shape=(
+            int(os.environ["HYPERSLOTH_NUM_GPUS"]) * 2
+        ),  # the last 2 elements are for synchronization purpose last -1 is answer for "is_all_read", last -2 is for "is_all_write"
+    )
+    NUM_ITEMS_IN_BATCH[:] = 0
 
     @patch
     def _inner_training_loop(
@@ -276,7 +302,9 @@ def patch_hf_trainer():
         )
         self.state.num_trained_tokens_seen = 0
         # Just to improve logging, so only one process logs the steps
-        self.state.is_world_process_zero = os.getenv("HYPERSLOTH_PROCESS_RANK", "0") == "0"
+        self.state.is_world_process_zero = (
+            os.getenv("HYPERSLOTH_LOCAL_RANK", "0") == "0"
+        )
 
         self.state.is_hyper_param_search = trial is not None
         self.state.train_batch_size = self._train_batch_size
@@ -440,7 +468,6 @@ def patch_hf_trainer():
         if args.eval_on_start:
             self._evaluate(trial, ignore_keys_for_eval, skip_scheduler=True)
 
-
         for epoch in range(epochs_trained, num_train_epochs):
             epoch_dataloader = train_dataloader
             if hasattr(epoch_dataloader, "set_epoch"):
@@ -487,6 +514,7 @@ def patch_hf_trainer():
             if args.gradient_accumulation_steps == 1:
                 total_updates -= 1
             from speedy_utils import Clock
+
             clock = Clock()
             for _ in range(total_updates):
                 update_step += 1
@@ -495,10 +523,11 @@ def patch_hf_trainer():
                     if update_step != (total_updates - 1)
                     else remainder
                 )
-                batch_samples, num_items_in_batch = self.get_batch_samples(
-                    epoch_iterator, num_batches
+
+                start_time, batch_samples, num_items_in_batch = (
+                    fetch_and_sync_batch_samples(self, epoch_iterator, num_batches)
                 )
-                clock.update_task("1. get_batch_samples")
+
                 for i, inputs in enumerate(batch_samples):
                     step += 1
                     do_sync_step = (
@@ -572,6 +601,7 @@ def patch_hf_trainer():
                         tr_loss_step = self.training_step(
                             model, inputs, num_items_in_batch
                         )
+                        logger.warning(f"{tr_loss_step=}, {num_items_in_batch=}")
 
                     if (
                         args.logging_nan_inf_filter
@@ -594,6 +624,9 @@ def patch_hf_trainer():
                     if do_sync_step:
                         # =====HYPER SLOTH >>>>
                         # This pre optim step is used to sync the gradients of the model by hypersloth
+                        # sync te loss
+                        # wait until all item in NUM_ITEMS_IN_BATCH !=0
+
                         clock.update_task("2. forward")
                         self.control = self.callback_handler.on_pre_optimizer_step(
                             args, self.state, self.control
@@ -664,7 +697,10 @@ def patch_hf_trainer():
                             start_time,
                         )
                         clock.update_task("4. optimizer step")
-                        if os.getenv("HYPERSLOTH_PROCESS_RANK", "0") == "0":
+                        if (
+                            os.getenv("HYPERSLOTH_LOCAL_RANK", "0") == "0"
+                            and self.state.global_step > 1
+                        ):
                             clock.print_task_table(interval=10)
                     else:
                         self.control = self.callback_handler.on_substep_end(
@@ -682,6 +718,8 @@ def patch_hf_trainer():
                             xm.mark_step()
                         break
                 # We also need to break out of the nested loop
+
+                # NUM_ITEMS_IN_BATCH[:] = 0
                 if self.control.should_epoch_stop or self.control.should_training_stop:
                     if is_torch_xla_available():
                         xm.mark_step()
@@ -793,36 +831,45 @@ def patch_hf_trainer():
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
 
-    @patch
-    def log(
-        self: Trainer, logs: Dict[str, float], start_time: Optional[float] = None
-    ) -> None:
-        """
-        Log `logs` on the various objects watching training.
-
-        Subclass and override this method to inject custom behavior.
-
-        Args:
-            logs (`Dict[str, float]`):
-                The values to log.
-            start_time (`Optional[float]`):
-                The start of training.
-        """
-        if self.state.epoch is not None:
-            logs["epoch"] = self.state.epoch
-        if self.args.include_num_input_tokens_seen:
-            logs["num_input_tokens_seen"] = self.state.num_input_tokens_seen
-            if start_time is not None:
-                speed_metrics(
-                    "train", start_time, num_tokens=self.state.num_input_tokens_seen
-                )
-        # ===HYPER SLOTH >>>>
-        if hasattr(self.state, "trained_token_ratio"):
-            logs["trained_token_ratio"] = self.state.trained_token_ratio
-        # <<<<< HYPER SLOTH====
-        output = {**logs, **{"step": self.state.global_step}}
-        self.state.log_history.append(output)
-        self.control = self.callback_handler.on_log(
-            self.args, self.state, self.control, logs
+    def fetch_and_sync_batch_samples(self, epoch_iterator, num_batches):
+        batch_samples, NUM_ITEMS_IN_BATCH[HYPERSLOTH_LOCAL_RANK] = (
+            self.get_batch_samples(epoch_iterator, num_batches)
         )
+        start_time = time.time()
+        while (NUM_ITEMS_IN_BATCH[:HYPERSLOTH_NUM_GPUS] == 0).any():
+            if time.time() - start_time > 10:  # 10 seconds timeout
+                logger.debug(
+                    f"Waiting too long for NUM_ITEMS_IN_BATCH: {NUM_ITEMS_IN_BATCH}"
+                )
+            time.sleep(random.random())
+            # Count the number of process has read the value
+        num_items_in_batch = NUM_ITEMS_IN_BATCH[:HYPERSLOTH_NUM_GPUS].mean()
 
+        NUM_ITEMS_IN_BATCH[HYPERSLOTH_NUM_GPUS + HYPERSLOTH_LOCAL_RANK] = 1
+
+        # wait for reset
+        if HYPERSLOTH_LOCAL_RANK == 0:
+            start_time = time.time()
+            while (
+                not NUM_ITEMS_IN_BATCH[HYPERSLOTH_NUM_GPUS:].sum()
+                == HYPERSLOTH_NUM_GPUS
+            ):
+                if time.time() - start_time > 10:  # 10 seconds timeout
+                    logger.debug(
+                        f"Waiting too long for NUM_ITEMS_IN_BATCH reset: {NUM_ITEMS_IN_BATCH}"
+                    )
+                time.sleep(0.1)
+            NUM_ITEMS_IN_BATCH[:] = 0
+        else:
+            start_time = time.time()
+            while not NUM_ITEMS_IN_BATCH[:].sum() == 0:
+                if time.time() - start_time > 10:  # 10 seconds timeout
+                    logger.debug(
+                        f"Waiting too long for NUM_ITEMS_IN_BATCH reset: {NUM_ITEMS_IN_BATCH}"
+                    )
+                time.sleep(0.1)
+        return start_time, batch_samples, num_items_in_batch
+
+    from ._patch_log import patch_log
+
+    patch_log()
