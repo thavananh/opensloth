@@ -6,7 +6,7 @@ from transformers.trainer_callback import TrainerCallback, TrainerControl, Train
 from loguru import logger
 
 TIME_OUT = 120
-SLEEP_TIME = 1
+SLEEP_TIME = 0.05
 
 
 class MmapGradientSyncV2:
@@ -209,10 +209,13 @@ class MmapGradientSyncV2:
                 break
             else:
                 elapsed = time.time() - start_time
-                if int(elapsed) % 5 == 0:
+                printed = {}
+                t = int(elapsed) % 5
+                if t == 0 and not printed.get(t, False):
                     logger.opt(depth=1).debug(
                         f"[GPU={self.gpu}] waiting for {stage}, step={local_step}, flags={done_slice.tolist()}"
                     )
+                    printed[t] = True
 
                 if (time.time() - start_time) > timeout:
                     raise RuntimeError(
@@ -220,7 +223,7 @@ class MmapGradientSyncV2:
                     )
                 time.sleep(SLEEP_TIME)
 
-        logger.success(
+        logger.debug(
             f"[GPU={self.gpu}] done waiting for {stage} at step={local_step}"
         )
 
