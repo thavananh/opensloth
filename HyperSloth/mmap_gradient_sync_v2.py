@@ -89,49 +89,44 @@ class MmapGradientSyncV2:
 
         # If main GPU, initialize global_step=0
         if self.is_main:
-            self._init_global_step_area()
+            self._init_values()
 
         # Ensure all GPUs see global_step=0 before proceeding (Step 0).
-        self._barrier_wait_for_step0()
+        # self._barrier_wait_for_step0()
 
         logger.info(
             f"[Init GPU={self.gpu}] local_rank={self.local_rank}, gpus={self.gpus}, is_main={self.is_main}, starting global_step={self._get_current_step()}"
         )
 
         self.current_state = None
-        
-        # log_current_state(self)
 
-    # ==================================================
-    # Global step management
-    # ==================================================
-    def _init_global_step_area(self):
+    def _init_values(self):
         """Force global_step=0 at the beginning."""
-        self.mem[self.step_offset] = 0.0
+        self.mem[:] = 0.0
         self.mem.flush()
 
-    def _barrier_wait_for_step0(self):
-        """
-        Ensure that all GPUs see the global_step=0 before continuing.
-        The main GPU sets it to 0 if not already; others wait.
-        """
-        start_time = time.time()
-        while True:
-            if self.is_main:
-                # Just ensure it's written as 0
-                self._set_current_step(0)
+    # def _barrier_wait_for_step0(self):
+    #     """
+    #     Ensure that all GPUs see the global_step=0 before continuing.
+    #     The main GPU sets it to 0 if not already; others wait.
+    #     """
+    #     start_time = time.time()
+    #     while True:
+    #         if self.is_main:
+    #             # Just ensure it's written as 0
+    #             self._set_current_step(0)
 
-            step_val = self._get_current_step()
-            if step_val == 0:
-                break
+    #         step_val = self._get_current_step()
+    #         if step_val == 0:
+    #             break
 
-            if (time.time() - start_time) > TIME_OUT:
-                raise RuntimeError(
-                    f"[GPU={self.gpu}] Timeout waiting for global_step=0"
-                )
-            time.sleep(SLEEP_TIME)
+    #         if (time.time() - start_time) > TIME_OUT:
+    #             raise RuntimeError(
+    #                 f"[GPU={self.gpu}] Timeout waiting for global_step=0"
+    #             )
+    #         time.sleep(SLEEP_TIME)
 
-        logger.info(f"[GPU={self.gpu}] Synced on global_step=0")
+    #     logger.info(f"[GPU={self.gpu}] Synced on global_step=0")
 
     def _get_current_step(self) -> int:
         return int(self.mem[self.step_offset])
@@ -210,8 +205,8 @@ class MmapGradientSyncV2:
             else:
                 elapsed = time.time() - start_time
                 printed = {}
-                t = int(elapsed) % 5
-                if t == 0 and not printed.get(t, False):
+                t = int(elapsed)
+                if t % 5 == 0 and not printed.get(t, False):
                     logger.opt(depth=1).debug(
                         f"[GPU={self.gpu}] waiting for {stage}, step={local_step}, flags={done_slice.tolist()}"
                     )
@@ -223,9 +218,7 @@ class MmapGradientSyncV2:
                     )
                 time.sleep(SLEEP_TIME)
 
-        logger.debug(
-            f"[GPU={self.gpu}] done waiting for {stage} at step={local_step}"
-        )
+        logger.debug(f"[GPU={self.gpu}] done waiting for {stage} at step={local_step}")
 
     def _reset_all_flags(self):
         """main GPU zeros out the 3 sets of flags"""
@@ -320,7 +313,7 @@ class MmapGradientSyncV2:
         self._wait_for_all("read", local_step)
 
         # Only main GPU zeros out param region
-        
+
         if self.is_main:
             logger.debug(
                 f"[GPU={self.gpu}] main => zero param region [0..{self.flags_offset}), step={local_step}"
@@ -343,8 +336,8 @@ class MmapGradientSyncV2:
 
         if self.is_main:
             self._wait_for_all("iteration_done", local_step)
-            
-            logger.debug('Main GPU increments global_step and resets flags')
+
+            logger.debug("Main GPU increments global_step and resets flags")
             # Reset flags and increment global step
             self._reset_all_flags()
             self._increment_global_step()
@@ -423,15 +416,3 @@ class MmapGradSyncCallback(TrainerCallback):
         logger.debug(
             f"[GPU={self.gpu_index}] on_optimizer_step => complete => next step will be {local_step + 1}"
         )
-
-
-# from fastcore.all import threaded
-
-
-# @threaded
-# def log_current_state(mg: MmapGradientSyncV2):
-#     t = time.time()
-#     while True:
-#         elapse_sec = int(time.time() - t)
-#         if elapse_sec % 5 == 0 and mg.current_state is not None:
-#             logger.info(f"[GPU={mg.gpu}] Current state: {mg.current_state}")

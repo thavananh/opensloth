@@ -21,7 +21,6 @@ def setup_model_and_training(
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
     """
-    
 
     gpu_ith = int(os.environ["HYPERSLOTH_PROCESS_RANK"])
     if not gpu_ith == 0:
@@ -32,12 +31,12 @@ def setup_model_and_training(
     # Unsloth uses monkey patching thus it might have race conditions so we need to try until it works
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
     # for i in range(10):
-        # try:
-        # except Exception as e:
-        #     t = random.choice([1, 2, 3, 4, 5])
-        #     logger.warning(f"Error initializing model and tokenizer: {e}, sleeping for {t} seconds")
-        #     time.sleep(t)
-        #     continue
+    # try:
+    # except Exception as e:
+    #     t = random.choice([1, 2, 3, 4, 5])
+    #     logger.warning(f"Error initializing model and tokenizer: {e}, sleeping for {t} seconds")
+    #     time.sleep(t)
+    #     continue
     # if i > 0:
     #     logger.success(f"Model and tokenizer initialized after {i} retries")
     # Build trainer (loads/prepares dataset, sets up SFTTrainer)
@@ -110,15 +109,13 @@ def _create_trainer(
     from datasets import load_from_disk
     from speedy_utils import identify
 
-
-
     tokenizer_name = identify(str(tokenizer))
     dataset_name = identify(hyper_config.data.model_dump())
-    dataset_cache_name = (
-        "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
+    dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
+    dataset_cache_path = os.path.join(
+        os.environ["HYPERSLOTH_CACHE_DIR"], dataset_cache_name
     )
-    dataset_cache_path = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], dataset_cache_name)
-    
+
     lock = dataset_cache_path + ".lock"
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 
@@ -149,8 +146,8 @@ def _create_trainer(
             )
             hf_train_args.dataset_kwargs = {"skip_prepare_dataset": False}
 
-            logger.info(f'[Hypersloth] Patching grad clip')
-            
+            logger.info(f"[Hypersloth] Patching grad clip")
+
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
@@ -161,7 +158,6 @@ def _create_trainer(
                 dataset_num_proc=hyper_config.data.dataset_num_proc,
                 args=hf_train_args,
             )
-            
 
             # Adjust dataset for multi-GPU
             max_len_ds = len(hyper_config.training.gpus) * (
@@ -210,8 +206,9 @@ def _create_trainer(
             hf_train_args.gradient_accumulation_steps,
             hf_train_args.per_device_train_batch_size,
         )
-    
+
     from HyperSloth.patching import patch_hf_trainer
+
     patch_hf_trainer()
     return trainer
 
