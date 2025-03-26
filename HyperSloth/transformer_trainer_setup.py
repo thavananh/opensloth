@@ -128,6 +128,10 @@ def _create_trainer(
     return trainer
 
 
+
+
+
+
 def get_trainer(
     tokenizer,
     hyper_config,
@@ -138,92 +142,94 @@ def get_trainer(
     lock,
     dataset_cache_exists,
 ):
+    """
+    Returns an SFTTrainer instance. If a cached dataset exists, load from disk.
+    If not, GPU 0 will create and save it, and other GPUs will wait for GPU 0
+    to finish.
+    """
+    import os
+    import time
+    import filelock
+    import logging
     from trl import SFTTrainer
     from datasets import load_from_disk
 
-    if dataset_cache_exists:
-        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
-        dataset = load_from_disk(dataset_cache_path)
-        hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
-        trainer = SFTTrainer(
+    def _create_trainer(train_dataset, eval_dataset=None, skip_prepare=True):
+        """Helper to build an SFTTrainer from given train/eval datasets."""
+        # We use a dataset_kwargs override so that, once the dataset is prepared,
+        # it won't attempt the same "prepare" logic again.
+        hf_train_args.dataset_kwargs = {"skip_prepare_dataset": skip_prepare}
+        return SFTTrainer(
             model=model,
             tokenizer=tokenizer,
-            train_dataset=dataset,
-            eval_dataset=None if gpu_ith != 0 else dataset,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             dataset_text_field="text",
             max_seq_length=hyper_config.fast_model_args.max_seq_length,
             dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
         )
 
-    # CASE 2: GPU 0 prepares the dataset and saves for others
+    # ---------------------------
+    # CASE 1: Cached dataset exists
+    # ---------------------------
+    if dataset_cache_exists:
+        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
+        dataset = load_from_disk(dataset_cache_path)
+        trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
+        return trainer
+
+    # ---------------------------
+    # CASE 2: GPU 0 prepares dataset
+    # ---------------------------
     elif gpu_ith == 0:
         with filelock.FileLock(lock):
             logger.info(f"GPU {gpu_ith}: Preparing dataset -> {dataset_cache_path}")
-            from HyperSloth.dataset_utils import get_chat_dataset
 
+            from HyperSloth.dataset_utils import get_chat_dataset
             ds_train, ds_test = get_chat_dataset(
                 tokenizer=tokenizer, **hyper_config.data.model_dump()
             )
-            hf_train_args.dataset_kwargs = {"skip_prepare_dataset": False}
+            trainer = _create_trainer(ds_train, eval_dataset=ds_test, skip_prepare=False)
 
-            logger.info(f"[Hypersloth] Patching grad clip")
-
-            trainer = SFTTrainer(
-                model=model,
-                tokenizer=tokenizer,
-                train_dataset=ds_train,
-                eval_dataset=ds_test,
-                dataset_text_field="text",
-                max_seq_length=hyper_config.fast_model_args.max_seq_length,
-                dataset_num_proc=hyper_config.data.dataset_num_proc,
-                args=hf_train_args,
-            )
-
+            # Optionally patch trainer or handle "response-only" logic
             _maybe_train_on_responses_only(trainer, hyper_config)
-            from .dynamic_batching import encode_dynamic_batching_dataset
 
+            from .dynamic_batching import encode_dynamic_batching_dataset
             trainer.train_dataset = encode_dynamic_batching_dataset(
                 trainer.train_dataset,
-                len(hyper_config.training.gpus),
+                num_gpus=len(hyper_config.training.gpus),
                 max_len_allow=hyper_config.fast_model_args.max_seq_length,
             )
 
             trainer.train_dataset.save_to_disk(dataset_cache_path)
 
+        # Release the lock file
         if os.path.exists(lock):
             os.remove(lock)
 
+        return trainer
+
+    # ---------------------------
     # CASE 3: Other GPUs wait for GPU 0
+    # ---------------------------
     else:
         logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
         while not os.path.exists(dataset_cache_path):
             time.sleep(1)
-        t = time.time()
+
+        start_t = time.time()
         while os.path.exists(lock):
             time.sleep(1)
             logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
-            if time.time() - t > 5:
+            if time.time() - start_t > 5:
                 raise TimeoutError(f"Lock not released: {lock}")
+
         logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
         dataset = load_from_disk(dataset_cache_path)
-        hf_train_args.dataset_kwargs = {"skip_prepare_dataset": True}
-        trainer = SFTTrainer(
-            model=model,
-            tokenizer=tokenizer,
-            train_dataset=dataset,
-            eval_dataset=None,
-            dataset_text_field="text",
-            max_seq_length=hyper_config.fast_model_args.max_seq_length,
-            dataset_num_proc=hyper_config.data.dataset_num_proc,
-            args=hf_train_args,
-        )
+        trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
+        return trainer
 
-
-
-
-    
-    return trainer
 
 
 def _maybe_train_on_responses_only(trainer, hyper_config):

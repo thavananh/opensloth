@@ -103,8 +103,9 @@ def encode_dynamic_batching_dataset(dataset, num_gpus, max_len_allow, filter_by_
     merged_items = []
     # Instead of using gpu_batches[0], we take the max # of batches across all GPUs
     num_updates = max(len(gb) for gb in gpu_batches) if gpu_batches else 0
-
-    for update_ith in range(num_updates):
+    from tqdm import tqdm
+    from datasets import Dataset
+    for update_ith in tqdm(range(num_updates), desc="Encoding dynamic batching"):
         # Collect one merged batch *per GPU* (if available)
         gpu_merged = []
         for gpu_ith in range(num_gpus):
@@ -115,7 +116,6 @@ def encode_dynamic_batching_dataset(dataset, num_gpus, max_len_allow, filter_by_
                 gpu_merged.append(merge_item)
 
         if not gpu_merged:
-            # No GPUs had a batch for this round
             continue
 
         # Merge the GPU batches into a single item, separated by SPECIAL_TOKEN_SPLIT_OUT_GPU
@@ -128,7 +128,6 @@ def encode_dynamic_batching_dataset(dataset, num_gpus, max_len_allow, filter_by_
 
         merged_items.append(global_item)
 
-    from datasets import Dataset
     return Dataset.from_list(merged_items)
 
 

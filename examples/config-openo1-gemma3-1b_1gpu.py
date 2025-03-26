@@ -17,7 +17,7 @@ hyper_config_model = HyperConfig(
     ),
     fast_model_args=FastModelArgs(
         model_name="unsloth/gemma-3-1b-it-bnb-4bit",
-        max_seq_length=4_000,
+        max_seq_length=16_000,
     ),
     lora_args=LoraArgs(
         r=16,
