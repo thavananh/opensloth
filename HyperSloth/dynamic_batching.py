@@ -1,4 +1,5 @@
 import itertools
+import os
 import random
 from typing import Literal
 
@@ -9,7 +10,7 @@ SPECIAL_TOKEN_SPLIT_IN_GPU = -1000
 SPECIAL_TOKEN_SPLIT_OUT_GPU = -1001
 
 
-def _create_batches(indexed_lengths, max_seq_len=5000, num_gpus=8):
+def _create_batches(indexed_lengths, max_seq_len=5000, num_gpus=8, shuffle=True):
     """
     Split sequence lengths into batches per GPU where each batch has total numel <= max_seq_len.
 
@@ -23,7 +24,11 @@ def _create_batches(indexed_lengths, max_seq_len=5000, num_gpus=8):
         and each batch is a list of original indices.
     """
     # Sort descending by length
-    indexed_lengths = sorted(indexed_lengths, key=lambda x: x[1], reverse=True)
+    if shuffle:
+        random.Random(42).shuffle(indexed_lengths)
+    else:
+        indexed_lengths = sorted(indexed_lengths, key=lambda x: x[1], reverse=True)
+        
 
     batches = []
     current_batch = []
@@ -209,7 +214,6 @@ def decode_dynamic_batching(item, gpu_boundary=-1001, sample_boundary=-1000):
     labels  = item["labels"][0]           # shape [L]
     
     
-    num_items_in_batch = (labels>=0).sum().item()
 
     # 1) Split by GPU boundary
     gpu_partitions_inp   = split_by_token(inp_ids,  gpu_boundary)
@@ -220,6 +224,8 @@ def decode_dynamic_batching(item, gpu_boundary=-1001, sample_boundary=-1000):
     assert len(gpu_partitions_inp) == len(gpu_partitions_attn) == len(gpu_partitions_label), (
         "Mismatch in # of GPU partitions after splitting"
     )
+    num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    num_items_in_batch = (labels>=0).sum().item()//num_gpus
 
     gpu_results = []
 
