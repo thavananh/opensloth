@@ -7,6 +7,7 @@ hyper_config_model = HyperConfig(
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
+        num_samples=10000,
     ),
     training=TrainingConfig(
         gpus=range(8),  # Change this to the number of GPUs you have
@@ -26,7 +27,7 @@ hyper_config_model = HyperConfig(
 training_config_model = TrainingArgsConfig(
     output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-27b-it/openo1",
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=1,
+    gradient_accumulation_steps=4,
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,

@@ -5,10 +5,88 @@ from typing import Literal
 
 import torch
 import torch.nn.functional as F
+from datasets import Dataset
+from loguru import logger
+from speedy_utils import multi_thread
+from tqdm import tqdm
 
 SPECIAL_TOKEN_SPLIT_IN_GPU = -1000
 SPECIAL_TOKEN_SPLIT_OUT_GPU = -1001
+from collections import defaultdict
 
+import pandas as pd
+
+
+def compute_batch_cost(batch_lens):
+    """
+    cost = (# of tasks in batch) * (max length in the batch)
+    """
+    if not batch_lens:
+        return 0
+    return len(batch_lens) * max(batch_lens)
+
+
+def dynamic_batch(tasks, max_cost):
+    """
+    Sort tasks by descending length. Then form consecutive batches so that
+    no batch's cost exceeds `max_cost`.
+
+    :param tasks: List[dict], each has at least {'idx': int, 'len': int}
+    :param max_cost: The maximum allowed cost per batch
+    :return: A list of dicts, where each dict has:
+             {
+               'indexes': [list_of_task_ids],
+               'cost': cost_of_this_batch
+             }
+    """
+    # 1) Sort tasks by descending length
+    id2len = {t["idx"]: t["len"] for t in tasks}
+    tasks_sorted = sorted(tasks, key=lambda x: x["len"], reverse=True)
+
+    results = []
+    current_batch_idxs = []
+    current_batch_lens = []
+
+    for t in tasks_sorted:
+        # If adding this task to the current batch stays <= max_cost, do it
+        prospective_lens = current_batch_lens + [t["len"]]
+        prospective_cost = compute_batch_cost(prospective_lens)
+
+        if prospective_cost <= max_cost:
+            # Add to current batch
+            current_batch_idxs.append(t["idx"])
+            current_batch_lens.append(t["len"])
+        else:
+            # 2) Cut (finalize) the current batch, then start a new one
+            if current_batch_idxs:  # If there's something in the batch
+                batch_cost = compute_batch_cost(current_batch_lens)
+                results.append(
+                    {
+                        "indexes": current_batch_idxs,
+                        "lens": [id2len[idx] for idx in current_batch_idxs],
+                        "cost": batch_cost,
+                    }
+                )
+
+            # Start a fresh batch
+            current_batch_idxs = [t["idx"]]
+            current_batch_lens = [t["len"]]
+
+    # 3) Finalize the last batch
+    if current_batch_idxs:
+        batch_cost = compute_batch_cost(current_batch_lens)
+        results.append(
+            {
+                "indexes": current_batch_idxs,
+                "cost": batch_cost,
+                "lens": [id2len[idx] for idx in current_batch_idxs],
+            }
+        )
+
+    return results
+
+
+# now we got larger examples
 
 def _create_batches(indexed_lengths, max_seq_len=5000, num_gpus=8, shuffle=True):
     """
@@ -20,39 +98,43 @@ def _create_batches(indexed_lengths, max_seq_len=5000, num_gpus=8, shuffle=True)
         num_gpus (int): number of GPUs.
 
     Returns:
-        List[List[List[int]]]: A list of length `num_gpus`. Each element is a list of batches,
+    
+        List[List[BatchIDS]]: A list of length `num_gpus`. Each element is a list of batches,
         and each batch is a list of original indices.
+        Where `BatchIDS:List[int]` is a list of indices of the original dataset.
     """
-    # Sort descending by length
-    if shuffle:
-        random.Random(42).shuffle(indexed_lengths)
-    else:
-        indexed_lengths = sorted(indexed_lengths, key=lambda x: x[1], reverse=True)
+
+    
+
+    max_cost = max_seq_len
+    data =pd.DataFrame(indexed_lengths, columns=['idx', 'len'])
+    
+    inbatch_examples = dynamic_batch(data.to_dict('records'), max_cost)
+    inbatch_examples = pd.DataFrame(inbatch_examples).sample(frac=1, random_state=42).to_dict('records')
+
+
+    from fastcore.all import chunked
+    
+    global_batches = []
+    
+    # each global batches uses num_gpus rows
+    for i in range(0, len(inbatch_examples), num_gpus):
+        list_ids = []
+        for j in range(num_gpus):
+            if i+j < len(inbatch_examples):
+                list_ids.append(inbatch_examples[i+j]['indexes'])
+        global_batches.append(
+            list_ids
+        )
         
+    return global_batches
+    
 
-    batches = []
-    current_batch = []
-    current_sum = 0
-
-    # Create batches so that sum of lengths in a batch <= max_seq_len
-    for idx, length in indexed_lengths:
-        if current_sum + length <= max_seq_len:
-            current_batch.append(idx)
-            current_sum += length
-        else:
-            batches.append(current_batch)
-            current_batch = [idx]
-            current_sum = length
-
-    if current_batch:
-        batches.append(current_batch)
-
-    # Distribute batches round-robin across GPUs
-    gpu_batches = [[] for _ in range(num_gpus)]
-    for i, batch in enumerate(batches):
-        gpu_batches[i % num_gpus].append(batch)
-
-    return gpu_batches
+#     # Distribute batches round-robin across GPUs
+#     gpu_batches = [[] for _ in range(num_gpus)]
+#     for i, batch in enumerate(batches):
+#         gpu_batches[i % num_gpus].append(batch)
+#     return gpu_batches
 
 
 def encode_dynamic_batching_dataset(dataset, num_gpus, max_len_allow, filter_by_max_len=True):
@@ -87,7 +169,7 @@ def encode_dynamic_batching_dataset(dataset, num_gpus, max_len_allow, filter_by_
             (idx, length) for idx, length in indexed_lengths if length <= max_len_allow
         ]
 
-    gpu_batches = _create_batches(
+    global_batches = _create_batches(
         indexed_lengths, max_seq_len=max_len_allow, num_gpus=num_gpus
     )
 
@@ -106,22 +188,24 @@ def encode_dynamic_batching_dataset(dataset, num_gpus, max_len_allow, filter_by_
         return merged
 
     merged_items = []
-    # Instead of using gpu_batches[0], we take the max # of batches across all GPUs
-    num_updates = max(len(gb) for gb in gpu_batches) if gpu_batches else 0
-    from tqdm import tqdm
-    from datasets import Dataset
-    for update_ith in tqdm(range(num_updates), desc="Encoding dynamic batching"):
+    num_updates = len(global_batches)
+
+    # for update_ith in tqdm(range(num_updates), desc="Encoding dynamic batching"):
         # Collect one merged batch *per GPU* (if available)
+    def merge_item(global_batch):
         gpu_merged = []
         for gpu_ith in range(num_gpus):
-            if update_ith < len(gpu_batches[gpu_ith]):
-                batch_indices = gpu_batches[gpu_ith][update_ith]
-                items = [dataset[idx] for idx in batch_indices]
-                merge_item = merge_items(items)
-                gpu_merged.append(merge_item)
+            # if update_ith < len(global_batches[gpu_ith]):
+            try:
+                batch_indices = global_batch[gpu_ith]
+            except Exception as e:
+                return None
+            items = [dataset[idx] for idx in batch_indices]
+            merge_item = merge_items(items)
+            gpu_merged.append(merge_item)
 
         if not gpu_merged:
-            continue
+            return
 
         # Merge the GPU batches into a single item, separated by SPECIAL_TOKEN_SPLIT_OUT_GPU
         global_item = gpu_merged[0]
@@ -131,8 +215,17 @@ def encode_dynamic_batching_dataset(dataset, num_gpus, max_len_allow, filter_by_
             global_item["labels"] += [SPECIAL_TOKEN_SPLIT_OUT_GPU] + gpu_item["labels"]
 
 
-        merged_items.append(global_item)
-
+        # merged_items.append(global_item)
+        return global_item
+    logger.info(f"Encoding {len(global_batches)} global batches")
+    merged_items = multi_thread(merge_item, global_batches, workers=32)
+    # filter none
+    num_none = sum([1 for i in merged_items if i is None])
+    merged_items = [i for i in merged_items if i is not None]
+    if num_none > 0:
+        logger.warning(f"Found {num_none} None items")
+      
+    logger.info(f"Encoded {len(merged_items)} merged items")
     return Dataset.from_list(merged_items)
 
 

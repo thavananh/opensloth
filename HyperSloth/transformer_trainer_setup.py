@@ -73,11 +73,11 @@ def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
     from unsloth import FastModel
 
     # ====== Patching the compiler location to avoid race conditions as it is shared between GPUs
-    gpu_idx = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
+    gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     from unsloth_zoo import compiler
 
     compiler.UNSLOTH_COMPILE_LOCATION = ".cache/{}_{}".format(
-        compiler.UNSLOTH_COMPILE_LOCATION, gpu_idx
+        compiler.UNSLOTH_COMPILE_LOCATION, gpu_ith
     )
     logger.info(f"Using compiler location: {compiler.UNSLOTH_COMPILE_LOCATION}")
 
@@ -98,14 +98,8 @@ def _create_trainer(
 ):
     """Load or prepare the dataset and create the SFTTrainer."""
 
-    from speedy_utils import identify
+    dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config)
 
-    tokenizer_name = identify(str(tokenizer))
-    dataset_name = identify(hyper_config.data.model_dump())
-    dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
-    dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
-
-    lock = dataset_cache_path + ".lock"
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 
     # CASE 1: Dataset cache already exists, just load it
@@ -116,20 +110,26 @@ def _create_trainer(
         gpu_ith,
         model,
         dataset_cache_path,
-        lock,
         dataset_cache_exists,
     )
 
-
     from HyperSloth.patch_inner_training_loop import patch_hf_trainer
-    
-    
+
     patch_hf_trainer(trainer)
     return trainer
 
 
+def _identify_dataset_name(tokenizer, hyper_config):
+    from speedy_utils import identify
 
-
+    tokenizer_name = identify(str(tokenizer))
+    # hash the dataset name and max_seq_length to create a unique cache name
+    dataset_name = identify(
+        [hyper_config.data.model_dump(), hyper_config.fast_model_args.max_seq_length]
+    )
+    dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
+    dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
+    return dataset_cache_path
 
 
 def get_trainer(
@@ -139,7 +139,6 @@ def get_trainer(
     gpu_ith,
     model,
     dataset_cache_path,
-    lock,
     dataset_cache_exists,
 ):
     """
@@ -153,6 +152,8 @@ def get_trainer(
     import logging
     from trl import SFTTrainer
     from datasets import load_from_disk
+
+    lock = dataset_cache_path + ".lock"
 
     def _create_trainer(train_dataset, eval_dataset=None, skip_prepare=True):
         """Helper to build an SFTTrainer from given train/eval datasets."""
@@ -187,20 +188,24 @@ def get_trainer(
             logger.info(f"GPU {gpu_ith}: Preparing dataset -> {dataset_cache_path}")
 
             from HyperSloth.dataset_utils import get_chat_dataset
+
             ds_train, ds_test = get_chat_dataset(
                 tokenizer=tokenizer, **hyper_config.data.model_dump()
             )
-            trainer = _create_trainer(ds_train, eval_dataset=ds_test, skip_prepare=False)
+            trainer = _create_trainer(
+                ds_train, eval_dataset=ds_test, skip_prepare=False
+            )
 
             # Optionally patch trainer or handle "response-only" logic
             _maybe_train_on_responses_only(trainer, hyper_config)
 
             from .dynamic_batching import encode_dynamic_batching_dataset
-            trainer.train_dataset = encode_dynamic_batching_dataset(
-                trainer.train_dataset,
-                num_gpus=len(hyper_config.training.gpus),
-                max_len_allow=hyper_config.fast_model_args.max_seq_length,
-            )
+            trainer.train_dataset = sort_shuffle_dataset(trainer.train_dataset)
+            # trainer.train_dataset = encode_dynamic_batching_dataset(
+            #     trainer.train_dataset,
+            #     num_gpus=len(hyper_config.training.gpus),
+            #     max_len_allow=hyper_config.fast_model_args.max_seq_length,
+            # )
 
             trainer.train_dataset.save_to_disk(dataset_cache_path)
 
@@ -231,7 +236,6 @@ def get_trainer(
         return trainer
 
 
-
 def _maybe_train_on_responses_only(trainer, hyper_config):
     """Use a specialized approach if 'response_only' loss is desired."""
     if hyper_config.training.loss_type == "response_only":
@@ -248,3 +252,33 @@ def _maybe_train_on_responses_only(trainer, hyper_config):
             response_part=response_part,
         )
     return trainer
+
+def sort_shuffle_dataset(dataset):
+    dataset = dataset.shuffle(seed=42)
+    
+    lens = [len(x["input_ids"]) for x in dataset]
+    ids = list(range(len(lens)))
+    
+    
+    from fastcore.all import chunked
+    
+    chunked_lens = list(chunked(ids, 8)) # 8 gpu each run with GA 4 and bz 1 
+    random.Random(42).shuffle(chunked_lens) # the 8 continous value are similar
+    
+    # flatten the list
+    ids = []
+    
+    for i, chunk in enumerate(chunked_lens):
+        if i % 2 == 0:
+            ids.extend(chunk)
+        else:
+            ids.extend(chunk[::-1])
+    dataset = dataset.select(ids)
+    lens = [len(x["input_ids"]) for x in dataset]
+    # write len to /tmp/lens to debu
+    with open("/tmp/lens.txt", "w") as f:
+        f.write(str(lens))
+    return dataset
+    
+
+    

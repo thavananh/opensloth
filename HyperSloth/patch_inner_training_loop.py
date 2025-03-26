@@ -40,6 +40,7 @@ from transformers.trainer import (
     unwrap_model,
 )
 
+from HyperSloth._patch_log import patch_log
 from HyperSloth.dynamic_batching import decode_dynamic_batching
 
 if is_torch_xla_available():
@@ -406,23 +407,20 @@ def patch_hf_trainer(trainer):
 
 
                 for i, inputs in enumerate(batch_samples):
-                    
-                    # MONKEY PATCHING LATER
 
                     if SPECIAL_SPLIT_TOKEN_IN_GPU in inputs["input_ids"] \
                         or SPECIAL_SPLIT_TOKEN_IN_GLOBALS in inputs["input_ids"]:
-                        assert i == 0
                         gpu_inputs = decode_dynamic_batching(inputs)
                         inputs = gpu_inputs[LOCAL_RANK]
-                        num_items_in_batch = inputs.pop('num_items_in_batch')
+                        num_items_in_batch = inputs.pop('num_items_in_batch')*len(batch_samples)
+                        non_masked_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
+                        logger.info('INPUT_SHAPE: {}| NON_MASKED_RATIO: {:0.2f}'.format(inputs['input_ids'].shape, non_masked_ratio))
+                    
+                    # MONKEY PATCHING LATER
 
                     step += 1
 
-                    do_sync_step = (
-                        step + 1
-                    ) % args.gradient_accumulation_steps == 0 or (
-                        step + 1
-                    ) == steps_in_epoch
+                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == steps_in_epoch
                     # Since we perform prefetching, we need to manually set sync_gradients
                     self.accelerator.gradient_state._set_sync_gradients(do_sync_step)
 
@@ -718,3 +716,4 @@ def patch_hf_trainer(trainer):
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
 
+    patch_log(Trainer)
