@@ -24,6 +24,12 @@ def setup_model_and_training(
     """
 
     gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
+    num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    assert hf_train_args.gradient_accumulation_steps % num_gpus == 0, (
+        "Gradient accumulation steps must be divisible by the number of GPUs. "
+        f"Got {hf_train_args.gradient_accumulation_steps} and {num_gpus
+        } GPUs."
+    )
     if not gpu_ith == 0:
         # disable reporting for all GPUs except the first one
         hf_train_args.report_to = "none"
@@ -254,15 +260,17 @@ def _maybe_train_on_responses_only(trainer, hyper_config):
     return trainer
 
 def sort_shuffle_dataset(dataset):
-    dataset = dataset.shuffle(seed=42)
+    # dataset = dataset.shuffle(seed=42)
     
     lens = [len(x["input_ids"]) for x in dataset]
-    ids = list(range(len(lens)))
+    sorted_ids = sorted(range(len(lens)), key=lambda k: lens[k])
+    dataset = dataset.select(sorted_ids)
     
     
     from fastcore.all import chunked
     
-    chunked_lens = list(chunked(ids, 8)) # 8 gpu each run with GA 4 and bz 1 
+    num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    chunked_lens = list(chunked(range(len(lens)), num_gpus)) # 8 gpu each run with GA 4 and bz 1 
     random.Random(42).shuffle(chunked_lens) # the 8 continous value are similar
     
     # flatten the list

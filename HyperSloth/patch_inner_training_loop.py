@@ -63,6 +63,8 @@ SPECIAL_SPLIT_TOKEN_IN_GPU     = -1000  # Intra-GPU boundary
 
 def patch_hf_trainer(trainer):
     # from transformers import Trainer
+    GPU_ITH = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
+    NUM_GPUS = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
     Trainer = type(trainer)
     @patch
     def _inner_training_loop(
@@ -401,20 +403,27 @@ def patch_hf_trainer(trainer):
                 # >>> hypersloth
                 # num_batches_all_gpus = num_batches * NUM_GPUS
 
-                batch_samples, _ = self.get_batch_samples(
+                batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
+                # when we have 
+                # select sample for this batch
+                # batch_samples = batch_samples[LOCAL_RANK::NUM_GPUS]
+                # import ipdb; ipdb.set_trace()
 
 
                 for i, inputs in enumerate(batch_samples):
+                    if i % NUM_GPUS != LOCAL_RANK:
+                        continue
+                    logger.warning(f"GPU {LOCAL_RANK} is processing batch {i}| num_items_in_batch: {num_items_in_batch}")
 
-                    if SPECIAL_SPLIT_TOKEN_IN_GPU in inputs["input_ids"] \
-                        or SPECIAL_SPLIT_TOKEN_IN_GLOBALS in inputs["input_ids"]:
-                        gpu_inputs = decode_dynamic_batching(inputs)
-                        inputs = gpu_inputs[LOCAL_RANK]
-                        num_items_in_batch = inputs.pop('num_items_in_batch')*len(batch_samples)
-                        non_masked_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
-                        logger.info('INPUT_SHAPE: {}| NON_MASKED_RATIO: {:0.2f}'.format(inputs['input_ids'].shape, non_masked_ratio))
+                    # if SPECIAL_SPLIT_TOKEN_IN_GPU in inputs["input_ids"] \
+                    #     or SPECIAL_SPLIT_TOKEN_IN_GLOBALS in inputs["input_ids"]:
+                    #     gpu_inputs = decode_dynamic_batching(inputs)
+                    #     inputs = gpu_inputs[LOCAL_RANK]
+                    #     num_items_in_batch = inputs.pop('num_items_in_batch')*len(batch_samples)
+                    #     non_masked_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
+                    #     logger.info('INPUT_SHAPE: {}| NON_MASKED_RATIO: {:0.2f}'.format(inputs['input_ids'].shape, non_masked_ratio))
                     
                     # MONKEY PATCHING LATER
 
