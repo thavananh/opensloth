@@ -205,8 +205,8 @@ def get_trainer(
             # Optionally patch trainer or handle "response-only" logic
             _maybe_train_on_responses_only(trainer, hyper_config)
 
-            from .dynamic_batching import encode_dynamic_batching_dataset
-            trainer.train_dataset = sort_shuffle_dataset(trainer.train_dataset)
+
+            trainer.train_dataset = reorder_and_shuffle_data(trainer.train_dataset)
             # trainer.train_dataset = encode_dynamic_batching_dataset(
             #     trainer.train_dataset,
             #     num_gpus=len(hyper_config.training.gpus),
@@ -259,23 +259,28 @@ def _maybe_train_on_responses_only(trainer, hyper_config):
         )
     return trainer
 
-def sort_shuffle_dataset(dataset):
+
+from datasets import Dataset
+
+
+def reorder_and_shuffle_data(dataset: Dataset):
     # dataset = dataset.shuffle(seed=42)
-    
+
     lens = [len(x["input_ids"]) for x in dataset]
     sorted_ids = sorted(range(len(lens)), key=lambda k: lens[k])
     dataset = dataset.select(sorted_ids)
-    
-    
+
     from fastcore.all import chunked
-    
+
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
-    chunked_lens = list(chunked(range(len(lens)), num_gpus)) # 8 gpu each run with GA 4 and bz 1 
-    random.Random(42).shuffle(chunked_lens) # the 8 continous value are similar
-    
+    chunked_lens = list(
+        chunked(range(len(lens)), num_gpus)
+    )  # 8 gpu each run with GA 4 and bz 1
+    random.Random(42).shuffle(chunked_lens)  # the 8 continous value are similar
+
     # flatten the list
     ids = []
-    
+
     for i, chunk in enumerate(chunked_lens):
         if i % 2 == 0:
             ids.extend(chunk)
@@ -287,6 +292,3 @@ def sort_shuffle_dataset(dataset):
     with open("/tmp/lens.txt", "w") as f:
         f.write(str(lens))
     return dataset
-    
-
-    

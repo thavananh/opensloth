@@ -41,7 +41,6 @@ from transformers.trainer import (
 )
 
 from HyperSloth._patch_log import patch_log
-from HyperSloth.dynamic_batching import decode_dynamic_batching
 
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm  # type: ignore
@@ -56,15 +55,13 @@ else:
     IS_XLA_FSDPV2_POST_2_2 = False
 
 
-SPECIAL_SPLIT_TOKEN_IN_GLOBALS = -1001  # Inter-GPU boundary
-SPECIAL_SPLIT_TOKEN_IN_GPU     = -1000  # Intra-GPU boundary
 
 
 
 def patch_hf_trainer(trainer):
     # from transformers import Trainer
-    GPU_ITH = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
-    NUM_GPUS = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
+    HP_LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
+    HP_WOLRD_SIZE = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
     Trainer = type(trainer)
     @patch
     def _inner_training_loop(
@@ -381,10 +378,8 @@ def patch_hf_trainer(trainer):
             if remainder == 0:
                 remainder = args.gradient_accumulation_steps
             update_step = -1
-            NUM_GPUS = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
-            LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK"))
             total_updates = (
-                steps_in_epoch // (args.gradient_accumulation_steps * (NUM_GPUS)) + 1
+                steps_in_epoch // (args.gradient_accumulation_steps * (HP_WOLRD_SIZE)) + 1
             )
             if args.gradient_accumulation_steps == 1:
                 total_updates -= 1
@@ -413,19 +408,12 @@ def patch_hf_trainer(trainer):
 
 
                 for i, inputs in enumerate(batch_samples):
-                    if i % NUM_GPUS != LOCAL_RANK:
+                    if i % HP_WOLRD_SIZE != HP_LOCAL_RANK:
                         continue
-                    logger.warning(f"GPU {LOCAL_RANK} is processing batch {i}| num_items_in_batch: {num_items_in_batch}")
-
-                    # if SPECIAL_SPLIT_TOKEN_IN_GPU in inputs["input_ids"] \
-                    #     or SPECIAL_SPLIT_TOKEN_IN_GLOBALS in inputs["input_ids"]:
-                    #     gpu_inputs = decode_dynamic_batching(inputs)
-                    #     inputs = gpu_inputs[LOCAL_RANK]
-                    #     num_items_in_batch = inputs.pop('num_items_in_batch')*len(batch_samples)
-                    #     non_masked_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
-                    #     logger.info('INPUT_SHAPE: {}| NON_MASKED_RATIO: {:0.2f}'.format(inputs['input_ids'].shape, non_masked_ratio))
-                    
-                    # MONKEY PATCHING LATER
+                    logger.info(
+                        f"GPU {HP_LOCAL_RANK} is processing batch {i} | num_items_in_batch: {num_items_in_batch} | "
+                        f"INPUT_SHAPE: {inputs['input_ids'].shape} | NON_MASKED_RATIO: {inputs['attention_mask'].sum() / inputs['attention_mask'].numel():0.2f}"
+                    )
 
                     step += 1
 
