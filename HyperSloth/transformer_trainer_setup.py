@@ -120,8 +120,10 @@ def _create_trainer(
     )
 
     from HyperSloth.patch_inner_training_loop import patch_hf_trainer
+    from HyperSloth.patch_sampler import patch_sampler
 
     patch_hf_trainer(trainer)
+    patch_sampler(trainer)
     return trainer
 
 
@@ -205,8 +207,11 @@ def get_trainer(
             # Optionally patch trainer or handle "response-only" logic
             _maybe_train_on_responses_only(trainer, hyper_config)
 
-
-            trainer.train_dataset = reorder_and_shuffle_data(trainer.train_dataset)
+            trainer.train_dataset = reorder_and_shuffle_data(
+                trainer.train_dataset,
+                hf_train_args.per_device_train_batch_size,
+                len(hyper_config.training.gpus),
+            )
             # trainer.train_dataset = encode_dynamic_batching_dataset(
             #     trainer.train_dataset,
             #     num_gpus=len(hyper_config.training.gpus),
@@ -263,7 +268,9 @@ def _maybe_train_on_responses_only(trainer, hyper_config):
 from datasets import Dataset
 
 
-def reorder_and_shuffle_data(dataset: Dataset):
+def reorder_and_shuffle_data(
+    dataset: Dataset, per_device_batchsize: int, num_gpus: int
+):
     # dataset = dataset.shuffle(seed=42)
 
     lens = [len(x["input_ids"]) for x in dataset]
@@ -274,7 +281,7 @@ def reorder_and_shuffle_data(dataset: Dataset):
 
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
     chunked_lens = list(
-        chunked(range(len(lens)), num_gpus)
+        chunked(range(len(lens)), per_device_batchsize * num_gpus)
     )  # 8 gpu each run with GA 4 and bz 1
     random.Random(42).shuffle(chunked_lens)  # the 8 continous value are similar
 
