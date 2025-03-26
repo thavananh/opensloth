@@ -8,6 +8,7 @@ import random
 import time
 from loguru import logger
 import filelock
+from speedy_utils import dump_json_or_pickle
 
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
@@ -31,18 +32,17 @@ def setup_model_and_training(
     # Unsloth uses monkey patching thus it might have race conditions so we need to try until it works
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
-    
 
-    _maybe_train_on_responses_only(trainer, hyper_config)
-    
     # Debug info for the main GPU
     if gpu_ith == 0:
         logger.info(f"Model setup complete for GPU {gpu_ith}")
         try:
             from ._debug_dataloader import _debug_dataloader
+
             _debug_dataloader(trainer)
             _debug_training_lengths(hf_train_args, gpu_ith, trainer)
-        except:pass
+        except:
+            pass
 
     return trainer, model, tokenizer
 
@@ -71,12 +71,16 @@ def _debug_training_lengths(hf_train_args, gpu_ith, trainer):
 def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
-    #====== Patching the compiler location to avoid race conditions as it is shared between GPUs
+
+    # ====== Patching the compiler location to avoid race conditions as it is shared between GPUs
     gpu_idx = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     from unsloth_zoo import compiler
-    compiler.UNSLOTH_COMPILE_LOCATION = '.cache/{}_{}'.format(compiler.UNSLOTH_COMPILE_LOCATION, gpu_idx)
+
+    compiler.UNSLOTH_COMPILE_LOCATION = ".cache/{}_{}".format(
+        compiler.UNSLOTH_COMPILE_LOCATION, gpu_idx
+    )
     logger.info(f"Using compiler location: {compiler.UNSLOTH_COMPILE_LOCATION}")
-    
+
     model, tokenizer = FastModel.from_pretrained(
         **hyper_config.fast_model_args.model_dump()
     )
@@ -93,19 +97,58 @@ def _create_trainer(
     model: any,
 ):
     """Load or prepare the dataset and create the SFTTrainer."""
-    from trl import SFTTrainer
-    from datasets import load_from_disk
+
     from speedy_utils import identify
 
     tokenizer_name = identify(str(tokenizer))
     dataset_name = identify(hyper_config.data.model_dump())
     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
-    dataset_cache_path = os.path.join('.cache/', dataset_cache_name)
+    dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
 
     lock = dataset_cache_path + ".lock"
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 
     # CASE 1: Dataset cache already exists, just load it
+    trainer = get_trainer(
+        tokenizer,
+        hyper_config,
+        hf_train_args,
+        gpu_ith,
+        model,
+        dataset_cache_path,
+        lock,
+        dataset_cache_exists,
+    )
+
+    _maybe_train_on_responses_only(trainer, hyper_config)
+    # we shard to each gpu
+    from .dynamic_batching import encode_dynamic_batching_dataset
+
+    trainer.train_dataset = encode_dynamic_batching_dataset(
+        trainer.train_dataset,
+        len(hyper_config.training.gpus),
+        max_len_allow=hyper_config.fast_model_args.max_seq_length,
+    )
+    from HyperSloth.patching import patch_hf_trainer
+    
+    
+    patch_hf_trainer()
+    return trainer
+
+
+def get_trainer(
+    tokenizer,
+    hyper_config,
+    hf_train_args,
+    gpu_ith,
+    model,
+    dataset_cache_path,
+    lock,
+    dataset_cache_exists,
+):
+    from trl import SFTTrainer
+    from datasets import load_from_disk
+
     if dataset_cache_exists:
         logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
         dataset = load_from_disk(dataset_cache_path)
@@ -145,12 +188,6 @@ def _create_trainer(
                 args=hf_train_args,
             )
 
-            # Adjust dataset for multi-GPU
-            # max_len_ds = len(hyper_config.training.gpus) * (
-            #     len(trainer.train_dataset) // len(hyper_config.training.gpus)
-            # )
-            # trainer.train_dataset = trainer.train_dataset.select(range(max_len_ds))
-
             trainer.train_dataset.save_to_disk(dataset_cache_path)
 
         if os.path.exists(lock):
@@ -181,29 +218,6 @@ def _create_trainer(
             args=hf_train_args,
         )
 
-    if hyper_config.data.group_by_length:
-        from .patching import patch_sampler, select_dataset_by_length
-
-        trainer = patch_sampler(trainer)
-
-        trainer.train_dataset = select_dataset_by_length(
-            trainer.train_dataset,
-            gpu_ith,
-            len(hyper_config.training.gpus),
-            hf_train_args.gradient_accumulation_steps,
-            hf_train_args.per_device_train_batch_size,
-        )
-
-    from HyperSloth.patching import patch_hf_trainer
-
-    patch_hf_trainer()
-    
-    # trainer.train_dataset = trainer.train_dataset.shard(
-    #     num_shards=len(hyper_config.training.gpus),
-    #     index=gpu_ith,
-    #     contiguous=False,
-    #     keep_in_memory=True,  # this will keep the dataset in memory
-    # )
     return trainer
 
 

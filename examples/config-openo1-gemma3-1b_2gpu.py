@@ -7,7 +7,7 @@ hyper_config_model = HyperConfig(
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
-        num_samples=32,
+        # num_samples=3200,
     ),
     training=TrainingConfig(
         # gpus=[0,1,2,3,4,5,6,7],  # Change this to the number of GPUs you have
@@ -16,8 +16,8 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/gemma-3-1b-it-bnb-4bit",
-        max_seq_length=16_000,
+        model_name="unsloth/gemma-3-4b-it-bnb-4bit",
+        max_seq_length=8000,
     ),
     lora_args=LoraArgs(
         r=16,

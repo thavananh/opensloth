@@ -8,7 +8,9 @@ from collections import defaultdict
 from typing import Dict, Optional
 
 import numpy as np
+from speedy_utils import load_json_or_pickle
 import torch
+import torch.nn.functional as F
 from fastcore.all import patch
 from loguru import logger
 from torch import nn
@@ -38,6 +40,8 @@ from transformers.trainer import (
     unwrap_model,
 )
 
+from HyperSloth.dynamic_batching import decode_dynamic_batching
+
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm  # type: ignore
     import torch_xla.debug.metrics as met  # type: ignore
@@ -51,130 +55,10 @@ else:
     IS_XLA_FSDPV2_POST_2_2 = False
 
 
-def patch_sampler(trainer):
-    # Simply use the SequentialSampler for the training dataset
-    from fastcore.all import patch
-    from torch.utils.data import SequentialSampler
-    from transformers import Trainer
-
-    @patch
-    def _get_train_sampler(self: Trainer) -> SequentialSampler:
-        """Get a sequential sampler for the training dataset."""
-        return SequentialSampler(self.train_dataset)
-
-    return trainer
-
-
-def select_dataset_by_length(
-    dataset, gpu_index: int, num_gpus: int, grad_accum_steps: int, batch_size: int
-):
-    # if num_gpus == 1:
-    #     return dataset.select(range(len(dataset)))
-    # else:
-    #     ids = [i for i in range(len(dataset)) if i % num_gpus == gpu_index]
-    #     print(f"GPU {gpu_index}: Selected {ids} samples for training")
-    #     return dataset.select(ids)
-
-    n_samples = len(dataset)
-    new_n_samples = (n_samples // num_gpus) * num_gpus
-    ids = range(new_n_samples)
-    dataset = dataset.select(ids)
-
-    from typing import Dict, List
-    import numpy as np
-    from fastcore.all import chunked
-
-    def split_batch_evenly(
-        lengths: List[int], global_ids: List[int], num_gpus: int
-    ) -> Dict[int, Dict[str, List[int]]]:
-        if len(lengths) % num_gpus != 0:
-            raise ValueError("The list length must be divisible by num_gpus")
-
-        indices_sorted = np.argsort(
-            -np.array(lengths)
-        )  # largest number will be at the beginning
-        splits = [[] for _ in range(num_gpus)]
-        length_sums = [0] * num_gpus
-        max_items_per_gpu = len(lengths) // num_gpus
-
-        for idx in indices_sorted:
-            gpu_candidates = sorted(
-                range(num_gpus),
-                key=lambda gpu: (
-                    len(splits[gpu]) >= max_items_per_gpu,
-                    length_sums[gpu],
-                ),
-            )
-            chosen_gpu = gpu_candidates[0]
-            splits[chosen_gpu].append(idx)
-            length_sums[chosen_gpu] += lengths[idx]
-
-        splits = [sorted(split) for split in splits]
-
-        gpu_batches = {
-            gpu: {
-                "global_ids": [global_ids[i] for i in splits[gpu]],
-                "lengths": [lengths[i] for i in splits[gpu]],
-            }
-            for gpu in range(num_gpus)
-        }
-        for gpu in range(num_gpus):
-            lens = gpu_batches[gpu]["lengths"]
-            ids = gpu_batches[gpu]["global_ids"]
-            new_lens, new_ids = zip(*sorted(zip(lens, ids), key=lambda x: x[0]))
-            total_len = sum(new_lens)
-            gpu_batches[gpu] = {
-                "global_ids": list(new_ids),
-                "lengths": list(new_lens),
-                "total_len": total_len,
-            }
-
-        return gpu_batches
-
-    dataset_indices = list(range(len(dataset)))
-    id_to_length = {idx: len(dataset[idx]["input_ids"]) for idx in dataset_indices}
-    random.Random(42).shuffle(dataset_indices)
-
-    global_batch_size = grad_accum_steps * batch_size * num_gpus
-    global_batches = list(chunked(dataset_indices, global_batch_size))
-
-    selected_ids = defaultdict(list)
-    for batch_indices in global_batches:  # Exclude potentially smaller last batch
-        batch_lengths = [id_to_length[i] for i in batch_indices]
-        splits = split_batch_evenly(batch_lengths, batch_indices, num_gpus)
-        if len(selected_ids) == 0 and gpu_index == 0:
-            # to print keys: lens, total_len
-            # create a table
-            table_header = ["GPU", "Lens", "Total Len"]
-            table_data = []
-            for gpu, split in splits.items():
-                table_data.append([gpu, split["lengths"], split["total_len"]])
-            # use tabulate to print the table
-            from tabulate import tabulate
-
-            s = "Below is the table of the selected samples for each GPU\n"
-            s += tabulate(table_data, headers=table_header)
-            logger.info(s)
-
-        for gpu, split in splits.items():
-            selected_ids[gpu].extend(split["global_ids"])
-    # ensure all gpus have the same number of samples
-    n1 = len(selected_ids[0])
-    for gpu in range(1, num_gpus):
-        n2 = len(selected_ids[gpu])
-        if n1 != n2:
-            raise ValueError(f"GPU {gpu} has {n2} samples, while GPU 0 has {n1}")
-    logger.info(f"GPU {gpu_index}: Selected {n1} samples for training")
-    selected_ids_flat = []
-    selected_ids_flat = selected_ids[gpu_index]
-    import ipdb; ipdb.set_trace()
-    return dataset.select(selected_ids_flat)
-
+SPECIAL_SPLIT_TOKEN_IN_GLOBALS = -1001  # Inter-GPU boundary
+SPECIAL_SPLIT_TOKEN_IN_GPU     = -1000  # Intra-GPU boundary
 
 def patch_hf_trainer():
-    # Copy from /home/anhvth5/miniconda3/envs/training/lib/python3.12/site-packages/transformers/trainer.py
-
-    # Patch the Trainer class
     from transformers import Trainer
 
     @patch
@@ -492,12 +376,17 @@ def patch_hf_trainer():
             if remainder == 0:
                 remainder = args.gradient_accumulation_steps
             update_step = -1
-            total_updates = steps_in_epoch // args.gradient_accumulation_steps + 1
+            NUM_GPUS = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
+            LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK"))
+            total_updates = (
+                steps_in_epoch // (args.gradient_accumulation_steps * (NUM_GPUS)) + 1
+            )
             if args.gradient_accumulation_steps == 1:
                 total_updates -= 1
             from speedy_utils import Clock
 
             clock = Clock()
+
             for _ in range(total_updates):
                 update_step += 1
                 num_batches = (
@@ -505,13 +394,27 @@ def patch_hf_trainer():
                     if update_step != (total_updates - 1)
                     else remainder
                 )
+                # >>> hypersloth
+                # num_batches_all_gpus = num_batches * NUM_GPUS
 
-                batch_samples, num_items_in_batch = self.get_batch_samples(
+                batch_samples, _ = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
 
+
                 for i, inputs in enumerate(batch_samples):
+                    
+                    # MONKEY PATCHING LATER
+
+                    if SPECIAL_SPLIT_TOKEN_IN_GPU in inputs["input_ids"] \
+                        or SPECIAL_SPLIT_TOKEN_IN_GLOBALS in inputs["input_ids"]:
+                        assert i == 0
+                        gpu_inputs = decode_dynamic_batching(inputs)
+                        inputs = gpu_inputs[LOCAL_RANK]
+                        num_items_in_batch = inputs.pop('num_items_in_batch')
+
                     step += 1
+
                     do_sync_step = (
                         step + 1
                     ) % args.gradient_accumulation_steps == 0 or (
@@ -812,64 +715,3 @@ def patch_hf_trainer():
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
 
-    # HYPERSLOTH_LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-    # HYPERSLOTH_RUN_DIR = os.environ["HYPERSLOTH_RUN_DIR"]
-    # HYPERSLOTH_NUM_GPUS = int(os.environ["HYPERSLOTH_NUM_GPUS"])
-    # # support_keys = ['num_items_in_batch']
-    # # # for key in support_keys:
-    # NUM_ITEMS_IN_BATCH = np.memmap(
-    #     f"{HYPERSLOTH_RUN_DIR}/num_items_in_batch.mmap",
-    #     dtype="float32",
-    #     mode="w+",
-    #     shape=(
-    #         int(os.environ["HYPERSLOTH_NUM_GPUS"]) * 2
-    #     ),  # the last 2 elements are for synchronization purpose last -1 is answer for "is_all_read", last -2 is for "is_all_write"
-    # )
-    # NUM_ITEMS_IN_BATCH[:] = 0
-    # NUM_ITEMS_IN_BATCH.flush()
-
-    # def fetch_and_sync_batch_samples(self, epoch_iterator, num_batches):
-    #     batch_samples, NUM_ITEMS_IN_BATCH[HYPERSLOTH_LOCAL_RANK] = (
-    #         self.get_batch_samples(epoch_iterator, num_batches)
-    #     )
-    #     NUM_ITEMS_IN_BATCH.flush()
-    #     start_time = time.time()
-    #     while (NUM_ITEMS_IN_BATCH[:HYPERSLOTH_NUM_GPUS] == 0).any():
-    #         if time.time() - start_time > 10:  # 10 seconds timeout
-    #             logger.debug(
-    #                 f"Waiting too long for NUM_ITEMS_IN_BATCH: {NUM_ITEMS_IN_BATCH}"
-    #             )
-    #         assert NUM_ITEMS_IN_BATCH[HYPERSLOTH_LOCAL_RANK] != 0, f'{HYPERSLOTH_LOCAL_RANK=} has {NUM_ITEMS_IN_BATCH}'
-    #         time.sleep(0.1)
-    #     num_items_in_batch = NUM_ITEMS_IN_BATCH[:HYPERSLOTH_NUM_GPUS].mean()
-
-    #     NUM_ITEMS_IN_BATCH[HYPERSLOTH_NUM_GPUS + HYPERSLOTH_LOCAL_RANK] = 1
-    #     NUM_ITEMS_IN_BATCH.flush()
-
-    #     # wait for reset
-    #     if HYPERSLOTH_LOCAL_RANK == 0:
-    #         start_time = time.time()
-    #         while (
-    #             not NUM_ITEMS_IN_BATCH[HYPERSLOTH_NUM_GPUS:].sum()
-    #             == HYPERSLOTH_NUM_GPUS
-    #         ):
-    #             if time.time() - start_time > 10:  # 10 seconds timeout
-    #                 logger.debug(
-    #                     f"Waiting too long for NUM_ITEMS_IN_BATCH reset: {NUM_ITEMS_IN_BATCH}"
-    #                 )
-    #             time.sleep(0.1)
-    #         NUM_ITEMS_IN_BATCH[:] = 0
-    #         NUM_ITEMS_IN_BATCH.flush()
-    #     else:
-    #         start_time = time.time()
-    #         while not NUM_ITEMS_IN_BATCH[:].sum() == 0:
-    #             if time.time() - start_time > 10:  # 10 seconds timeout
-    #                 logger.debug(
-    #                     f"Waiting too long for NUM_ITEMS_IN_BATCH reset: {NUM_ITEMS_IN_BATCH}"
-    #                 )
-    #             time.sleep(0.1)
-    #     return start_time, batch_samples, num_items_in_batch
-
-    # from ._patch_log import patch_log
-
-    # patch_log()

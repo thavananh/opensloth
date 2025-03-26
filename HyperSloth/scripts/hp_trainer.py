@@ -153,7 +153,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
         hyper_config.training.gpus = range(world_size)
         run_id = identify(combined_config)
         os.environ["HYPERSLOTH_RUN_DIR"] = _get_run_dir(run_id)
-
+        os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
         _train(
             gpu=hyper_config.training.gpus[rank],
             hyper_config=hyper_config,
@@ -161,6 +161,7 @@ def train(config_file: str, rank: int = None, world_size: int = None):
         )
     # NORMAL MULTI PROCESS MODE
     else:
+        os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
         if len(hyper_config.training.gpus) > 1:
 
             run_id = identify(combined_config)
