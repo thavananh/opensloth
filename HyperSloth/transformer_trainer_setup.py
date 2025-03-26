@@ -104,7 +104,7 @@ def _create_trainer(
 ):
     """Load or prepare the dataset and create the SFTTrainer."""
 
-    dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config)
+    dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
 
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 
@@ -127,13 +127,18 @@ def _create_trainer(
     return trainer
 
 
-def _identify_dataset_name(tokenizer, hyper_config):
+def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
     from speedy_utils import identify
 
     tokenizer_name = identify(str(tokenizer))
     # hash the dataset name and max_seq_length to create a unique cache name
     dataset_name = identify(
-        [hyper_config.data.model_dump(), hyper_config.fast_model_args.max_seq_length]
+        [
+            hyper_config.data.model_dump(),
+            hyper_config.fast_model_args.max_seq_length,
+            hf_train_args.per_device_train_batch_size,
+            hf_train_args.gradient_accumulation_steps,
+        ]
     )
     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
     dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
@@ -212,12 +217,6 @@ def get_trainer(
                 hf_train_args.per_device_train_batch_size,
                 len(hyper_config.training.gpus),
             )
-            # trainer.train_dataset = encode_dynamic_batching_dataset(
-            #     trainer.train_dataset,
-            #     num_gpus=len(hyper_config.training.gpus),
-            #     max_len_allow=hyper_config.fast_model_args.max_seq_length,
-            # )
-
             trainer.train_dataset.save_to_disk(dataset_cache_path)
 
         # Release the lock file
@@ -293,9 +292,13 @@ def reorder_and_shuffle_data(
             ids.extend(chunk)
         else:
             ids.extend(chunk[::-1])
+            
+    assert len(set(ids)) == len(ids)
+    ids = list(set(ids))
     dataset = dataset.select(ids)
     lens = [len(x["input_ids"]) for x in dataset]
     # write len to /tmp/lens to debu
     with open("/tmp/lens.txt", "w") as f:
         f.write(str(lens))
+    
     return dataset

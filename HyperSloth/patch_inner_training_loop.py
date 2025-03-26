@@ -397,22 +397,18 @@ def patch_hf_trainer(trainer):
                 )
                 # >>> hypersloth
                 # num_batches_all_gpus = num_batches * NUM_GPUS
-
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
-                # when we have 
-                # select sample for this batch
-                # batch_samples = batch_samples[LOCAL_RANK::NUM_GPUS]
-                # import ipdb; ipdb.set_trace()
 
 
                 for i, inputs in enumerate(batch_samples):
                     if i % HP_WOLRD_SIZE != HP_LOCAL_RANK:
                         continue
+                    pad_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
                     logger.info(
                         f"GPU {HP_LOCAL_RANK} is processing batch {i} | num_items_in_batch: {num_items_in_batch} | "
-                        f"INPUT_SHAPE: {inputs['input_ids'].shape} | NON_MASKED_RATIO: {inputs['attention_mask'].sum() / inputs['attention_mask'].numel():0.2f}"
+                        f"INPUT_SHAPE: {inputs['input_ids'].shape} | PAD_RATIO: {pad_ratio:0.2f}"
                     )
 
                     step += 1

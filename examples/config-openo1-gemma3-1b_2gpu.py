@@ -7,17 +7,17 @@ hyper_config_model = HyperConfig(
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
-        num_samples=10000,
+        num_samples=1000,
     ),
     training=TrainingConfig(
         # gpus=[0,1,2,3,4,5,6,7],  # Change this to the number of GPUs you have
-        # gpus=[0,1,2,3,4,5,6,7],  # Change this to the number of GPUs you have
+        # gpus=[0,1],  # Change this to the number of GPUs you have
         gpus=[0,1],  # Change this to the number of GPUs you have
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
         model_name="unsloth/gemma-3-1b-it-bnb-4bit",
-        max_seq_length=16_000,
+        max_seq_length=8_000,
     ),
     lora_args=LoraArgs(
         r=16,
@@ -28,8 +28,8 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-1b-it/openo1",
-    per_device_train_batch_size=2,
-    gradient_accumulation_steps=4,  # Meaing 8*4*4=128 examples per step
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=16,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,
