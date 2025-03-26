@@ -58,9 +58,11 @@ else:
 SPECIAL_SPLIT_TOKEN_IN_GLOBALS = -1001  # Inter-GPU boundary
 SPECIAL_SPLIT_TOKEN_IN_GPU     = -1000  # Intra-GPU boundary
 
-def patch_hf_trainer():
-    from transformers import Trainer
 
+
+def patch_hf_trainer(trainer):
+    # from transformers import Trainer
+    Trainer = type(trainer)
     @patch
     def _inner_training_loop(
         self: Trainer,  # type: ignore
@@ -383,8 +385,9 @@ def patch_hf_trainer():
             )
             if args.gradient_accumulation_steps == 1:
                 total_updates -= 1
+                
+            
             from speedy_utils import Clock
-
             clock = Clock()
 
             for _ in range(total_updates):
@@ -655,7 +658,7 @@ def patch_hf_trainer():
             elif args.parallel_mode == ParallelMode.DISTRIBUTED:
                 dist.barrier()
             elif is_sagemaker_mp_enabled():
-                smp.barrier()
+                smp.barrier() # type: ignore
 
             self._load_best_model()
 

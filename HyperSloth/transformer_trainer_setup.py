@@ -121,10 +121,10 @@ def _create_trainer(
     )
 
 
-    from HyperSloth.patching import patch_hf_trainer
+    from HyperSloth.patch_inner_training_loop import patch_hf_trainer
     
     
-    patch_hf_trainer()
+    patch_hf_trainer(trainer)
     return trainer
 
 
