@@ -214,8 +214,9 @@ def get_trainer(
 
             trainer.train_dataset = reorder_and_shuffle_data(
                 trainer.train_dataset,
-                hf_train_args.per_device_train_batch_size,
-                len(hyper_config.training.gpus),
+                per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
+                num_gpus=len(hyper_config.training.gpus),
+                gradient_accumulation_steps=hf_train_args.gradient_accumulation_steps,
             )
             trainer.train_dataset.save_to_disk(dataset_cache_path)
 
@@ -268,7 +269,10 @@ from datasets import Dataset
 
 
 def reorder_and_shuffle_data(
-    dataset: Dataset, per_device_batchsize: int, num_gpus: int
+    dataset: Dataset,
+    per_device_train_batch_size: int,
+    num_gpus: int,
+    gradient_accumulation_steps,
 ):
     # dataset = dataset.shuffle(seed=42)
 
@@ -280,8 +284,11 @@ def reorder_and_shuffle_data(
 
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
     chunked_lens = list(
-        chunked(range(len(lens)), per_device_batchsize * num_gpus)
-    )  # 8 gpu each run with GA 4 and bz 1
+        chunked(
+            range(len(lens)),
+            per_device_train_batch_size * gradient_accumulation_steps * num_gpus,
+        )
+    )
     random.Random(42).shuffle(chunked_lens)  # the 8 continous value are similar
 
     # flatten the list
@@ -292,13 +299,11 @@ def reorder_and_shuffle_data(
             ids.extend(chunk)
         else:
             ids.extend(chunk[::-1])
-            
-    assert len(set(ids)) == len(ids)
-    ids = list(set(ids))
+
     dataset = dataset.select(ids)
     lens = [len(x["input_ids"]) for x in dataset]
     # write len to /tmp/lens to debu
     with open("/tmp/lens.txt", "w") as f:
         f.write(str(lens))
-    
+
     return dataset

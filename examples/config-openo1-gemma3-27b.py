@@ -7,7 +7,7 @@ hyper_config_model = HyperConfig(
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
-        num_samples=10000,
+        # num_samples=10000,
     ),
     training=TrainingConfig(
         gpus=range(8),  # Change this to the number of GPUs you have
