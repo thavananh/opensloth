@@ -120,15 +120,7 @@ def _create_trainer(
         dataset_cache_exists,
     )
 
-    _maybe_train_on_responses_only(trainer, hyper_config)
-    # we shard to each gpu
-    from .dynamic_batching import encode_dynamic_batching_dataset
 
-    trainer.train_dataset = encode_dynamic_batching_dataset(
-        trainer.train_dataset,
-        len(hyper_config.training.gpus),
-        max_len_allow=hyper_config.fast_model_args.max_seq_length,
-    )
     from HyperSloth.patching import patch_hf_trainer
     
     
@@ -188,6 +180,15 @@ def get_trainer(
                 args=hf_train_args,
             )
 
+            _maybe_train_on_responses_only(trainer, hyper_config)
+            from .dynamic_batching import encode_dynamic_batching_dataset
+
+            trainer.train_dataset = encode_dynamic_batching_dataset(
+                trainer.train_dataset,
+                len(hyper_config.training.gpus),
+                max_len_allow=hyper_config.fast_model_args.max_seq_length,
+            )
+
             trainer.train_dataset.save_to_disk(dataset_cache_path)
 
         if os.path.exists(lock):
@@ -218,6 +219,10 @@ def get_trainer(
             args=hf_train_args,
         )
 
+
+
+
+    
     return trainer
 
 
