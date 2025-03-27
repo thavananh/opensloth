@@ -1,14 +1,12 @@
 import os
-def _debug_dataloader(trainer, n_example=10):
+def _debug_dataloader(dataloader, tokenizer, n_example=10):
     """
     Debug function to log samples from the training dataloader in an HTML format.
     Outputs to both terminal (with colors) and an HTML file with CSS styling.
     """
     from copy import deepcopy
 
-    tokenizer = deepcopy(trainer.tokenizer)
-    dl = trainer.get_train_dataloader()
-    g = iter(dl)
+    g = iter(dataloader)
     html_path = ".log/dataloader_examples.html"
     os.makedirs(os.path.dirname(html_path), exist_ok=True)
 

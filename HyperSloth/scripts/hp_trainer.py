@@ -86,10 +86,7 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
         model.save_pretrained(hf_train_args.output_dir)
         tokenizer.save_pretrained(hf_train_args.output_dir)
 
-@threaded(process=True)
-def run_in_process(*args, **kwargs):
-    """Runs _train() in a separate Python process."""
-    _train(*args, **kwargs)
+
 
 def load_config_from_path(config_path: str):
     """Load configuration from Python file path."""
@@ -195,6 +192,11 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
         else:
             # Launch via multi-processing (no tmux).
             processes = []
+            assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
+            @threaded(process=True)
+            def run_in_process(*args, **kwargs):
+                """Runs _train() in a separate Python process."""
+                _train(*args, **kwargs)
             for gpu_index in gpus:
                 p = run_in_process(
                     gpu_index,

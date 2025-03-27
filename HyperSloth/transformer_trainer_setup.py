@@ -38,39 +38,11 @@ def setup_model_and_training(
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
 
-    # Debug info for the main GPU
-    if gpu_ith == 0:
-        logger.info(f"Model setup complete for GPU {gpu_ith}")
-        try:
-            from ._debug_dataloader import _debug_dataloader
-
-            _debug_dataloader(trainer)
-            _debug_training_lengths(hf_train_args, gpu_ith, trainer)
-        except:
-            pass
 
     return trainer, model, tokenizer
 
 
-def _debug_training_lengths(hf_train_args, gpu_ith, trainer):
-    dataloader = trainer.get_train_dataloader()
-    generator = iter(dataloader)
-    with open(f"lengths_{gpu_ith}.txt", "w") as f:
-        num_grad_accum = hf_train_args.gradient_accumulation_steps
-        txt = ""
-        for i in range(10):
-            len_in_one_update = []
-            for i in range(num_grad_accum):
-                batch = next(generator)
-                s1, s2 = batch["input_ids"].shape[0], batch["input_ids"].shape[1]
-                len_in_one_update.append(s2)
-            total_len = sum([shape for shape in len_in_one_update])
-            txt += (
-                "|".join([str(x) for x in len_in_one_update])
-                + "Total len:{}".format(total_len)
-                + "\n"
-            )
-        f.write(txt)
+
 
 
 def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
@@ -256,10 +228,10 @@ def get_trainer(
 
     
     # reorder and shuffle data
-    trainer.train_dataset = reorder_and_shuffle_data(
-        trainer.train_dataset,
-        per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
-    )
+    # trainer.train_dataset = reorder_and_shuffle_data(
+    #     trainer.train_dataset,
+    #     per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
+    # )
 
     return trainer
 
@@ -281,35 +253,3 @@ def _maybe_train_on_responses_only(trainer, hyper_config):
         )
     return trainer
 
-
-from datasets import Dataset
-
-
-def reorder_and_shuffle_data(
-    dataset: Dataset,
-    per_device_train_batch_size: int,
-):
-    # dataset = dataset.shuffle(seed=42)
-
-    lens = [len(x["input_ids"]) for x in dataset]
-    sorted_ids = sorted(range(len(lens)), key=lambda k: lens[k])
-    dataset = dataset.select(sorted_ids)
-
-    from fastcore.all import chunked
-
-    chunked_lens = list(
-        chunked(
-            range(len(lens)),
-            per_device_train_batch_size ,
-        )
-    )
-    # random.Random(42).shuffle(chunked_lens)  # the 8 continous value are similar
-    ids = [idx for chunk in chunked_lens for idx in chunk]
-    dataset = dataset.select(ids)
-    lens = [len(x["input_ids"]) for x in dataset]
-    
-    gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-    with open(f"lengths_{gpu_ith}.txt", "w") as f:
-        # jsut write all
-        f.write("|".join([str(x) for x in lens]) + "\n")
-    return dataset
