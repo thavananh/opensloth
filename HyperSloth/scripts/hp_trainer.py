@@ -41,7 +41,12 @@ def _get_run_dir(run_id):
     return grad_dir
 
 def _setup_logger(gpu_id):
-    setup_logger(os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO"))
+    lvl = os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO")
+    if os.getenv('USE_TMUX', '0') == '1':
+        lvl = 'DEBUG'
+        setup_logger(lvl, disable_grep='mmap_gradient_sync')
+    else:
+        setup_logger(lvl)
     file = f".log/process_{gpu_id}.log"
     if os.path.exists(file):
         os.remove(file)
@@ -118,12 +123,7 @@ def build_tmux_script(
     lines.append("#!/usr/bin/env bash")
     lines.append("")
     lines.append("""# Create a new session with first GPU = 0
-tmux new-session -d -s train_hp -n MAIN
-
-tmux new-window -t train_hp -n nvtop
-# tmux send-keys -t train_hp:MAIN 'source /home/anhvth5/miniconda3/etc/profile.d/conda.sh' Enter
-# tmux send-keys -t train_hp:MAIN 'ECHO HELLOWORLD' Enter
-echo =======================================""")
+tmux new-session -d -s train_hp -n MAIN""")
 
     # First GPU
     # check tmux session command, if yes, ask user enter "y" to kill the session

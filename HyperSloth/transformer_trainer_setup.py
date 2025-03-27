@@ -253,10 +253,12 @@ def get_trainer(
     # Optionally patch trainer or handle "response-only" logic
     _maybe_train_on_responses_only(trainer, hyper_config)
 
-    trainer.train_dataset = reorder_and_shuffle_data(
-        trainer.train_dataset,
-        per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
-    )
+    
+    # reorder and shuffle data
+    # trainer.train_dataset = reorder_and_shuffle_data(
+    #     trainer.train_dataset,
+    #     per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
+    # )
 
     return trainer
 

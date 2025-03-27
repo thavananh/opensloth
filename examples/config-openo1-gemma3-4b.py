@@ -25,7 +25,7 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-4b-it/openo1",
-    per_device_train_batch_size=1,
+    per_device_train_batch_size=2,
     gradient_accumulation_steps=8,
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
