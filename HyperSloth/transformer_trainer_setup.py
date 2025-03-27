@@ -255,10 +255,10 @@ def get_trainer(
 
     
     # reorder and shuffle data
-    # trainer.train_dataset = reorder_and_shuffle_data(
-    #     trainer.train_dataset,
-    #     per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
-    # )
+    trainer.train_dataset = reorder_and_shuffle_data(
+        trainer.train_dataset,
+        per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
+    )
 
     return trainer
 
@@ -307,9 +307,6 @@ def reorder_and_shuffle_data(
     ids = [idx for chunk in chunked_lens for idx in chunk]
     dataset = dataset.select(ids)
     lens = [len(x["input_ids"]) for x in dataset]
-    # write len to /tmp/lens to debu
-    # with open("/tmp/lens.txt", "w") as f:
-        # f.write(str(lens))
         
     # Just to check the lens
     for i in range(5):

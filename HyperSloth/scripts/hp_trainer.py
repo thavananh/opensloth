@@ -51,6 +51,11 @@ def _setup_logger(gpu_id):
     if os.path.exists(file):
         os.remove(file)
     logger.add(file)
+    if gpu_id == 0:
+        os.remove(".log/process.log")
+    # add prefix [gpu_id] to log messages
+    logger.add(f".log/process.log", format=f"[{gpu_id}] " + logger._core.handlers[0].format)
+    
     print(f"Logging to {file}")
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):

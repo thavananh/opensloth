@@ -90,9 +90,6 @@ class MmapGradientSync:
         if self.is_main:
             self._init_values()
 
-        # Ensure all GPUs see global_step=0 before proceeding (Step 0).
-        # self._barrier_wait_for_step0()
-
         logger.info(f"[Init GPU={self.gpu}] Memmap opened: total_size={total_size}, local_rank={self.local_rank}, gpus={self.gpus}, is_main={self.is_main}, starting global_step={self._get_current_step()}")
 
 
