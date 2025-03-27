@@ -111,7 +111,7 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
             # hf_train_args.gradient_accumulation_steps,
         ]
     )
-    dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
+    dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name
     dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
     return dataset_cache_path
 
@@ -213,8 +213,6 @@ def get_trainer(
                 logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
                 if time.time() - start_t > SLEEP_WAIT_DATASET_TIMEOUT:
                     # remove the lock and retry
-                    if counter > 5:
-                        raise TimeoutError(f"Lock not released: {lock}")
                     logger.warning(f"GPU {gpu_ith}: Lock not released, now removing the lock and retrying")
                     os.remove(lock)
                     return get_trainer(
@@ -232,8 +230,21 @@ def get_trainer(
             dataset = load_from_disk(dataset_cache_path)
             trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
     except Exception as e:
-        logger.error(f"GPU {gpu_ith}: Error while creating trainer: {e}")
-        raise e
+        logger.warning(f"GPU {gpu_ith}: Exception occurred: {e}")
+        if os.path.exists(lock):
+            os.remove(lock)
+        if counter >= 3:
+            raise e
+        return get_trainer(
+            tokenizer,
+            hyper_config,
+            hf_train_args,
+            gpu_ith,
+            model,
+            dataset_cache_path,
+            dataset_cache_exists,
+            counter=counter + 1,
+        )
     finally:
         if os.path.exists(lock):
             os.remove(lock)
