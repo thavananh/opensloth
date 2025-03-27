@@ -400,8 +400,9 @@ def patch_hf_trainer(trainer):
                     epoch_iterator, num_batches
                 )
                 from speedy_utils import identify
-                step_id = identify(str(batch_samples))
-                logger.info(f"GPU {HP_LOCAL_RANK} is processing step {update_step}| {step_id} | num_items_in_batch: {num_items_in_batch}")
+                num_items_in_batch /= float(HP_WOLRD_SIZE)
+                step_id = identify(str(batch_samples)) # to make sure all gpus are processing the same batch
+                logger.info(f"[HYPERSLOTH ] GPU {HP_LOCAL_RANK} is processing step {update_step}| {step_id} | num_items_in_batch: {num_items_in_batch}")
                 def select(inputs):
                     return {
                         'input_ids': inputs['input_ids'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
@@ -411,9 +412,11 @@ def patch_hf_trainer(trainer):
                     
                 for i, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
+                    
+                    
                     pad_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
-                    logger.info(
-                        f"GPU {HP_LOCAL_RANK} is processing batch {i} | num_items_in_batch: {num_items_in_batch} | "
+                    logger.debug(
+                        f"[HYPERSLOTH ]GPU {HP_LOCAL_RANK} is processing batch {i} | num_items_in_batch: {num_items_in_batch} | "
                         f"INPUT_SHAPE: {inputs['input_ids'].shape} | PAD_RATIO: {pad_ratio:0.2f}"
                     )
 
