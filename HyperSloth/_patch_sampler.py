@@ -19,11 +19,12 @@ def reorder_and_shuffle_data(
     dataset = dataset.select(sorted_ids)
 
     from fastcore.all import chunked
-
+    num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    per_fw_bz = 10
     chunked_lens = list(
         chunked(
             range(len(lens)),
-            per_device_train_batch_size,
+            per_fw_bz,
         )
     )
     random.Random(seed + epoch).shuffle(chunked_lens)  # the 8 continous value are similar

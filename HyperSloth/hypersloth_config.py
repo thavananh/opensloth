@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field
 from multiprocessing import cpu_count
 
 CPU_COUNT = 16
+
+
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
@@ -92,7 +94,7 @@ class HyperConfig(BaseModel):
 class TrainingArgsConfig(BaseModel):
     """Configuration for Hugging Face TrainingArguments."""
 
-    output_dir: str = "model_training_outputs/debug"
+    output_dir: str = "saves/loras/"
     per_device_train_batch_size: int = 8
     learning_rate: float = 2e-4
     gradient_accumulation_steps: int = 16
