@@ -7,7 +7,7 @@ hyper_config_model = HyperConfig(
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
-        num_samples=1000,
+        num_samples=100,
     ),
     training=TrainingConfig(
         gpus=range(4),
@@ -27,13 +27,13 @@ hyper_config_model = HyperConfig(
 training_config_model = TrainingArgsConfig(
     output_dir="/data-4090/anhvth5/hypersloth_output/loras/",
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=2,  # Meaing 8*4*4=128 examples per step
+    gradient_accumulation_steps=1,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,
     logging_steps=1,
     report_to="tensorboard",
-    num_train_epochs=1,
+    num_train_epochs=2,
     lr_scheduler_type="linear",
     warmup_steps=0,
     save_only_model=True,

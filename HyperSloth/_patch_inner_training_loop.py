@@ -498,7 +498,7 @@ def patch_inner_training_loop(trainer):
                     if do_sync_step:
                         # =====HYPER SLOTH >>>>
                         # This pre optim step is used to sync the gradients of the model by hypersloth
-                        # sync te loss
+                        # sync the loss
                         # wait until all item in NUM_ITEMS_IN_BATCH !=0
 
                         clock.update_task("2. forward")
