@@ -199,6 +199,7 @@ def get_trainer(
         dataset = load_from_disk(dataset_cache_path)
         logger.info(f"GPU {gpu_ith}: Dataset loaded, Now creating trainer")
         trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
+        logger.info(f"GPU {gpu_ith}: Trainer created")
     # ---------------------------
     # CASE 2: GPU 0 prepares dataset
     # ---------------------------
