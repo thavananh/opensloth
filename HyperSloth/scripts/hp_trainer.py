@@ -52,14 +52,13 @@ def _train(
     # from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
     trainer, model, tokenizer = setup_model_and_training(
-        gpu=gpu,
         hyper_config=hyper_config,
         hf_train_args=hf_train_args,
     )
 
     if len(hyper_config.training.gpus) > 0 and hyper_config.hps_version is not None:
         if hyper_config.hps_version == 2:
-            from HyperSloth.mmap_gradient_sync_v2 import MmapGradSyncCallback
+            from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
             logger.info("Using gradient sync callback v2")
         else:

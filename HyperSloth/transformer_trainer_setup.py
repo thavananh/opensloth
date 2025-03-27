@@ -10,12 +10,11 @@ from loguru import logger
 import filelock
 from speedy_utils import dump_json_or_pickle
 
-
+SLEEP_WAIT_DATASET_TIMEOUT = 1800
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
 
 
 def setup_model_and_training(
-    gpu: int,
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
 ):
@@ -230,7 +229,7 @@ def get_trainer(
         while os.path.exists(lock):
             time.sleep(1)
             logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
-            if time.time() - start_t > 5:
+            if time.time() - start_t > SLEEP_WAIT_DATASET_TIMEOUT:
                 # remove the lock and retry
                 if counter > 5:
                     raise TimeoutError(f"Lock not released: {lock}")
@@ -246,7 +245,6 @@ def get_trainer(
                     dataset_cache_exists,
                     counter=counter + 1,
                 )
-                raise TimeoutError(f"Lock not released: {lock}")
 
         logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
         dataset = load_from_disk(dataset_cache_path)
