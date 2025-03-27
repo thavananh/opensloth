@@ -195,8 +195,9 @@ def get_trainer(
         while os.path.exists(lock):
             time.sleep(1)
             logger.warning(f"GPU {gpu_ith}: Dataset file exist but lock file exists... waiting")
-        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
+        logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}, this might take a while")
         dataset = load_from_disk(dataset_cache_path)
+        logger.info(f"GPU {gpu_ith}: Dataset loaded, Now creating trainer")
         trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
     # ---------------------------
     # CASE 2: GPU 0 prepares dataset
