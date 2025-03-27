@@ -575,7 +575,7 @@ def patch_inner_training_loop(trainer):
                             os.getenv("HYPERSLOTH_LOCAL_RANK", "0") == "0"
                             and self.state.global_step > 1
                         ):
-                            clock.print_task_table(interval=10)
+                            clock.print_task_table(interval=60)
                     else:
                         self.control = self.callback_handler.on_substep_end(
                             args, self.state, self.control
