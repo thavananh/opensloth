@@ -46,6 +46,7 @@ def get_chat_dataset(
             )
     else:
         try:
+            from unsloth_zoo.dataset_utils import standardize_data_formats
             dataset = load_dataset(dataset_name_or_path, split=split)
             # Check if dataset is empty
             dataset[0]

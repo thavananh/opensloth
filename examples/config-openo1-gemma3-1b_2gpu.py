@@ -29,7 +29,7 @@ hyper_config_model = HyperConfig(
 training_config_model = TrainingArgsConfig(
     output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-1b-it/openo1",
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=16,  # Meaing 8*4*4=128 examples per step
+    gradient_accumulation_steps=2,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,

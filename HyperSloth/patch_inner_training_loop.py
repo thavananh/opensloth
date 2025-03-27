@@ -59,6 +59,7 @@ else:
 
 
 def patch_hf_trainer(trainer):
+    from speedy_utils import Clock
     # from transformers import Trainer
     HP_LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
     HP_WOLRD_SIZE = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
@@ -118,7 +119,6 @@ def patch_hf_trainer(trainer):
         ) = self.set_initial_training_values(
             args, train_dataloader, total_train_batch_size
         )
-
         num_train_tokens = None
         if self.args.include_tokens_per_second:
             num_train_tokens = self.num_tokens(
@@ -379,13 +379,12 @@ def patch_hf_trainer(trainer):
                 remainder = args.gradient_accumulation_steps
             update_step = -1
             total_updates = (
-                steps_in_epoch // (args.gradient_accumulation_steps * (HP_WOLRD_SIZE)) + 1
+                steps_in_epoch // (args.gradient_accumulation_steps ) + 1
             )
             if args.gradient_accumulation_steps == 1:
                 total_updates -= 1
                 
             
-            from speedy_utils import Clock
             clock = Clock()
 
             for _ in range(total_updates):
@@ -400,11 +399,18 @@ def patch_hf_trainer(trainer):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
-
-
+                from speedy_utils import identify
+                step_id = identify(str(batch_samples))
+                logger.info(f"GPU {HP_LOCAL_RANK} is processing step {update_step}| {step_id} | num_items_in_batch: {num_items_in_batch}")
+                def select(inputs):
+                    return {
+                        'input_ids': inputs['input_ids'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
+                        'attention_mask': inputs['attention_mask'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
+                        'labels': inputs['labels'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
+                    }
+                    
                 for i, inputs in enumerate(batch_samples):
-                    if i % HP_WOLRD_SIZE != HP_LOCAL_RANK:
-                        continue
+                    inputs = select(inputs)
                     pad_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
                     logger.info(
                         f"GPU {HP_LOCAL_RANK} is processing batch {i} | num_items_in_batch: {num_items_in_batch} | "

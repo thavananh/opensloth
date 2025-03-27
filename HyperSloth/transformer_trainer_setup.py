@@ -22,9 +22,13 @@ def setup_model_and_training(
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
     """
+    
+    # T
 
     gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    logger.info(f"Hypersloth will change the batch size to {hf_train_args.per_device_train_batch_size * num_gpus} so each gpu will have {hf_train_args.per_device_train_batch_size} samples")
+    hf_train_args.per_device_train_batch_size *= num_gpus # This is the total batch size loaded by dataloader, the trainer later will chose the correct batch size for each GPU
     assert hf_train_args.gradient_accumulation_steps % num_gpus == 0, (
         "Gradient accumulation steps must be divisible by the number of GPUs. "
         f"Got {hf_train_args.gradient_accumulation_steps} and {num_gpus
@@ -188,11 +192,12 @@ def get_trainer(
     # CASE 1: Cached dataset exists
     # ---------------------------
     if dataset_cache_exists:
+        while os.path.exists(lock):
+            time.sleep(1)
+            logger.warning(f"GPU {gpu_ith}: Dataset file exist but lock file exists... waiting")
         logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
         dataset = load_from_disk(dataset_cache_path)
         trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
-        return trainer
-
     # ---------------------------
     # CASE 2: GPU 0 prepares dataset
     # ---------------------------
@@ -209,29 +214,18 @@ def get_trainer(
                 ds_train, eval_dataset=ds_test, skip_prepare=False
             )
 
-            # Optionally patch trainer or handle "response-only" logic
-            _maybe_train_on_responses_only(trainer, hyper_config)
-
-            trainer.train_dataset = reorder_and_shuffle_data(
-                trainer.train_dataset,
-                per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
-                num_gpus=len(hyper_config.training.gpus),
-                gradient_accumulation_steps=hf_train_args.gradient_accumulation_steps,
-            )
             trainer.train_dataset.save_to_disk(dataset_cache_path)
+            logger.info(f"GPU {gpu_ith}: Dataset saved to {dataset_cache_path}")
 
         # Release the lock file
         if os.path.exists(lock):
             os.remove(lock)
-
-        return trainer
-
     # ---------------------------
     # CASE 3: Other GPUs wait for GPU 0
     # ---------------------------
     else:
         logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
-        while not os.path.exists(dataset_cache_path):
+        while not os.path.exists(dataset_cache_path) and not os.path.exists(lock):
             time.sleep(1)
 
         start_t = time.time()
@@ -244,7 +238,16 @@ def get_trainer(
         logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
         dataset = load_from_disk(dataset_cache_path)
         trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
-        return trainer
+
+    # Optionally patch trainer or handle "response-only" logic
+    _maybe_train_on_responses_only(trainer, hyper_config)
+
+    trainer.train_dataset = reorder_and_shuffle_data(
+        trainer.train_dataset,
+        per_device_train_batch_size=hf_train_args.per_device_train_batch_size,
+    )
+
+    return trainer
 
 
 def _maybe_train_on_responses_only(trainer, hyper_config):
@@ -271,8 +274,6 @@ from datasets import Dataset
 def reorder_and_shuffle_data(
     dataset: Dataset,
     per_device_train_batch_size: int,
-    num_gpus: int,
-    gradient_accumulation_steps,
 ):
     # dataset = dataset.shuffle(seed=42)
 
@@ -286,24 +287,20 @@ def reorder_and_shuffle_data(
     chunked_lens = list(
         chunked(
             range(len(lens)),
-            per_device_train_batch_size * gradient_accumulation_steps * num_gpus,
+            per_device_train_batch_size ,
         )
     )
     random.Random(42).shuffle(chunked_lens)  # the 8 continous value are similar
-
-    # flatten the list
-    ids = []
-
-    for i, chunk in enumerate(chunked_lens):
-        if i % 2 == 0:
-            ids.extend(chunk)
-        else:
-            ids.extend(chunk[::-1])
-
+    ids = [idx for chunk in chunked_lens for idx in chunk]
     dataset = dataset.select(ids)
     lens = [len(x["input_ids"]) for x in dataset]
     # write len to /tmp/lens to debu
-    with open("/tmp/lens.txt", "w") as f:
-        f.write(str(lens))
-
+    # with open("/tmp/lens.txt", "w") as f:
+        # f.write(str(lens))
+        
+        
+    for i in range(5):
+        bz = per_device_train_batch_size
+        lens_batch = lens[i * bz : (i + 1) * bz]
+        logger.info(f"Batch {i} lens: {lens_batch}")
     return dataset
