@@ -155,7 +155,7 @@ def serve(
             "--disable-log-requests",
             "--enable-prefix-caching",
         ]
-        if not_verbose:
+        if not_verbose or True:
             cmd += ["--uvicorn-log-level critical"]
 
         if served_model_name:
