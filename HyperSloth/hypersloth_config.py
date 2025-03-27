@@ -103,7 +103,6 @@ class TrainingArgsConfig(BaseModel):
     num_train_epochs: int = 1
     lr_scheduler_type: str = "linear"
     warmup_steps: int = 5
-    seed: int = 42
     save_total_limit: int = 2
     bf16: bool = True
     fp16: bool = False

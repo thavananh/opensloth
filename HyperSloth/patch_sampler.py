@@ -13,7 +13,6 @@ def reorder_and_shuffle_data(
     epoch=0,
     seed=42,
 ):
-    # dataset = dataset.shuffle(seed=42)
 
     lens = [len(x["input_ids"]) for x in dataset]
     sorted_ids = sorted(range(len(lens)), key=lambda k: lens[k])
@@ -27,7 +26,7 @@ def reorder_and_shuffle_data(
             per_device_train_batch_size,
         )
     )
-    random.Random(42 + epoch).shuffle(chunked_lens)  # the 8 continous value are similar
+    random.Random(seed + epoch).shuffle(chunked_lens)  # the 8 continous value are similar
     ids = [idx for chunk in chunked_lens for idx in chunk]
     dataset = dataset.select(ids)
     lens = [len(x["input_ids"]) for x in dataset]
@@ -45,7 +44,7 @@ def get_callback_shuffle_data():
 
     class ShuffleData(TrainerCallback):
         def on_epoch_begin(self, args, state, control, train_dataloader, **kwargs):
-            logger.warning("[on_epoch_begin] Shuffling data")
+            logger.info("[on_epoch_begin] Shuffling data")
             
             local_rank = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
             # Debug info for the main GPU
