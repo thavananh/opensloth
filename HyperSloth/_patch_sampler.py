@@ -20,11 +20,10 @@ def reorder_and_shuffle_data(
 
     from fastcore.all import chunked
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
-    per_fw_bz = 10
     chunked_lens = list(
         chunked(
             range(len(lens)),
-            per_fw_bz,
+            num_gpus,
         )
     )
     random.Random(seed + epoch).shuffle(chunked_lens)  # the 8 continous value are similar
