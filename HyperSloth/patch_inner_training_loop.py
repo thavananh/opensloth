@@ -399,26 +399,26 @@ def patch_hf_trainer(trainer):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
-                from speedy_utils import identify
-                num_items_in_batch = num_items_in_batch/float(HP_WOLRD_SIZE)
-                step_id = identify(str(batch_samples)) # to make sure all gpus are processing the same batch
-                logger.debug(f"[HYPERSLOTH ] GPU {HP_LOCAL_RANK} is processing step {update_step}| {step_id} | num_items_in_batch: {num_items_in_batch}")
+                # from speedy_utils import identify
+                # num_items_in_batch = num_items_in_batch/float(HP_WOLRD_SIZE)
+                # step_id = identify(str(batch_samples)) # to make sure all gpus are processing the same batch
+                
                 def select(inputs):
+                    max_gpu_need = min(HP_WOLRD_SIZE, len(inputs['input_ids']))
+                    local_rank = HP_LOCAL_RANK
+                    if HP_LOCAL_RANK >= max_gpu_need:
+                        logger.warning(f"HP_LOCAL_RANK {HP_LOCAL_RANK} for now bypass by selecting the first gpu which might cause the gradient to be wrong")
+                        local_rank = HP_LOCAL_RANK % max_gpu_need
+                        
                     return {
-                        'input_ids': inputs['input_ids'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
-                        'attention_mask': inputs['attention_mask'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
-                        'labels': inputs['labels'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
+                        'input_ids': inputs['input_ids'][local_rank::max_gpu_need],
+                        'attention_mask': inputs['attention_mask'][local_rank::max_gpu_need],
+                        'labels': inputs['labels'][local_rank::max_gpu_need],
                     }
                     
                 for i, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
-                    
-                    
-                    pad_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
-                    logger.debug(
-                        f"[HYPERSLOTH ]GPU {HP_LOCAL_RANK} is processing batch {i} | num_items_in_batch: {num_items_in_batch} | "
-                        f"INPUT_SHAPE: {inputs['input_ids'].shape} | PAD_RATIO: {pad_ratio:0.2f}"
-                    )
+
 
                     step += 1
 
