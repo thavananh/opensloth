@@ -41,25 +41,19 @@ def _get_run_dir(run_id):
     return grad_dir
 
 def _setup_logger(gpu_id):
-    lvl = os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO")
-    if os.getenv('USE_TMUX', '0') == '1':
-        lvl = 'DEBUG'
-        setup_logger(lvl, disable_grep='mmap_gradient_sync')
-    else:
-        setup_logger(lvl)
+    lvl = os.environ.get("HYPERSLOTH_LOG_LEVEL", "D")
+    setup_logger(lvl, disable_grep='mmap_gradient_sync')
     file = f".log/process_{gpu_id}.log"
     if os.path.exists(file):
         os.remove(file)
-    logger.add(file)
-    if gpu_id == 0:
-        os.remove(".log/process.log")
-    # add prefix [gpu_id] to log messages
-    logger.add(f".log/process.log", format=f"[{gpu_id}] " + logger._core.handlers[0].format)
+
     
     print(f"Logging to {file}")
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
     _setup_logger(f"{gpu}")
+    hf_train_args.output_dir = os.path.join(hf_train_args.output_dir, get_run_id(hyper_config, hf_train_args))
+    logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
     from HyperSloth.transformer_trainer_setup import setup_model_and_training  # avoid circular import
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
@@ -228,6 +222,7 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
 
     else:
         # Single GPU
+        assert not use_tmux, "Cannot use tmux with a single GPU"
         _train(
             gpu=gpus[0],
             hyper_config=hyper_config,

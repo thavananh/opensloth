@@ -400,7 +400,7 @@ def patch_hf_trainer(trainer):
                     epoch_iterator, num_batches
                 )
                 # from speedy_utils import identify
-                # num_items_in_batch = num_items_in_batch/float(HP_WOLRD_SIZE)
+                num_items_in_batch = num_items_in_batch/float(HP_WOLRD_SIZE)
                 # step_id = identify(str(batch_samples)) # to make sure all gpus are processing the same batch
                 
                 def select(inputs):

@@ -10,9 +10,7 @@ hyper_config_model = HyperConfig(
         num_samples=1000,
     ),
     training=TrainingConfig(
-        # gpus=[0,1,2,3,4,5,6,7],  # Change this to the number of GPUs you have
-        # gpus=[0,1],  # Change this to the number of GPUs you have
-        gpus=[0,1],  # Change this to the number of GPUs you have
+        gpus=[0,1,2,3,4,5,6,7],  # Change this to the number of GPUs you have
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
@@ -27,7 +25,7 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-1b-it/openo1",
+    output_dir="/data-4090/anhvth5/hypersloth_output/loras/",
     per_device_train_batch_size=1,
     gradient_accumulation_steps=2,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,
