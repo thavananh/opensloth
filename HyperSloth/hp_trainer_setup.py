@@ -91,7 +91,7 @@ def _create_trainer(
     )
 
     from HyperSloth._patch_inner_training_loop import patch_inner_training_loop
-    from HyperSloth.patch_sampler import patch_sampler
+    from HyperSloth._patch_sampler import patch_sampler
     if hyper_config.use_mmap_grad_sync:
         patch_inner_training_loop(trainer)
     patch_sampler(trainer)

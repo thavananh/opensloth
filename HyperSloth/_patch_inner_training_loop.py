@@ -8,39 +8,27 @@ from collections import defaultdict
 from typing import Dict, Optional
 
 import numpy as np
-from speedy_utils import load_json_or_pickle
 import torch
 import torch.nn.functional as F
 from fastcore.all import patch
 from loguru import logger
+from speedy_utils import load_json_or_pickle
 from torch import nn
 from torch.cuda import amp
-from transformers.trainer import (
-    TRAINER_STATE_NAME,
-    DebugOption,
-    DebugUnderflowOverflow,
-    DistributedType,
-    ExportableState,
-    OptimizerNames,
-    ParallelMode,
-    Trainer,
-    TrainerState,
-    TrainOutput,
-    _is_peft_model,
-    deepspeed_init,
-    deepspeed_load_checkpoint,
-    dist,
-    get_model_param_count,
-    is_accelerate_available,
-    is_sagemaker_mp_enabled,
-    is_torch_xla_available,
-    skip_first_batches,
-    speed_metrics,
-    tpu_spmd_dataloader,
-    unwrap_model,
-)
+from transformers.trainer import (TRAINER_STATE_NAME, DebugOption,
+                                  DebugUnderflowOverflow, DistributedType,
+                                  ExportableState, OptimizerNames,
+                                  ParallelMode, Trainer, TrainerState,
+                                  TrainOutput, _is_peft_model, deepspeed_init,
+                                  deepspeed_load_checkpoint, dist,
+                                  get_model_param_count,
+                                  is_accelerate_available,
+                                  is_sagemaker_mp_enabled,
+                                  is_torch_xla_available, skip_first_batches,
+                                  speed_metrics, tpu_spmd_dataloader,
+                                  unwrap_model)
 
-from HyperSloth._patch_log import patch_log
+from HyperSloth._patch_log import _patch_log
 
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm  # type: ignore
@@ -60,10 +48,12 @@ else:
 
 def patch_inner_training_loop(trainer):
     from speedy_utils import Clock
+
     # from transformers import Trainer
     HP_LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
     HP_WOLRD_SIZE = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
     Trainer = type(trainer)
+    _patch_log(Trainer)
     @patch
     def _inner_training_loop(
         self: Trainer,  # type: ignore
@@ -399,9 +389,6 @@ def patch_inner_training_loop(trainer):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
-                # from speedy_utils import identify
-                num_items_in_batch = num_items_in_batch/float(HP_WOLRD_SIZE)
-                # step_id = identify(str(batch_samples)) # to make sure all gpus are processing the same batch
                 
                 def select(inputs):
                     max_gpu_need = min(HP_WOLRD_SIZE, len(inputs['input_ids']))
@@ -718,4 +705,4 @@ def patch_inner_training_loop(trainer):
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
 
-    patch_log(Trainer)
+    

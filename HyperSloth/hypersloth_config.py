@@ -110,6 +110,7 @@ class TrainingArgsConfig(BaseModel):
     weight_decay: float = 0.01
     packing: bool = False
     save_only_model: bool = True
+    seed: int = 42
 
     class Config:
         """Pydantic configuration for DataConfig."""

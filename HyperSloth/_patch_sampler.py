@@ -38,33 +38,47 @@ def reorder_and_shuffle_data(
     return dataset
 
 
+def print_sequence_lengths(dataset: Dataset):
+    lens = [len(x["input_ids"]) for x in dataset]
+    logger.info(f"First 10 sequence lengths: {lens[:10]}")
+    logger.info(f"Last 10 sequence lengths: {lens[-10:]}")
+    logger.info(f"Max sequence length: {max(lens)}")
+    logger.info(f"Min sequence length: {min(lens)}")
+    logger.info(f"Mean sequence length: {sum(lens) / len(lens)}")
+
 # callback to shuffle data on_epoch_begin
-def get_callback_shuffle_data():
-    from transformers import TrainerCallback
+from transformers import TrainerCallback
+
+def get_callback_shuffle_data(trainer)->TrainerCallback:
+    "return a callback to shuffle data on_epoch_begin"
 
     class ShuffleData(TrainerCallback):
+        def __init__(self, trainer):
+            self.trainer:Trainer = trainer
         def on_epoch_begin(self, args, state, control, train_dataloader, **kwargs):
             logger.info("[on_epoch_begin] Shuffling data")
             
             local_rank = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
             # Debug info for the main GPU
-            train_dataloader.dataset = reorder_and_shuffle_data(
-                train_dataloader.dataset,
+            
+            self.trainer.train_dataset = reorder_and_shuffle_data(
+                self.trainer.train_dataset,
                 args.per_device_train_batch_size,
                 epoch=state.epoch,
                 seed=args.seed,
             )
+            print_sequence_lengths(self.trainer.train_dataset)
             
             if local_rank == 0:
                 try:
                     from ._debug_dataloader import _debug_dataloader
                     tok = kwargs['processing_class']
-                    _debug_dataloader(train_dataloader, tokenizer=tok)
+                    _debug_dataloader(self.trainer.get_train_dataloader(), tokenizer=tok)
                 except:
                     logger.exception("Failed to debug dataloader this is not a problem")
                     pass
 
-    return ShuffleData()
+    return ShuffleData(trainer)
 
 
 def patch_sampler(trainer:Trainer):
@@ -74,6 +88,6 @@ def patch_sampler(trainer:Trainer):
         """Get a sequential sampler for the training dataset."""
         return SequentialSampler(self.train_dataset)
 
-    trainer.add_callback(get_callback_shuffle_data())
+    trainer.add_callback(get_callback_shuffle_data(trainer))
 
     return trainer

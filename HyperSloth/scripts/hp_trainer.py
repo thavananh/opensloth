@@ -57,7 +57,7 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     hf_train_args.output_dir = os.path.join(hf_train_args.output_dir, get_run_id(hyper_config, hf_train_args))
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
-    from HyperSloth.transformer_trainer_setup import setup_model_and_training  # avoid circular import
+    from HyperSloth.hp_trainer_setup import setup_model_and_training  # avoid circular import
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
