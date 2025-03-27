@@ -56,7 +56,8 @@ def get_callback_shuffle_data(trainer) -> TrainerCallback:
             self.trainer: Trainer = trainer
 
         def on_epoch_begin(self, args, state, control, train_dataloader, **kwargs):
-
+            if state.epoch == 0:
+                return
             local_rank = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
             # Debug info for the main GPU
 

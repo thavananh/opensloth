@@ -27,7 +27,7 @@ def setup_model_and_training(
     gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
     if num_gpus!=1:
-        logger.info(f"Hypersloth will change the batch size to {hf_train_args.per_device_train_batch_size * num_gpus} so each gpu will have {hf_train_args.per_device_train_batch_size} samples")
+        logger.info(f"Hypersloth will change the batch size to {hf_train_args.per_device_train_batch_size * num_gpus} so each gpu will have {hf_train_args.per_device_train_batch_size} x {hf_train_args.gradient_accumulation_steps} per update step.")
         hf_train_args.per_device_train_batch_size *= num_gpus # This is the total batch size loaded by dataloader, the trainer later will chose the correct batch size for each GPU
     if not gpu_ith == 0:
         # disable reporting for all GPUs except the first one
