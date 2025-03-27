@@ -1,20 +1,21 @@
 import os
 import time
 
+import tabulate
 from fastcore.all import threaded
 from loguru import logger
-
+import warnings
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
+from speedy_utils import setup_logger
+from fastcore.all import call_parse
+
 
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
 
-# turn off user warnings
-# Too verbose -> turn off
-import warnings
+
 warnings.filterwarnings("ignore")
 os.environ["UNSLOTH_ENABLE_LOGGING"] = "0"
-
 
 
 def _get_run_dir(run_id):
@@ -25,8 +26,10 @@ def _get_run_dir(run_id):
 
 
 def _setup_loger(gpu_id):
-    # create a file logger for this specific gpu store at /dev/shm/hypersloth/log_gpu{gpu}.log
-    from loguru import logger
+    
+    setup_logger(os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO"))
+    
+    
 
     file = f".log/process_{gpu_id}.log"
     if os.path.exists(file):
@@ -41,13 +44,13 @@ def _train(
     hf_train_args: TrainingArgsConfig,
 ):
     _setup_loger(f"{gpu}")
-    import os
 
+    # Import inside function to avoid circular imports
+    from HyperSloth.transformer_trainer_setup import setup_model_and_training # noqa
 
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
-    from HyperSloth.transformer_trainer_setup import setup_model_and_training
 
     # from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
 
@@ -81,10 +84,8 @@ def _train(
         tokenizer.save_pretrained(hf_train_args.output_dir)
 
 
-# run_in_process = threaded(process=True)(_train)
 @threaded(process=True)
 def run_in_process(*args, **kwargs):
-    # for i in range(5):
     _train(*args, **kwargs)
 
 
@@ -99,23 +100,16 @@ def load_config_from_path(config_path: str):
     return config_module
 
 
-from fastcore.all import call_parse
 
 
 @call_parse
 def train(config_file: str, rank: int = None, world_size: int = None):
-    import os
+
 
     config_file = os.path.abspath(config_file)
     assert os.path.exists(config_file), f"Config file {config_file} not found"
 
     config_module = load_config_from_path(config_file)
-    import tabulate
-    from speedy_utils import setup_logger
-
-    setup_logger(os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO"))
-    # Get configurations from the module
-    from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 
     # Use Pydantic models directly or create from dictionaries if needed
     if hasattr(config_module, "hyper_config_model"):
