@@ -134,8 +134,8 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
         [
             hyper_config.data.model_dump(),
             hyper_config.fast_model_args.max_seq_length,
-            hf_train_args.per_device_train_batch_size,
-            hf_train_args.gradient_accumulation_steps,
+            # hf_train_args.per_device_train_batch_size,
+            # hf_train_args.gradient_accumulation_steps,
         ]
     )
     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name + ".cache"
@@ -309,7 +309,7 @@ def reorder_and_shuffle_data(
     # with open("/tmp/lens.txt", "w") as f:
         # f.write(str(lens))
         
-        
+    # Just to check the lens
     for i in range(5):
         bz = per_device_train_batch_size
         lens_batch = lens[i * bz : (i + 1) * bz]

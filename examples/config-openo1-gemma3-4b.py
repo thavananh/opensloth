@@ -3,13 +3,13 @@ from HyperSloth.hypersloth_config import *
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
     data=DataConfig(
-        dataset_name_or_path="data/OpenO1-SFT-1k",
+        dataset_name_or_path="data/OpenO1-SFT-5k",
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
     ),
     training=TrainingConfig(
-        gpus=range(7),  # Change this to the number of GPUs you have
+        gpus=range(8),  # Change this to the number of GPUs you have
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
@@ -26,7 +26,7 @@ hyper_config_model = HyperConfig(
 training_config_model = TrainingArgsConfig(
     output_dir="/data-4090/anhvth5/hypersloth_output/loras/gemma-3-4b-it/openo1",
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=1,
+    gradient_accumulation_steps=8,
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,
