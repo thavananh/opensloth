@@ -37,7 +37,7 @@ def get_run_id(hyper_config_model, training_config_model):
     run_id += "-use_mmap_grad_sync" if hyper_config_model.use_mmap_grad_sync else "-no_mmap_grad_sync"
     return run_id
 
-def _get_run_dir(run_id):
+def _get_hp_grad_dir(run_id):
     grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], f"run_{run_id}")
     os.makedirs(grad_dir, exist_ok=True)
     return grad_dir
@@ -157,17 +157,17 @@ tmux new-session -d -s {session_name} -n MAIN""")
 
 @call_parse
 def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: bool = False):
+    
+    _clean_grad_dir(rank, world_size, use_tmux)
+        
     config_file, hyper_config, training_config = initialize_training_config(config_file, use_tmux)
-
+    # clean grad_dir
     # CASE 1: Child process => single GPU
+    run_id = get_run_id(hyper_config, training_config)
+    os.environ["HYPERSLOTH_RUN_DIR"] = _get_hp_grad_dir(run_id)
+    # clearn dir
     if rank is not None and world_size is not None:
         logger.info(f"[CASE 1] Running on rank {rank} with world size {world_size}")
-        hyper_config.training.gpus = list(range(world_size))
-
-        # Prepare run_dir
-        run_id = get_run_id(hyper_config, training_config)
-        os.environ["HYPERSLOTH_RUN_DIR"] = _get_run_dir(run_id)
-
         _train(
             gpu=hyper_config.training.gpus[rank],
             hyper_config=hyper_config,
@@ -176,8 +176,6 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
         return
 
     # CASE 2: Top-level process => spawn multi-GPU or single GPU
-    run_id = get_run_id(hyper_config, training_config)
-    os.environ["HYPERSLOTH_RUN_DIR"] = _get_run_dir(run_id)
     gpus = hyper_config.training.gpus
 
     # If multiple GPUs:
@@ -186,11 +184,14 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
             # Build a tmux script that the user can run manually
             session_name = f"train_hp_{run_id}".replace("-", "_").replace(".", "_")
             script_path = "/tmp/hp_train.sh"
+            # clean grad_dir
+
             build_tmux_script(session_name, script_path, run_id, config_file, gpus)
 
             return
         else:
             # Launch via multi-processing (no tmux).
+            logger.info(f"[CASE 2] Running on {len(gpus)} GPUs")
             processes = []
             assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
             @threaded(process=True)
@@ -228,6 +229,11 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
             hyper_config=hyper_config,
             hf_train_args=training_config,
         )
+
+def _clean_grad_dir(rank, world_size, use_tmux):
+    if rank == 0 and world_size is not None or use_tmux:
+        if os.path.exists(os.environ["HYPERSLOTH_RUN_DIR"]):
+            os.remove(os.environ["HYPERSLOTH_RUN_DIR"])
 
 def initialize_training_config(config_file, use_tmux):
     # global USE_TMUX

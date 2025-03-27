@@ -24,7 +24,7 @@ def reorder_and_shuffle_data(
     chunked_lens = list(
         chunked(
             range(len(lens)),
-            num_gpus * per_device_train_batch_size,
+            num_gpus,
         )
     )
     random.Random(seed + epoch).shuffle(
