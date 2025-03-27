@@ -29,11 +29,6 @@ def setup_model_and_training(
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
     logger.info(f"Hypersloth will change the batch size to {hf_train_args.per_device_train_batch_size * num_gpus} so each gpu will have {hf_train_args.per_device_train_batch_size} samples")
     hf_train_args.per_device_train_batch_size *= num_gpus # This is the total batch size loaded by dataloader, the trainer later will chose the correct batch size for each GPU
-    assert hf_train_args.gradient_accumulation_steps % num_gpus == 0, (
-        "Gradient accumulation steps must be divisible by the number of GPUs. "
-        f"Got {hf_train_args.gradient_accumulation_steps} and {num_gpus
-        } GPUs."
-    )
     if not gpu_ith == 0:
         # disable reporting for all GPUs except the first one
         hf_train_args.report_to = "none"
@@ -157,6 +152,7 @@ def get_trainer(
     model,
     dataset_cache_path,
     dataset_cache_exists,
+    counter = 0
 ):
     """
     Returns an SFTTrainer instance. If a cached dataset exists, load from disk.
@@ -235,6 +231,21 @@ def get_trainer(
             time.sleep(1)
             logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
             if time.time() - start_t > 5:
+                # remove the lock and retry
+                if counter > 5:
+                    raise TimeoutError(f"Lock not released: {lock}")
+                logger.warning(f"GPU {gpu_ith}: Lock not released, now removing the lock and retrying")
+                os.remove(lock)
+                return get_trainer(
+                    tokenizer,
+                    hyper_config,
+                    hf_train_args,
+                    gpu_ith,
+                    model,
+                    dataset_cache_path,
+                    dataset_cache_exists,
+                    counter=counter + 1,
+                )
                 raise TimeoutError(f"Lock not released: {lock}")
 
         logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
