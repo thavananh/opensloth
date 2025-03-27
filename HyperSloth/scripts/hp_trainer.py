@@ -75,8 +75,8 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
                 gpu=gpu,
                 gpus=hyper_config.training.gpus,
             )
-        logger.info(f"Using gradient sync callback for GPU {gpu}")
-        trainer.add_callback(grad_sync_cb)
+            logger.info(f"Using gradient sync callback for GPU {gpu}")
+            trainer.add_callback(grad_sync_cb)
 
     trainer.train()
 
