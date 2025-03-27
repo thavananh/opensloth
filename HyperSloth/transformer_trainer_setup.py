@@ -117,10 +117,10 @@ def _create_trainer(
         dataset_cache_exists,
     )
 
-    from HyperSloth.patch_inner_training_loop import patch_hf_trainer
+    from HyperSloth._patch_inner_training_loop import patch_inner_training_loop
     from HyperSloth.patch_sampler import patch_sampler
-
-    patch_hf_trainer(trainer)
+    if hf_train_args.use_mmap_grad_sync:
+        patch_inner_training_loop(trainer)
     patch_sampler(trainer)
     return trainer
 
@@ -296,21 +296,19 @@ def reorder_and_shuffle_data(
 
     from fastcore.all import chunked
 
-    num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
     chunked_lens = list(
         chunked(
             range(len(lens)),
             per_device_train_batch_size ,
         )
     )
-    random.Random(42).shuffle(chunked_lens)  # the 8 continous value are similar
+    # random.Random(42).shuffle(chunked_lens)  # the 8 continous value are similar
     ids = [idx for chunk in chunked_lens for idx in chunk]
     dataset = dataset.select(ids)
     lens = [len(x["input_ids"]) for x in dataset]
-        
-    # Just to check the lens
-    for i in range(5):
-        bz = per_device_train_batch_size
-        lens_batch = lens[i * bz : (i + 1) * bz]
-        logger.info(f"Batch {i} lens: {lens_batch}")
+    
+    gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
+    with open(f"lengths_{gpu_ith}.txt", "w") as f:
+        # jsut write all
+        f.write("|".join([str(x) for x in lens]) + "\n")
     return dataset

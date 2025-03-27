@@ -81,7 +81,7 @@ class HyperConfig(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
-    hps_version: int = Field(default=2)
+    use_mmap_grad_sync: bool = Field(default=True)
 
     class Config:
         """Pydantic configuration for DataConfig."""

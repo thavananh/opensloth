@@ -28,11 +28,13 @@ def get_run_id(hyper_config_model, training_config_model):
     accum_steps = training_config_model.gradient_accumulation_steps
     epochs = training_config_model.num_train_epochs
     seed = training_config_model.seed
-
+    ngpu = len(hyper_config_model.training.gpus)
     run_id = (
-        f"{model_name}-{dataset}-loss-{loss_type}-lora{lora_r}a{lora_alpha}"
+        f"{model_name}-{dataset}-loss-{loss_type}-lora_r{lora_r}a{lora_alpha}-ngpu{ngpu}"
         f"-seq{seq_len}-lr{lr}-bs{batch_size}x{accum_steps}-e{epochs}-seed{seed}"
     )
+
+    run_id += "-use_mmap_grad_sync" if hyper_config_model.use_mmap_grad_sync else "-no_mmap_grad_sync"
     return run_id
 
 def _get_run_dir(run_id):
@@ -64,19 +66,15 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
         hf_train_args=hf_train_args,
     )
 
-    if len(hyper_config.training.gpus) > 0 and hyper_config.hps_version is not None:
+    if len(hyper_config.training.gpus) > 0 and hyper_config.use_mmap_grad_sync is not None:
         from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-        if hyper_config.hps_version == 2:
-            logger.info("Using gradient sync callback v2")
-        else:
-            logger.info("Using gradient sync callback v1")
-
-        grad_sync_cb = MmapGradSyncCallback(
-            model=trainer.model,
-            grad_dir=os.environ["HYPERSLOTH_RUN_DIR"],
-            gpu=gpu,
-            gpus=hyper_config.training.gpus,
-        )
+        if hyper_config.use_mmap_grad_sync:
+            grad_sync_cb = MmapGradSyncCallback(
+                model=trainer.model,
+                grad_dir=os.environ["HYPERSLOTH_RUN_DIR"],
+                gpu=gpu,
+                gpus=hyper_config.training.gpus,
+            )
         logger.info(f"Using gradient sync callback for GPU {gpu}")
         trainer.add_callback(grad_sync_cb)
 
@@ -121,8 +119,8 @@ def build_tmux_script(
     lines = []
     lines.append("#!/usr/bin/env bash")
     lines.append("")
-    lines.append("""# Create a new session with first GPU = 0
-tmux new-session -d -s train_hp -n MAIN""")
+    lines.append(f"""# Create a new session with first GPU = 0
+tmux new-session -d -s {session_name} -n MAIN""")
 
     # First GPU
     # check tmux session command, if yes, ask user enter "y" to kill the session
@@ -189,7 +187,7 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
     if len(gpus) > 1:
         if os.environ.get("USE_TMUX", "0") == "1" or use_tmux:
             # Build a tmux script that the user can run manually
-            session_name = f"train_hp"
+            session_name = f"train_hp_{run_id}".replace("-", "_").replace(".", "_")
             script_path = "/tmp/hp_train.sh"
             build_tmux_script(session_name, script_path, run_id, config_file, gpus)
 

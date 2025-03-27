@@ -58,7 +58,7 @@ else:
 
 
 
-def patch_hf_trainer(trainer):
+def patch_inner_training_loop(trainer):
     from speedy_utils import Clock
     # from transformers import Trainer
     HP_LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
