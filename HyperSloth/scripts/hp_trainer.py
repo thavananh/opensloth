@@ -97,7 +97,7 @@ def load_config_from_path(config_path: str):
     return config_module
 
 # We'll just detect if the user wants a tmux script:
-USE_TMUX = os.getenv("USE_TMUX", "0") == "1"
+
 
 def build_tmux_script(
     session_name: str,
@@ -156,50 +156,18 @@ echo =======================================""")
     if is_session_exists == 0:
         logger.warning(f"Session {session_name} exists, please kill it before running the script")
     else:
-        logger.info(f"Script generated at {script_path}... now i will run it")
         os.system(f"bash {script_path}")
+        logger.info(f"Script started with session name {session_name}")
         
         
 
 @call_parse
 def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: bool = False):
-    global USE_TMUX
-    USE_TMUX = USE_TMUX or use_tmux
-    """Train entry-point. If rank/world_size are provided, we assume this is 
-    a child process that trains on a single GPU. Otherwise, 
-    we spawn multi-gpu runs either by generating a tmux script or by multi-process.
-    """
-    config_file = os.path.abspath(config_file)
-    assert os.path.exists(config_file), f"Config file {config_file} not found"
-
-    config_module = load_config_from_path(config_file)
-
-    # Retrieve configs from the module
-    if hasattr(config_module, "hyper_config_model"):
-        hyper_config = config_module.hyper_config_model
-    elif hasattr(config_module, "hyper_config"):
-        hyper_config = HyperConfig(**config_module.hyper_config)
-    else:
-        hyper_config = HyperConfig()
-
-    if hasattr(config_module, "training_config_model"):
-        training_config = config_module.training_config_model
-    elif hasattr(config_module, "training_config"):
-        training_config = TrainingArgsConfig(**config_module.training_config)
-    else:
-        raise ValueError("No training configuration found")
-
-    # Display combined config
-    combined_config = {**hyper_config.model_dump(), **training_config.model_dump()}
-    config_table = tabulate.tabulate(combined_config.items(), headers=["Key", "Value"])
-    logger.info("\n" + config_table)
-
-    # # of GPUs
-    os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
+    config_file, hyper_config, training_config = initialize_training_config(config_file, use_tmux)
 
     # CASE 1: Child process => single GPU
     if rank is not None and world_size is not None:
-        logger.warning(f"Running on rank {rank} with world size {world_size}")
+        logger.info(f"[CASE 1] Running on rank {rank} with world size {world_size}")
         hyper_config.training.gpus = list(range(world_size))
 
         # Prepare run_dir
@@ -220,16 +188,12 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
 
     # If multiple GPUs:
     if len(gpus) > 1:
-        if USE_TMUX:
+        if os.environ.get("USE_TMUX", "0") == "1" or use_tmux:
             # Build a tmux script that the user can run manually
             session_name = f"train_hp"
             script_path = "/tmp/hp_train.sh"
             build_tmux_script(session_name, script_path, run_id, config_file, gpus)
 
-            logger.info(
-                f"[tmux script generated] => {script_path}\n"
-                f"Run:\n\n    bash {script_path}\n\nto start the tmux session."
-            )
             return
         else:
             # Launch via multi-processing (no tmux).
@@ -264,3 +228,39 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
             hyper_config=hyper_config,
             hf_train_args=training_config,
         )
+
+def initialize_training_config(config_file, use_tmux):
+    # global USE_TMUX
+    # USE_TMUX = USE_TMUX or use_tmux
+    """Train entry-point. If rank/world_size are provided, we assume this is 
+    a child process that trains on a single GPU. Otherwise, 
+    we spawn multi-gpu runs either by generating a tmux script or by multi-process.
+    """
+    config_file = os.path.abspath(config_file)
+    assert os.path.exists(config_file), f"Config file {config_file} not found"
+
+    config_module = load_config_from_path(config_file)
+
+    # Retrieve configs from the module
+    if hasattr(config_module, "hyper_config_model"):
+        hyper_config = config_module.hyper_config_model
+    elif hasattr(config_module, "hyper_config"):
+        hyper_config = HyperConfig(**config_module.hyper_config)
+    else:
+        hyper_config = HyperConfig()
+
+    if hasattr(config_module, "training_config_model"):
+        training_config = config_module.training_config_model
+    elif hasattr(config_module, "training_config"):
+        training_config = TrainingArgsConfig(**config_module.training_config)
+    else:
+        raise ValueError("No training configuration found")
+
+    # Display combined config
+    combined_config = {**hyper_config.model_dump(), **training_config.model_dump()}
+    config_table = tabulate.tabulate(combined_config.items(), headers=["Key", "Value"])
+    logger.info("\n" + config_table)
+
+    # # of GPUs
+    os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
+    return config_file,hyper_config,training_config
