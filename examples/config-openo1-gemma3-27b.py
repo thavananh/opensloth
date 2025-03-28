@@ -13,7 +13,7 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/gemma-3-27b-it-bnb-4bit",
+        model_name="unsloth/gemma-3-4b-it-bnb-4bit",
         max_seq_length=6_000,
     ),
     lora_args=LoraArgs(
