@@ -36,10 +36,8 @@ training_config = dict(
     num_train_epochs=1,
     lr_scheduler_type="linear",
     warmup_steps=5,
-    seed=42,
     save_total_limit=2,
-    bf16=True,
-    fp16=False,
+
     optim="adamw_8bit",
     weight_decay=0.01,
 )

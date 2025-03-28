@@ -10,7 +10,7 @@ hyper_config_model = HyperConfig(
         num_samples=100,
     ),
     training=TrainingConfig(
-        gpus=range(1),
+        gpus=range(4),
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
@@ -25,9 +25,9 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="./saves/loras/",
-    per_device_train_batch_size=2,
-    gradient_accumulation_steps=2,  # Meaing 8*4*4=128 examples per step
+    output_dir="saves/loras/",
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=1,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
     eval_steps=100000,

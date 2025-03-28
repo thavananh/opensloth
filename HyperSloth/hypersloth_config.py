@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field
 from multiprocessing import cpu_count
 
 CPU_COUNT = 16
+
+
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
@@ -81,7 +83,7 @@ class HyperConfig(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
-    hps_version: int = Field(default=2)
+    use_mmap_grad_sync: bool = Field(default=True)
 
     class Config:
         """Pydantic configuration for DataConfig."""
@@ -92,7 +94,7 @@ class HyperConfig(BaseModel):
 class TrainingArgsConfig(BaseModel):
     """Configuration for Hugging Face TrainingArguments."""
 
-    output_dir: str = "model_training_outputs/debug"
+    output_dir: str = "saves/loras/"
     per_device_train_batch_size: int = 8
     learning_rate: float = 2e-4
     gradient_accumulation_steps: int = 16
@@ -103,7 +105,6 @@ class TrainingArgsConfig(BaseModel):
     num_train_epochs: int = 1
     lr_scheduler_type: str = "linear"
     warmup_steps: int = 5
-    seed: int = 42
     save_total_limit: int = 2
     bf16: bool = True
     fp16: bool = False
@@ -111,6 +112,7 @@ class TrainingArgsConfig(BaseModel):
     weight_decay: float = 0.01
     packing: bool = False
     save_only_model: bool = True
+    seed: int = 42
 
     class Config:
         """Pydantic configuration for DataConfig."""

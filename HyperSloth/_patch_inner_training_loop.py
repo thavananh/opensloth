@@ -8,39 +8,27 @@ from collections import defaultdict
 from typing import Dict, Optional
 
 import numpy as np
-from speedy_utils import load_json_or_pickle
 import torch
 import torch.nn.functional as F
 from fastcore.all import patch
 from loguru import logger
+from speedy_utils import load_json_or_pickle
 from torch import nn
 from torch.cuda import amp
-from transformers.trainer import (
-    TRAINER_STATE_NAME,
-    DebugOption,
-    DebugUnderflowOverflow,
-    DistributedType,
-    ExportableState,
-    OptimizerNames,
-    ParallelMode,
-    Trainer,
-    TrainerState,
-    TrainOutput,
-    _is_peft_model,
-    deepspeed_init,
-    deepspeed_load_checkpoint,
-    dist,
-    get_model_param_count,
-    is_accelerate_available,
-    is_sagemaker_mp_enabled,
-    is_torch_xla_available,
-    skip_first_batches,
-    speed_metrics,
-    tpu_spmd_dataloader,
-    unwrap_model,
-)
+from transformers.trainer import (TRAINER_STATE_NAME, DebugOption,
+                                  DebugUnderflowOverflow, DistributedType,
+                                  ExportableState, OptimizerNames,
+                                  ParallelMode, Trainer, TrainerState,
+                                  TrainOutput, _is_peft_model, deepspeed_init,
+                                  deepspeed_load_checkpoint, dist,
+                                  get_model_param_count,
+                                  is_accelerate_available,
+                                  is_sagemaker_mp_enabled,
+                                  is_torch_xla_available, skip_first_batches,
+                                  speed_metrics, tpu_spmd_dataloader,
+                                  unwrap_model)
 
-from HyperSloth._patch_log import patch_log
+from HyperSloth._patch_log import _patch_log
 
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm  # type: ignore
@@ -58,12 +46,14 @@ else:
 
 
 
-def patch_hf_trainer(trainer):
+def patch_inner_training_loop(trainer):
     from speedy_utils import Clock
+
     # from transformers import Trainer
     HP_LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
     HP_WOLRD_SIZE = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
     Trainer = type(trainer)
+    _patch_log(Trainer)
     @patch
     def _inner_training_loop(
         self: Trainer,  # type: ignore
@@ -386,7 +376,8 @@ def patch_hf_trainer(trainer):
                 
             
             clock = Clock()
-
+            from ._patch_sampler import print_sequence_lengths
+            print_sequence_lengths(self.train_dataset)
             for _ in range(total_updates):
                 update_step += 1
                 num_batches = (
@@ -399,28 +390,23 @@ def patch_hf_trainer(trainer):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
-                from speedy_utils import identify
-                num_items_in_batch = num_items_in_batch/float(HP_WOLRD_SIZE)
-                step_id = identify(str(batch_samples)) # to make sure all gpus are processing the same batch
-                logger.debug(f"[HYPERSLOTH ] GPU {HP_LOCAL_RANK} is processing step {update_step}| {step_id} | num_items_in_batch: {num_items_in_batch}")
+                
                 def select(inputs):
+                    max_gpu_need = min(HP_WOLRD_SIZE, len(inputs['input_ids']))
+                    local_rank = HP_LOCAL_RANK
+                    if HP_LOCAL_RANK >= max_gpu_need:
+                        logger.warning(f"HP_LOCAL_RANK {HP_LOCAL_RANK} for now bypass by selecting the first gpu which might cause the gradient to be wrong")
+                        local_rank = HP_LOCAL_RANK % max_gpu_need
                     return {
-                        'input_ids': inputs['input_ids'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
-                        'attention_mask': inputs['attention_mask'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
-                        'labels': inputs['labels'][HP_LOCAL_RANK::HP_WOLRD_SIZE],
+                        'input_ids': inputs['input_ids'][local_rank::max_gpu_need],
+                        'attention_mask': inputs['attention_mask'][local_rank::max_gpu_need],
+                        'labels': inputs['labels'][local_rank::max_gpu_need],
                     }
                     
                 for i, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
-                    
-                    
-                    pad_ratio = inputs['attention_mask'].sum() / inputs['attention_mask'].numel()
-                    logger.debug(
-                        f"[HYPERSLOTH ]GPU {HP_LOCAL_RANK} is processing batch {i} | num_items_in_batch: {num_items_in_batch} | "
-                        f"INPUT_SHAPE: {inputs['input_ids'].shape} | PAD_RATIO: {pad_ratio:0.2f}"
-                    )
-
                     step += 1
+                    logger.debug(f"Input shape: {inputs['input_ids'].shape}, Attention masked ratio: {inputs['attention_mask'].sum().item() / inputs['attention_mask'].numel()}")
 
                     do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == steps_in_epoch
                     # Since we perform prefetching, we need to manually set sync_gradients
@@ -511,7 +497,7 @@ def patch_hf_trainer(trainer):
                     if do_sync_step:
                         # =====HYPER SLOTH >>>>
                         # This pre optim step is used to sync the gradients of the model by hypersloth
-                        # sync te loss
+                        # sync the loss
                         # wait until all item in NUM_ITEMS_IN_BATCH !=0
 
                         clock.update_task("2. forward")
@@ -588,7 +574,7 @@ def patch_hf_trainer(trainer):
                             os.getenv("HYPERSLOTH_LOCAL_RANK", "0") == "0"
                             and self.state.global_step > 1
                         ):
-                            clock.print_task_table(interval=10)
+                            clock.print_task_table(interval=60)
                     else:
                         self.control = self.callback_handler.on_substep_end(
                             args, self.state, self.control
@@ -718,4 +704,4 @@ def patch_hf_trainer(trainer):
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
 
-    patch_log(Trainer)
+    

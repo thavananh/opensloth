@@ -35,11 +35,9 @@ training_config_model = TrainingArgsConfig(
     num_train_epochs=1,
     lr_scheduler_type="linear",
     warmup_steps=100,
-    seed=42,
     save_total_limit=2,
     save_steps=200,
-    bf16=True,
-    fp16=False,
+
     optim="adamw_8bit",
     weight_decay=0.01,
     packing=False,
