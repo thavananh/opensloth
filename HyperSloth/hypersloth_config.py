@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from multiprocessing import cpu_count
 
 CPU_COUNT = 16
-
+from transformers import TrainingArguments
 
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
@@ -113,6 +113,7 @@ class TrainingArgsConfig(BaseModel):
     packing: bool = False
     save_only_model: bool = True
     seed: int = 42
+    save_only_model: bool = True
 
     class Config:
         """Pydantic configuration for DataConfig."""

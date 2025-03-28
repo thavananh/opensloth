@@ -21,7 +21,7 @@ def get_run_id(hyper_config_model, training_config_model):
     Generate a descriptive and concise run ID based on the hyperparameters and training configuration.
     """
     model_name = hyper_config_model.fast_model_args.model_name.split("/")[-1]
-    dataset = hyper_config_model.data.dataset_name_or_path.split("/")[-1]
+    dataset = hyper_config_model.data.dataset_name_or_path.split("/")[-1].split('.')[0]
     loss_type = hyper_config_model.training.loss_type
     lora_r = hyper_config_model.lora_args.r
     lora_alpha = hyper_config_model.lora_args.lora_alpha
@@ -29,16 +29,21 @@ def get_run_id(hyper_config_model, training_config_model):
     lr = training_config_model.learning_rate
     batch_size = training_config_model.per_device_train_batch_size
     accum_steps = training_config_model.gradient_accumulation_steps
+    ngpu = len(hyper_config_model.training.gpus)
     epochs = training_config_model.num_train_epochs
     seed = training_config_model.seed
-    ngpu = len(hyper_config_model.training.gpus)
     mmap_sync = "mmap" if hyper_config_model.use_mmap_grad_sync else "no-mmap"
+    
+    # Calculate global batch size
+    global_bz = batch_size * accum_steps * ngpu
 
     run_id = (
         f"{model_name}_{dataset}_loss-{loss_type}_lora-r{lora_r}-a{lora_alpha}_"
-        f"gpus-{ngpu}_seq-{seq_len}_lr-{lr}_bs-{batch_size}x{accum_steps}_"
+        f"seq-{seq_len}_lr-{lr}_global_bz-{global_bz}_"
         f"epochs-{epochs}_seed-{seed}_{mmap_sync}"
     )
+    # normalize remove special characters like .
+    run_id = run_id.replace(".", "_").replace("-", "_")
 
     return run_id
 
@@ -120,9 +125,11 @@ def build_tmux_script(
     """
     lines = []
     lines.append("#!/usr/bin/env bash")
-    lines.append("")
+    # remove grad_dir
+    lines.append(f"rm -rf {_get_hp_grad_dir(run_id)}")
     lines.append(f"""# Create a new session with first GPU = 0
 tmux new-session -d -s {session_name} -n MAIN""")
+    
 
     # First GPU
     # check tmux session command, if yes, ask user enter "y" to kill the session
@@ -169,7 +176,7 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
     # CASE 1: Child process => single GPU
     run_id = get_run_id(hyper_config, training_config)
     os.environ["HYPERSLOTH_RUN_DIR"] = _get_hp_grad_dir(run_id)
-    _clean_grad_dir(rank, world_size, use_tmux)
+    # _clean_grad_dir(rank, world_size, use_tmux)
     # clearn dir
     if rank is not None and world_size is not None:
         logger.info(f"[CASE 1] Running on rank {rank} with world size {world_size}")
@@ -235,12 +242,12 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
             hf_train_args=training_config,
         )
 
-def _clean_grad_dir(rank, world_size, use_tmux):
-    if rank == 0 and world_size is not None or use_tmux:
-        if os.path.exists(os.environ["HYPERSLOTH_RUN_DIR"]):
-            import shutil
-            shutil.rmtree(os.environ["HYPERSLOTH_RUN_DIR"])
-            logger.info(f"Cleaned {os.environ['HYPERSLOTH_RUN_DIR']}")
+# def _clean_grad_dir(rank, world_size, use_tmux):
+#     if rank == 0 and world_size is not None or use_tmux:
+#         if os.path.exists(os.environ["HYPERSLOTH_RUN_DIR"]):
+#             import shutil
+#             shutil.rmtree(os.environ["HYPERSLOTH_RUN_DIR"])
+#             logger.info(f"Cleaned {os.environ['HYPERSLOTH_RUN_DIR']}")
 
 def initialize_training_config(config_file, use_tmux):
     # global USE_TMUX

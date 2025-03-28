@@ -3,7 +3,7 @@ from HyperSloth.hypersloth_config import *
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
     data=DataConfig(
-        dataset_name_or_path="data/OpenO1-SFT",
+        dataset_name_or_path="/data-4090/anhvth5/sharegpt/evaluate_translation.json",
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",
@@ -13,8 +13,8 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/gemma-3-4b-it-bnb-4bit",
-        max_seq_length=6_000,
+        model_name="unsloth/gemma-3-27b-it-bnb-4bit",
+        max_seq_length=2_000,
     ),
     lora_args=LoraArgs(
         r=16,
@@ -25,7 +25,7 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="./saves/loras/",
-    per_device_train_batch_size=1,
+    per_device_train_batch_size=2,
     gradient_accumulation_steps=8,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,
     per_device_eval_batch_size=4,
