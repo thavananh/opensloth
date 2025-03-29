@@ -37,8 +37,6 @@ def setup_model_and_training(
     # Unsloth uses monkey patching thus it might have race conditions so we need to try until it works
     model, tokenizer = _initialize_model_and_tokenizer(hyper_config)
     trainer = _create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
-
-
     return trainer, model, tokenizer
 
 
@@ -57,12 +55,17 @@ def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
         compiler.UNSLOTH_COMPILE_LOCATION, gpu_ith
     )
     logger.info(f"Using compiler location: {compiler.UNSLOTH_COMPILE_LOCATION}")
-
+    if hyper_config.pretrained_lora:
+        logger.info(
+            f"Loading model from {hyper_config.pretrained_lora} with LoRA weights"
+        )
+        hyper_config.fast_model_args.model_name = hyper_config.pretrained_lora
     model, tokenizer = FastModel.from_pretrained(
         **hyper_config.fast_model_args.model_dump()
     )
-    if not hyper_config.fast_model_args.full_finetuning:
+    if not hyper_config.fast_model_args.full_finetuning and not hyper_config.pretrained_lora:
         model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
+
     return model, tokenizer
 
 
@@ -118,8 +121,8 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
 
 def get_trainer(
     tokenizer,
-    hyper_config,
-    hf_train_args,
+    hyper_config: HyperConfig,
+    hf_train_args: TrainingArgsConfig,
     gpu_ith,
     model,
     dataset_cache_path,
@@ -192,7 +195,8 @@ def get_trainer(
                 trainer = _create_trainer(
                     ds_train, eval_dataset=ds_test, skip_prepare=False
                 )
-
+                logger.info(f'Maybe train on responses only')
+                
                 trainer.train_dataset.save_to_disk(dataset_cache_path)
                 logger.info(f"GPU {gpu_ith}: Dataset saved to {dataset_cache_path}")
 
@@ -266,6 +270,7 @@ def _maybe_train_on_responses_only(trainer, hyper_config):
             trainer,
             instruction_part=instruction_part,
             response_part=response_part,
+            num_proc=64,
         )
     return trainer
 

@@ -2,8 +2,7 @@ from typing import List, Literal, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
 from multiprocessing import cpu_count
 
-CPU_COUNT = 16
-from transformers import TrainingArguments
+CPU_COUNT = min(64, cpu_count() - 2)
 
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
@@ -44,7 +43,7 @@ class FastModelArgs(BaseModel):
     """Configuration for Unsloth's FastModel initialization."""
 
     model_name: str = "unsloth/gemma-3-4b-it"
-    max_seq_length: int = 2048
+    max_seq_length: int = None
     load_in_4bit: bool = True
     load_in_8bit: bool = False
     full_finetuning: bool = False
@@ -84,6 +83,10 @@ class HyperConfig(BaseModel):
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
     use_mmap_grad_sync: bool = Field(default=True)
+    pretrained_lora: Optional[str] = Field(
+        default=None, description="Path to pretrained LoRA model"
+    )
+    
 
     class Config:
         """Pydantic configuration for DataConfig."""
