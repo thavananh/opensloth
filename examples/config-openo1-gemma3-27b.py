@@ -3,7 +3,7 @@ from HyperSloth.hypersloth_config import *
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
     data=DataConfig(
-        dataset_name_or_path="'/shared-mnt/data/sharegpt/teacher_messages_deepseek.json'",
+        dataset_name_or_path="/shared-mnt/data/sharegpt/teacher_messages_deepseek.json",
         group_by_length=True,
         instruction_part="<start_of_turn>user\n",
         response_part="<start_of_turn>model\n",

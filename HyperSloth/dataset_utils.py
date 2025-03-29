@@ -8,6 +8,7 @@ from datasets import load_dataset
 from typing import Any
 
 from datasets import load_dataset
+from speedy_utils import load_by_ext
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -32,7 +33,7 @@ def get_chat_dataset(
     # Load dataset based on input type
     if os.path.exists(dataset_name_or_path):
         if dataset_name_or_path.endswith(".json"):
-            dataset = Dataset.from_json(dataset_name_or_path)
+            dataset = Dataset.from_list(load_by_ext(dataset_name_or_path))
         elif dataset_name_or_path.endswith(".csv"):
             dataset = Dataset.from_csv(dataset_name_or_path)
         # is folder
