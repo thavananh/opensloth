@@ -38,17 +38,17 @@ def get_run_id(hyper_config_model, training_config_model):
     global_bz = batch_size * accum_steps * ngpu
 
     run_id = (
-        f"{model_name}_{dataset}_loss-{loss_type}_lora-r{lora_r}-a{lora_alpha}_"
+        f"loss-{loss_type}_lora-r{lora_r}-a{lora_alpha}_"
         f"seq-{seq_len}_lr-{lr}_global_bz-{global_bz}_"
         f"epochs-{epochs}_seed-{seed}_{mmap_sync}"
     )
     # normalize remove special characters like .
     run_id = run_id.replace(".", "_").replace("-", "_")
 
-    return run_id
+    return f'{model_name}_{dataset}', run_id
 
-def _get_hp_grad_dir(run_id):
-    grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], f"run_{run_id}")
+def _get_hp_grad_dir(model_name_dataset, run_id):
+    grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], model_name_dataset,f"run_{run_id}")
     os.makedirs(grad_dir, exist_ok=True)
     return grad_dir
 
@@ -64,7 +64,7 @@ def _setup_logger(gpu_id):
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
     _setup_logger(f"{gpu}")
-    hf_train_args.output_dir = os.path.join(hf_train_args.output_dir, get_run_id(hyper_config, hf_train_args))
+    hf_train_args.output_dir = os.path.join(hf_train_args.output_dir, *get_run_id(hyper_config, hf_train_args))
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
     from HyperSloth.hp_trainer_setup import setup_model_and_training  # avoid circular import
@@ -111,6 +111,7 @@ def load_config_from_path(config_path: str):
 def build_tmux_script(
     session_name: str,
     script_path: str,
+    model_name_dataset: str,
     run_id: str,
     config_file: str,
     gpus: list
@@ -126,7 +127,7 @@ def build_tmux_script(
     lines = []
     lines.append("#!/usr/bin/env bash")
     # remove grad_dir
-    lines.append(f"rm -rf {_get_hp_grad_dir(run_id)}")
+    lines.append(f"rm -rf {_get_hp_grad_dir(model_name_dataset, run_id)}")
     lines.append(f"""# Create a new session with first GPU = 0
 tmux new-session -d -s {session_name} -n MAIN""")
     
@@ -171,11 +172,11 @@ tmux new-session -d -s {session_name} -n MAIN""")
 def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: bool = False):
     
         
-    config_file, hyper_config, training_config = initialize_training_config(config_file, use_tmux)
+    config_file, hyper_config, training_config = initialize_training_config(config_file)
     # clean grad_dir
     # CASE 1: Child process => single GPU
-    run_id = get_run_id(hyper_config, training_config)
-    os.environ["HYPERSLOTH_RUN_DIR"] = _get_hp_grad_dir(run_id)
+    model_name_dataset, run_id = get_run_id(hyper_config, training_config)
+    os.environ["HYPERSLOTH_RUN_DIR"] = _get_hp_grad_dir(model_name_dataset, run_id)
     # _clean_grad_dir(rank, world_size, use_tmux)
     # clearn dir
     if rank is not None and world_size is not None:
@@ -194,12 +195,9 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
     if len(gpus) > 1:
         if os.environ.get("USE_TMUX", "0") == "1" or use_tmux:
             # Build a tmux script that the user can run manually
-            session_name = f"train_hp_{run_id}".replace("-", "_").replace(".", "_")
+            session_name = f"train_hp_{model_name_dataset}_{run_id}"
             script_path = "/tmp/hp_train.sh"
-            # clean grad_dir
-
-            build_tmux_script(session_name, script_path, run_id, config_file, gpus)
-
+            build_tmux_script(session_name, script_path, model_name_dataset, run_id, config_file, gpus)
             return
         else:
             # Launch via multi-processing (no tmux).
@@ -242,14 +240,7 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
             hf_train_args=training_config,
         )
 
-# def _clean_grad_dir(rank, world_size, use_tmux):
-#     if rank == 0 and world_size is not None or use_tmux:
-#         if os.path.exists(os.environ["HYPERSLOTH_RUN_DIR"]):
-#             import shutil
-#             shutil.rmtree(os.environ["HYPERSLOTH_RUN_DIR"])
-#             logger.info(f"Cleaned {os.environ['HYPERSLOTH_RUN_DIR']}")
-
-def initialize_training_config(config_file, use_tmux):
+def initialize_training_config(config_file):
     # global USE_TMUX
     # USE_TMUX = USE_TMUX or use_tmux
     """Train entry-point. If rank/world_size are provided, we assume this is 
