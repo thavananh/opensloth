@@ -3,15 +3,15 @@ from HyperSloth.hypersloth_config import *
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
     data=DataConfig(
-        dataset_name_or_path="/shared-mnt/data/share_gpt/translation_o1/12k_without_target.json",
+        dataset_name_or_path="/shared-mnt/data/share_gpt/translation_o1_12k.json",
         group_by_length=True,
         instruction_part="<|im_start|>user\n",
         response_part="<|im_start|>assistant\n",
-        # num_samples=1000,
     ),
     training=TrainingConfig(
         gpus=range(8),
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
+        chat_template='Qwen/Qwen2.5-32B-Instruct'
     ),
     fast_model_args=FastModelArgs(
         model_name="unsloth/QwQ-32B-bnb-4bit",

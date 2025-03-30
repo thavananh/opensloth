@@ -32,7 +32,10 @@ class TrainingConfig(BaseModel):
     packing: bool = Field(
         default=False, description="Whether to use packing for training data"
     )
-
+    chat_template: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Chat template for formatting input data",
+    )
     class Config:
         """Pydantic configuration for DataConfig."""
 
