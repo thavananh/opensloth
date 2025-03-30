@@ -12,9 +12,9 @@ from speedy_utils import setup_logger
 
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
-
+os.environ['HF_HOME'] = '/data-4090/huggingace-cache'
 warnings.filterwarnings("ignore")
-os.environ["UNSLOTH_ENABLE_LOGGING"] = "0"
+# os.environ["UNSLOTH_ENABLE_LOGGING"] = "0"
 
 def get_run_id(hyper_config_model, training_config_model):
     """
