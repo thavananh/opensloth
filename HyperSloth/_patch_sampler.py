@@ -20,7 +20,6 @@ def reorder_and_shuffle_data(
     from fastcore.all import chunked
 
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
-    num_gpus = 5
     
     # group size
     chunked_lens = list(
