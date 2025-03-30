@@ -66,6 +66,7 @@ def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
     if not hyper_config.fast_model_args.full_finetuning and not hyper_config.pretrained_lora:
         model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
 
+    # Allow custom chat templates
     if hasattr(hyper_config.training, 'chat_template') and hyper_config.training.chat_template is not None:
         from transformers import AutoTokenizer
         new_template = AutoTokenizer.from_pretrained(
