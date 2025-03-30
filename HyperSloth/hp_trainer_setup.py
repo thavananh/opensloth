@@ -69,7 +69,7 @@ def _initialize_model_and_tokenizer(hyper_config: HyperConfig):
     if hasattr(hyper_config.training, 'chat_template') and hyper_config.training.chat_template is not None:
         from transformers import AutoTokenizer
         new_template = AutoTokenizer.from_pretrained(
-            hyper_config.training
+            hyper_config.training.chat_template
         ).chat_template
         tokenizer.chat_template = new_template
         logger.warning(f"Using chat template of {new_template}")
