@@ -6,411 +6,239 @@ from filelock import FileLock
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 from loguru import logger
 
-TIME_OUT = 120
-SLEEP_TIME = 0.05
+TIME_OUT = 4
+SLEEP_TIME = 0.00001
+WAIT_WARNING_THRESHOLD = 2  # Log a warning if waiting longer than this
+
+
+class Flag:
+    def __init__(self, world_size: int, file_path: str, is_master: bool = False):
+        self.world_size = world_size
+        self.file_path = file_path
+        self.is_master = is_master
+        self.lock_path = self.file_path + ".lock"
+        self.lock = FileLock(self.lock_path)
+
+        if self.is_master:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(self.file_path, "wb") as f:
+                f.truncate(world_size * 4)
+        else:
+            while not os.path.exists(self.file_path):
+                time.sleep(SLEEP_TIME)
+
+        self.mem = np.memmap(
+            self.file_path,
+            dtype="float32",
+            mode="r+",
+            shape=(self.world_size,),
+        )
+
+        if self.is_master:
+            self.reset()
+
+    def update(self, rank: int):
+        with self.lock:
+            self.mem[rank] = 1.0
+            self.mem.flush()
+
+    def wait_for_all(self, step: int, timeout: float = TIME_OUT):
+        t0 = time.time()
+        has_logged = False
+
+        while True:
+            with self.lock:
+                flags_copy = self.mem.copy()
+            if np.all(flags_copy == 1.0):
+                break
+
+            elapsed = time.time() - t0
+            if elapsed > WAIT_WARNING_THRESHOLD and not has_logged:
+                logger.warning(f"[Flag={self.file_path}] waiting {elapsed:.1f}s at step={step}, flags={flags_copy.tolist()}")
+                has_logged = True
+
+            if elapsed > timeout:
+                raise RuntimeError(f"[Flag={self.file_path}] Timeout after {elapsed:.1f}s waiting at step={step}, flags={flags_copy.tolist()}")
+
+            time.sleep(SLEEP_TIME)
+
+        logger.debug(f"[Flag={self.file_path}] all ranks ready at step={step}")
+
+    def reset(self):
+        if not self.is_master:
+            raise RuntimeError("Only master can reset a flag array.")
+        with self.lock:
+            self.mem[:] = 0.0
+            self.mem.flush()
 
 
 class MmapGradientSync:
-    """
-    Single-file gradient sync that also stores a 'global_step' in the file,
-    so that each GPU only waits on flags belonging to the *current* iteration.
-
-    Refactored to enforce:
-      0) All GPUs start at global_step=0 in sync.
-      1) Each GPU writes its local gradient => set write=1
-      2) Wait for all writes => read/average => set read=1
-      3) Optim step => set iteration_done=1 => main increments global_step => others wait
-    """
-
-    def __init__(
-        self,
-        model: torch.nn.Module,
-        gpu: int,
-        gpus: list,
-        grad_dir: str = "/dev/shm/hypersloth/",
-    ):
-        # Basic info
+    def __init__(self, model: torch.nn.Module, gpu: int, gpus: list, grad_dir: str = "/dev/shm/hypersloth/"):
         self.gpu = gpu
         self.gpus = gpus
         self.local_rank = gpus.index(gpu)
         self.num_gpus = len(gpus)
         self.is_main = (self.local_rank == 0)
 
+        os.makedirs(".cache", exist_ok=True)
+        log_file = f".cache/gpu_{self.local_rank}.log"
+        main_log_file = f".cache/gpu_main.log"
+
+        self.logger = logger.bind()
+        # remove existing handlers
+        self.logger.remove()
+        self.logger.add(log_file, format="{time} {level} {message}", level="DEBUG", enqueue=True)
+        self.logger.add(main_log_file, format="{time} {level} {message}", level="DEBUG", enqueue=True)
+
         os.makedirs(grad_dir, exist_ok=True)
-        self.buffer_path = os.path.join(grad_dir, "grad_buffer_v2.dat")
-        self.lock_path = self.buffer_path + ".lock"
-        self.lock = FileLock(self.lock_path)
 
-        # ------------------------------------------------
-        # Build param info: each param => param.numel * num_gpus
-        # ------------------------------------------------
+        self.grad_path = os.path.join(grad_dir, "grad_buffer_v2.dat")
+        self.grad_lock = FileLock(self.grad_path + ".lock")
+
         self.param_info = []
-        current_offset = 0
+        total_grad_size = 0
         for name, param in model.named_parameters():
-            if not param.requires_grad:
-                continue
-            numel = param.numel()
-            shape = param.shape
-            self.param_info.append(
-                {
-                    "name": name,
-                    "offset": current_offset,
-                    "numel": numel,
-                    "shape": shape,
-                }
-            )
-            current_offset += numel * self.num_gpus
+            if param.requires_grad:
+                numel = param.numel()
+                shape = param.shape
+                self.param_info.append({"name": name, "offset": total_grad_size, "numel": numel, "shape": shape})
+                total_grad_size += numel * self.num_gpus
 
-        # ------------------------------------------------
-        # We'll store 3 sets of flags: write, read, iteration_done
-        #   write flags:       [0 .. (num_gpus-1)]
-        #   read flags:        [num_gpus .. (2*num_gpus-1)]
-        #   iteration_done:    [2*num_gpus .. (3*num_gpus-1)]
-        # => total_size_for_flags = 3 * num_gpus
-        # ------------------------------------------------
-        self.flags_offset = current_offset
-        self.flags_size = 3 * self.num_gpus
-        total_size = self.flags_offset + self.flags_size
-
-        # ------------------------------------------------
-        # Add 1 slot for "global_step" (float). total_size += 1
-        # ------------------------------------------------
-        self.step_offset = total_size
-        total_size += 1  # just 1 float for the global step
-
-        # ------------------------------------------------
-        # Only the main GPU creates/truncates the file. Others open r+
-        # ------------------------------------------------
         if self.is_main:
-            # Create/truncate the file to the required size in bytes (float32=4 bytes)
-            with open(self.buffer_path, "wb") as f:
-                f.truncate(total_size * 4)
+            with open(self.grad_path, "wb") as f:
+                f.truncate(total_grad_size * 4)
         else:
-            # Wait until the file is created by the main GPU
-            while not os.path.exists(self.buffer_path):
+            while not os.path.exists(self.grad_path):
                 time.sleep(SLEEP_TIME)
-            time.sleep(5.0)  # Give it a few seconds to be ready
-        # Open memmap in read/write mode (r+). It's now guaranteed to exist.
-        self.mem = np.memmap(
-            self.buffer_path,
-            dtype="float32",
-            mode="r+",
-            shape=(total_size,),
-        )
 
-        # Initialize global_step=0 if main GPU
+        self.grad_mem = np.memmap(self.grad_path, dtype="float32", mode="r+", shape=(total_grad_size,))
+
+        self.flag_dir = os.path.join(grad_dir, "flags")
+        os.makedirs(self.flag_dir, exist_ok=True)
+
+        self.flags = {
+            "ready_to_start": Flag(self.num_gpus, os.path.join(self.flag_dir, "ready_to_start.dat"), is_master=self.is_main),
+            "write": Flag(self.num_gpus, os.path.join(self.flag_dir, "write.dat"), is_master=self.is_main),
+            "read": Flag(self.num_gpus, os.path.join(self.flag_dir, "read.dat"), is_master=self.is_main),
+            "iteration_done": Flag(self.num_gpus, os.path.join(self.flag_dir, "iteration_done.dat"), is_master=self.is_main),
+        }
+
+        self.step_file = os.path.join(self.flag_dir, "step.dat")
+        self.step_lock = FileLock(self.step_file + ".lock")
         if self.is_main:
-            self._init_values()
+            with open(self.step_file, "wb") as f:
+                f.truncate(4)
+        else:
+            while not os.path.exists(self.step_file):
+                time.sleep(SLEEP_TIME)
 
-        logger.info(
-            f"[Init GPU={self.gpu}] Memmap opened: total_size={total_size}, "
-            f"local_rank={self.local_rank}, gpus={self.gpus}, is_main={self.is_main}, "
-            f"starting global_step={self._get_current_step()}"
-        )
-
-    def _init_values(self):
-        """Force global_step=0 at the beginning."""
-        with self.lock:
-            self.mem[:] = 0.0
-            self.mem.flush()
+        self.step_mem = np.memmap(self.step_file, dtype="float32", mode="r+", shape=(1,))
+        if self.is_main:
+            self.step_mem[0] = 0.0
+            self.step_mem.flush()
 
     def _get_current_step(self) -> int:
-        with self.lock:
-            step_val = self.mem[self.step_offset]
-        return int(step_val)
+        with self.step_lock:
+            return int(self.step_mem[0])
 
     def _set_current_step(self, step: int):
-        # Only the main GPU writes the step
-        assert self.is_main, "Only main GPU can set global_step"
-        with self.lock:
-            self.mem[self.step_offset] = float(step)
-            self.mem.flush()
+        assert self.is_main
+        with self.step_lock:
+            self.step_mem[0] = float(step)
+            self.step_mem.flush()
 
     def _increment_global_step(self):
-        """main GPU increments the global_step by +1"""
-        old = self._get_current_step()
-        new = old + 1
+        new = self._get_current_step() + 1
         self._set_current_step(new)
-        logger.debug(f"[GPU={self.gpu}] incremented global_step from {old} to {new}")
+        self.logger.info(f"[GPU={self.gpu}] Master incremented step to {new}")
 
     def _check_step_matches_local(self, local_step: int):
-        """Check that the file's global_step matches local_step."""
-        current_file_step = self._get_current_step()
-        return current_file_step == local_step
+        return (self._get_current_step() == local_step)
 
-    # ==================================================
-    # Stage-based flags (write/read/iteration_done)
-    # ==================================================
-    def _set_flag(self, stage: str):
-        if stage == "write":
-            idx = self.local_rank
-        elif stage == "read":
-            idx = self.local_rank + self.num_gpus
-        elif stage == "iteration_done":
-            idx = self.local_rank + 2 * self.num_gpus
-        else:
-            raise ValueError(f"Unknown stage={stage}")
-
-        with self.lock:
-            self.mem[self.flags_offset + idx] = 1.0
-            self.mem.flush()
-
-        logger.debug(f"[GPU={self.gpu}] set {stage}=1 at index={idx}")
-
-    def _get_flags_slice(self, stage: str) -> np.ndarray:
-        """
-        Return the slice of the flags array for the given stage,
-        as a *copy* so that we don't hold the lock while analyzing it.
-        """
-        with self.lock:
-            flags_slice = self.mem[self.flags_offset : self.flags_offset + self.flags_size]
-        if stage == "write":
-            return flags_slice[0 : self.num_gpus]
-        elif stage == "read":
-            return flags_slice[self.num_gpus : 2 * self.num_gpus]
-        elif stage == "iteration_done":
-            return flags_slice[2 * self.num_gpus : 3 * self.num_gpus]
-        else:
-            raise ValueError(f"Unknown stage={stage}")
-
-    def _wait_for_all(self, stage: str, local_step: int, timeout=TIME_OUT):
-        """
-        Wait until all GPUs have set stage=1,
-        but ONLY if the global_step in the file matches local_step.
-        If the file step changes, keep waiting or eventually fail on timeout.
-        """
-        start_time = time.time()
-        printed = False
-
-        while True:
-            # If the file's global_step changed, we keep waiting
-            # until it matches local_step again, or time out.
-            if not self._check_step_matches_local(local_step):
-                # Not matching yet, keep sleeping
-                time.sleep(SLEEP_TIME)
-                if (time.time() - start_time) > timeout:
-                    raise RuntimeError(
-                        f"[GPU={self.gpu}] Timeout: global_step changed or did not match local_step={local_step}"
-                    )
-                continue
-
-            done_slice = self._get_flags_slice(stage)
-
-            if np.all(done_slice == 1.0):
-                logger.opt(depth=1).debug(
-                    f"[GPU={self.gpu}] all GPUs done with {stage} at step={local_step}."
-                )
-                break
-            else:
-                elapsed = time.time() - start_time
-                if (not printed) and (elapsed > 5.0):
-                    logger.opt(depth=1).debug(
-                        f"[GPU={self.gpu}] waiting for {stage}, step={local_step}, flags={done_slice.tolist()}"
-                    )
-                    printed = True
-
-                if elapsed > timeout:
-                    raise RuntimeError(
-                        f"[GPU={self.gpu}] Timeout waiting for {stage} at local_step={local_step}"
-                    )
-                time.sleep(SLEEP_TIME)
-
-        logger.debug(f"[GPU={self.gpu}] done waiting for {stage} at step={local_step}")
-
-    def _reset_all_flags(self):
-        """main GPU zeros out the 3 sets of flags"""
-        logger.debug(
-            f"[GPU={self.gpu}] main GPU resetting all flags => [write, read, iteration_done]"
-        )
-        with self.lock:
-            self.mem[self.flags_offset : self.flags_offset + self.flags_size] = 0.0
-            self.mem.flush()
-
-    # ==================================================
-    # Public Methods: Writing Grad, Reading Grad, Zero, Iteration
-    # ==================================================
     def accumulate_local_grad(self, model: torch.nn.Module, local_step: int):
-        """
-        Step 1: Each GPU writes its local gradient into the memmap => set write=1
-        """
-        # Make sure the file global_step matches local_step
+        self.flags["ready_to_start"].update(self.local_rank)
+        if self.is_main:
+            self.flags["ready_to_start"].wait_for_all(local_step)
+            self.flags["ready_to_start"].reset()
+            print(f'\n===============================\n')
+
+
+
         if not self._check_step_matches_local(local_step):
-            raise RuntimeError(
-                f"[GPU={self.gpu}] accumulate_local_grad mismatch: "
-                f"local_step={local_step}, file_step={self._get_current_step()}"
-            )
+            raise RuntimeError(f"[GPU={self.gpu}] Step mismatch: local={local_step}, global={self._get_current_step()}")
 
         named_params = dict(model.named_parameters())
-        wrote_grad = False
-        with self.lock:
+        written = 0
+        with self.grad_lock:
             for info in self.param_info:
                 name = info["name"]
                 offset = info["offset"]
                 numel = info["numel"]
                 param = named_params[name]
                 if param.grad is not None:
-                    sub_offset = offset + self.local_rank * numel
                     flat = param.grad.detach().cpu().numpy().ravel()
-                    self.mem[sub_offset : sub_offset + numel] = flat
-                    wrote_grad = True
+                    start = offset + self.local_rank * numel
+                    self.grad_mem[start : start + numel] = flat
+                    written += numel
+            self.grad_mem.flush()
 
-            self.mem.flush()
+        self.logger.debug(f"[GPU={self.gpu}] Wrote {written} grad floats at step={local_step}")
+        self.flags["write"].update(self.local_rank)
 
-        logger.debug(
-            f"[GPU={self.gpu}] accumulate_local_grad done, wrote_any_grad={wrote_grad}, step={local_step}"
-        )
-        self._set_flag("write")
-
-    def read_final_grad_into_model(
-        self, model: torch.nn.Module, local_step: int, average=True
-    ):
-        """
-        Step 2: Wait for all writes => sum (optionally average) => set read=1
-        """
-        logger.debug(
-            f"[GPU={self.gpu}] read_final_grad => waiting for write, step={local_step}"
-        )
-        self._wait_for_all("write", local_step)
+    def read_final_grad_into_model(self, model: torch.nn.Module, local_step: int, average=True):
+        self.flags["write"].wait_for_all(local_step)
 
         named_params = dict(model.named_parameters())
-        # Summation has to be done under lock to ensure consistent reads
-        with self.lock:
+        with self.grad_lock:
             for info in self.param_info:
                 name = info["name"]
                 offset = info["offset"]
                 numel = info["numel"]
                 shape = info["shape"]
                 param = named_params[name]
-                if not param.requires_grad:
-                    continue
-
-                # Summation from all ranks
                 acc = np.zeros(numel, dtype=np.float32)
-                for rank_id in range(self.num_gpus):
-                    sub_offset = offset + rank_id * numel
-                    acc += self.mem[sub_offset : sub_offset + numel]
-
+                for r in range(self.num_gpus):
+                    acc += self.grad_mem[offset + r * numel : offset + (r + 1) * numel]
                 if average:
                     acc /= self.num_gpus
-
                 param.grad = torch.from_numpy(acc.reshape(shape)).to(param.device)
 
-        logger.debug(f"[GPU={self.gpu}] done summing => set read=1, step={local_step}")
-        self._set_flag("read")
+        self.flags["read"].update(self.local_rank)
 
     def zero_mmaps(self, local_step: int):
-        """
-        Called right after the optimizer step on each GPU:
-        Wait for all read=1 => main GPU zeroes the gradient region => others wait
-        """
-        logger.debug(
-            f"[GPU={self.gpu}] zero_mmaps => waiting for read, step={local_step}"
-        )
-        self._wait_for_all("read", local_step)
-
-        # Only main GPU zeros out param region
+        self.flags["read"].wait_for_all(local_step)
         if self.is_main:
-            with self.lock:
-                logger.debug(
-                    f"[GPU={self.gpu}] main => zero param region [0..{self.flags_offset}), step={local_step}"
-                )
-                self.mem[0 : self.flags_offset] = 0.0
-                self.mem.flush()
-
-        logger.debug(f"[GPU={self.gpu}] zero_mmaps done, step={local_step}")
-        self._set_flag("iteration_done")
+            with self.grad_lock:
+                self.grad_mem[:] = 0.0
+                self.grad_mem.flush()
+        self.flags["iteration_done"].update(self.local_rank)
 
     def iteration_done(self, local_step: int):
-        """
-        Mark iteration_done=1 => wait => main increments global_step => others wait
-        This completes Step 3 (post-optim sync).
-        """
-        logger.debug(
-            f"[GPU={self.gpu}] iteration_done => set iteration_done=1 at step={local_step}"
-        )
-        self._set_flag("iteration_done")
-
         if self.is_main:
-            self._wait_for_all("iteration_done", local_step)
-
-            logger.debug("[GPU={}] main GPU increments global_step and resets flags".format(self.gpu))
-            # Reset flags and increment global step
-            self._reset_all_flags()
+            self.flags["iteration_done"].wait_for_all(local_step)
+            for key in ["write", "read", "iteration_done"]:
+                self.flags[key].reset()
             self._increment_global_step()
         else:
-            # Wait until main increments global_step
-            while True:
-                if self._get_current_step() > local_step:
-                    logger.debug(f"[GPU={self.gpu}] main GPU incremented global_step")
-                    break
+            while self._get_current_step() <= local_step:
                 time.sleep(SLEEP_TIME)
 
-        logger.debug(
-            f"[GPU={self.gpu}] iteration_done complete => next iteration (old step={local_step})"
-        )
 
-
-# =======================================================================
-# Example Callback using the global-step approach
-# =======================================================================
 class MmapGradSyncCallback(TrainerCallback):
-    """
-    A TrainerCallback that uses 'MmapGradientSync' with a global step approach,
-    matching the requested 3-step flow. The HuggingFace Trainer calls:
-
-      - on_pre_optimizer_step(...)   -> we do Step 1 & Step 2
-      - **the trainer does the optimizer step**
-      - on_optimizer_step(...)       -> we do the post-step syncing + global_step increment
-    """
-
     def __init__(self, model, grad_dir, gpu, gpus):
         self.model = model
         self.grad_dir = grad_dir
         self.gpu = gpu
         self.local_rank = gpus.index(gpu)
         self.gpus = gpus
-
         self.grad_sync = MmapGradientSync(model, gpu, gpus, grad_dir)
 
-    def on_pre_optimizer_step(
-        self, args, state: TrainerState, control: TrainerControl, **kwargs
-    ):
-        """
-        HF calls this right before the optimizer step.
-         - Step 1: Each GPU accumulates/writes its gradient => set 'write=1'
-         - Step 2: Wait for all writes, read & average => set 'read=1'
-        """
-        logger.debug("=" * 80)
+    def on_pre_optimizer_step(self, args, state: TrainerState, control: TrainerControl, **kwargs):
+        step = state.global_step
+        self.grad_sync.accumulate_local_grad(self.model, step)
+        self.grad_sync.read_final_grad_into_model(self.model, step, average=True)
 
-        local_step = state.global_step  # Our "iteration" index
-        logger.debug(
-            f"[GPU={self.gpu}] on_pre_optimizer_step => Step1 accumulate_local_grad"
-        )
-        self.grad_sync.accumulate_local_grad(self.model, local_step)
-
-        logger.debug(f"[GPU={self.gpu}] on_pre_optimizer_step => Step2 read_final_grad")
-        self.grad_sync.read_final_grad_into_model(self.model, local_step, average=True)
-
-    def on_optimizer_step(
-        self, args, state: TrainerState, control: TrainerControl, **kwargs
-    ):
-        """
-        HF calls this right after the optimizer step is done.
-         - Zero memmaps => wait
-         - Mark iteration_done => main GPU increments global_step => others wait
-        """
-        local_step = state.global_step
-        logger.debug(
-            f"[GPU={self.gpu}] on_optimizer_step => zero memmaps, step={local_step}"
-        )
-        self.grad_sync.zero_mmaps(local_step)
-
-        logger.debug(
-            f"[GPU={self.gpu}] on_optimizer_step => iteration_done, step={local_step}"
-        )
-        # This is effectively a barrier
-        self.grad_sync.iteration_done(local_step)
-
-        logger.debug(
-            f"[GPU={self.gpu}] on_optimizer_step => complete => next step will be {local_step + 1}"
-        )
+    def on_optimizer_step(self, args, state: TrainerState, control: TrainerControl, **kwargs):
+        step = state.global_step
+        self.grad_sync.zero_mmaps(step)
+        self.grad_sync.iteration_done(step)

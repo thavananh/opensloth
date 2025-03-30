@@ -14,7 +14,7 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/gemma-3-27b-it-bnb-4bit",
+        model_name="unsloth/gemma-3-4b-it-bnb-4bit",
         max_seq_length=7_000,
     ),
     # pretrained_lora="/shared-mnt/loras/gemma-3-27b-it-bnb-4bit_teacher_messages_deepseek_direct/loss_response_only_lora_r16_a16_seq_7000_lr_0_0001_global_bz_16_epochs_2_seed_42_mmap/",
