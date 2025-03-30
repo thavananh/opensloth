@@ -32,12 +32,11 @@ training_config_model = TrainingArgsConfig(
     gradient_accumulation_steps=8,  # Meaing 8*4*4=128 examples per step
     num_train_epochs=2,
     learning_rate=1e-4,
-    per_device_eval_batch_size=4,
     eval_steps=100000,
     logging_steps=1,
     report_to="tensorboard",
     lr_scheduler_type="linear",
-    warmup_steps=0,
+    warmup_steps=1,
     save_only_model=True,
     save_steps=200,
     save_total_limit=1,

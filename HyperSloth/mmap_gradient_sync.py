@@ -7,7 +7,7 @@ from transformers.trainer_callback import TrainerCallback, TrainerControl, Train
 from loguru import logger
 
 TIME_OUT = 4
-SLEEP_TIME = 0.00001
+SLEEP_TIME = 0.01
 WAIT_WARNING_THRESHOLD = 2  # Log a warning if waiting longer than this
 
 
@@ -86,7 +86,7 @@ class MmapGradientSync:
 
         self.logger = logger.bind()
         # remove existing handlers
-        self.logger.remove()
+        # self.logger.remove()
         self.logger.add(log_file, format="{time} {level} {message}", level="DEBUG", enqueue=True)
         self.logger.add(main_log_file, format="{time} {level} {message}", level="DEBUG", enqueue=True)
 
@@ -160,7 +160,6 @@ class MmapGradientSync:
         if self.is_main:
             self.flags["ready_to_start"].wait_for_all(local_step)
             self.flags["ready_to_start"].reset()
-            print(f'\n===============================\n')
 
 
 

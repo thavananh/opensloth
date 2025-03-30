@@ -40,7 +40,7 @@ def get_run_id(hyper_config_model, training_config_model):
     run_id = (
         f"loss-{loss_type}_lora-r{lora_r}-a{lora_alpha}_"
         f"seq-{seq_len}_lr-{lr}_global_bz-{global_bz}_"
-        f"epochs-{epochs}_seed-{seed}_{mmap_sync}"
+        f"epochs-{epochs}_seed-{seed}_{mmap_sync}-{ngpu}gpu"
     )
     # normalize remove special characters like .
     run_id = run_id.replace(".", "_").replace("-", "_")
@@ -87,7 +87,8 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
             )
             logger.info(f"Using gradient sync callback for GPU {gpu}")
             trainer.add_callback(grad_sync_cb)
-
+    else:
+        logger.warning("Gradient sync is not enabled, will use normal unsloth training")
     trainer.train()
 
     # Save once from rank=0
