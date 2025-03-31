@@ -196,7 +196,8 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
     if len(gpus) > 1:
         if os.environ.get("USE_TMUX", "0") == "1" or use_tmux:
             # Build a tmux script that the user can run manually
-            session_name = f"train_hp_{model_name_dataset}_{run_id}"
+            # session_name = f"train_hp_{model_name_dataset}_{run_id}"
+            session_name = f"train_hp"
             script_path = "/tmp/hp_train.sh"
             build_tmux_script(session_name, script_path, model_name_dataset, run_id, config_file, gpus)
             return
