@@ -402,11 +402,11 @@ def patch_inner_training_loop(trainer):
                         'attention_mask': inputs['attention_mask'][local_rank::max_gpu_need],
                         'labels': inputs['labels'][local_rank::max_gpu_need],
                     }
-                    
+                from speedy_utils import log
                 for i, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
                     step += 1
-                    logger.debug(f"Input shape: {inputs['input_ids'].shape}, Attention masked ratio: {inputs['attention_mask'].sum().item() / inputs['attention_mask'].numel()}")
+                    log(f"Input shape: {inputs['input_ids'].shape}, Attention masked ratio: {inputs['attention_mask'].sum().item() / inputs['attention_mask'].numel()}", interval=60)
 
                     do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == steps_in_epoch
                     # Since we perform prefetching, we need to manually set sync_gradients

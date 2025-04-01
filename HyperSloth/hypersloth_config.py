@@ -120,6 +120,7 @@ class TrainingArgsConfig(BaseModel):
     save_only_model: bool = True
     seed: int = 42
     save_only_model: bool = True
+    eval_strategy: str = "epoch"
 
     class Config:
         """Pydantic configuration for DataConfig."""
