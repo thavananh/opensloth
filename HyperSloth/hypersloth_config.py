@@ -104,8 +104,6 @@ class TrainingArgsConfig(BaseModel):
     per_device_train_batch_size: int = 8
     learning_rate: float = 2e-4
     gradient_accumulation_steps: int = 16
-    per_device_eval_batch_size: int = 2
-    eval_steps: int = 100
     logging_steps: int = 1
     report_to: str = "tensorboard"
     num_train_epochs: int = 1
@@ -120,7 +118,10 @@ class TrainingArgsConfig(BaseModel):
     save_only_model: bool = True
     seed: int = 42
     save_only_model: bool = True
-    eval_strategy: str = "epoch"
+    
+    eval_strategy: str = "steps"
+    eval_steps: int = 100
+    per_device_eval_batch_size: int = 2
 
     class Config:
         """Pydantic configuration for DataConfig."""

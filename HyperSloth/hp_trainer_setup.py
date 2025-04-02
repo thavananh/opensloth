@@ -119,8 +119,6 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
         [
             hyper_config.data.model_dump(),
             hyper_config.fast_model_args.max_seq_length,
-            # hf_train_args.per_device_train_batch_size,
-            # hf_train_args.gradient_accumulation_steps,
         ]
     )
     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name
@@ -160,9 +158,6 @@ def get_trainer(
         hf_train_args.dataset_kwargs = {"skip_prepare_dataset": skip_prepare}
         if LOCAL_RANK != 0:
             hf_train_args.eval_strategy = "no"
-        else:
-            hf_train_args.eval_strategy = "steps"
-            hf_train_args.eval_steps=10
         return SFTTrainer(
             model=model,
             tokenizer=tokenizer,
