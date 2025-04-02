@@ -5,18 +5,18 @@ hyper_config_model = HyperConfig(
     data=DataConfig(
         dataset_name_or_path='/shared-mnt/data/share_gpt/multilingual_translation_qa_expert.json',
         group_by_length=True,
-        instruction_part="<|im_start|>user\n",
-        response_part="<|im_start|>assistant\n",
-        # num_samples=200,
-        test_ratio=0.05
+        # instruction_part="<|im_start|>user\n",
+        # response_part="<|im_start|>assistant\n",
+        instruction_part="<start_of_turn>user\n",
+        response_part="<start_of_turn>model\n",
     ),
     training=TrainingConfig(
-        gpus=range(8),
+        gpus=[4,5,6,7],
         loss_type="response_only",  # Choices: ["all", "response_only"], the loss will only be calculated on the response part of the input
-        # chat_template='Qwen/Qwen2.5-7B-Instruct'
+        chat_template='google/gemma-3-27b-it'
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/Qwen2.5-7B-Instruct",
+        model_name="/mnt/data/huggingface-models/ModelSpace/GemmaX2-28-9B-v0.1-bnb-4bit",
         max_seq_length=7_000,
     ),
     # pretrained_lora="/shared-mnt/loras/gemma-3-27b-it-bnb-4bit_teacher_messages_deepseek_direct/loss_response_only_lora_r16_a16_seq_7000_lr_0_0001_global_bz_16_epochs_2_seed_42_mmap/",
@@ -31,7 +31,7 @@ hyper_config_model = HyperConfig(
 training_config_model = TrainingArgsConfig(
     output_dir="/shared-mnt/loras/",
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=8,  # Meaing 8*4*4=128 examples per step
+    gradient_accumulation_steps=4,  # Meaing 8*4*4=128 examples per step
     num_train_epochs=1,
     learning_rate=1e-4,
     eval_steps=100000,
