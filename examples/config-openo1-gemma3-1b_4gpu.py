@@ -25,7 +25,7 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="saves/loras/",
+    output_dir="saves/loras/debug/4gpu",
     per_device_train_batch_size=1,
     gradient_accumulation_steps=1,  # Meaing 8*4*4=128 examples per step
     learning_rate=1e-4,

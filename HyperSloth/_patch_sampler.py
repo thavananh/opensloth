@@ -9,8 +9,7 @@ from transformers import Trainer
 
 def reorder_and_shuffle_data(
     dataset: Dataset,
-    per_device_train_batch_size: int,
-    epoch=0,
+    epoch,
     seed=42,
 ):
 
@@ -21,10 +20,12 @@ def reorder_and_shuffle_data(
     from fastcore.all import chunked
 
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    
+    # group size
     chunked_lens = list(
         chunked(
             range(len(lens)),
-            num_gpus,
+           num_gpus,
         )
     )
     random.Random(seed + epoch).shuffle(
@@ -56,15 +57,14 @@ def get_callback_shuffle_data(trainer) -> TrainerCallback:
             self.trainer: Trainer = trainer
 
         def on_epoch_begin(self, args, state, control, train_dataloader, **kwargs):
-            if state.epoch == 0:
-                return
+            # if state.epoch == 0:
+            #     return
             local_rank = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
             # Debug info for the main GPU
 
             logger.info("[on_epoch_begin] Shuffling data, this may take a while...")
             self.trainer.train_dataset = reorder_and_shuffle_data(
                 self.trainer.train_dataset,
-                args.per_device_train_batch_size,
                 epoch=state.epoch,
                 seed=args.seed,
             )
@@ -97,7 +97,6 @@ def patch_sampler(trainer: Trainer):
 
     trainer.train_dataset = reorder_and_shuffle_data(
         trainer.train_dataset,
-        trainer.args.per_device_train_batch_size,
         epoch=0,
         seed=trainer.args.seed,
     )

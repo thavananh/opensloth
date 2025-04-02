@@ -8,6 +8,7 @@ from datasets import load_dataset
 from typing import Any
 
 from datasets import load_dataset
+from speedy_utils import load_by_ext, log
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -32,7 +33,7 @@ def get_chat_dataset(
     # Load dataset based on input type
     if os.path.exists(dataset_name_or_path):
         if dataset_name_or_path.endswith(".json"):
-            dataset = Dataset.from_json(dataset_name_or_path)
+            dataset = Dataset.from_list(load_by_ext(dataset_name_or_path))
         elif dataset_name_or_path.endswith(".csv"):
             dataset = Dataset.from_csv(dataset_name_or_path)
         # is folder
@@ -123,6 +124,7 @@ def get_chat_dataset(
     if test_ratio > 0:
         ds = dataset.train_test_split(test_size=test_ratio, shuffle=True, seed=42)
         ds_train, ds_test = ds["train"], ds["test"]
+        log(f'Splitting dataset into train and test sets, test_ratio={test_ratio}, seed=42, Num test samples={len(ds_test)}')
     else:
         ds_train, ds_test = dataset, None
 
