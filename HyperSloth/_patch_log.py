@@ -69,7 +69,6 @@ def _patch_log(T: type):
             is_done = lambda: (LOG_MMAP["loss"][:] != 0).all()
             if is_main:
                 while not is_done():
-                    logger.debug(f"MAIN Waiting for other processes to finish logging")
                     time.sleep(SLEEP_TIME)
                 # perform summing or avg then do log on main process
                 logs["loss"] = float(LOG_MMAP["loss"].sum())

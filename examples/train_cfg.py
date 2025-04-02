@@ -3,7 +3,6 @@ from HyperSloth.hypersloth_config import *
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
     data=DataConfig(
-        # dataset_name_or_path="/shared-mnt/data/share_gpt/translation_o1_12k.json",
         dataset_name_or_path='/shared-mnt/data/share_gpt/multilingual_translation_qa_expert.json',
         group_by_length=True,
         # instruction_part="<|im_start|>user\n",
@@ -47,4 +46,7 @@ training_config_model = TrainingArgsConfig(
     weight_decay=0.01,
     packing=False,
     include_num_input_tokens_seen=True,
+    eval_strategy = "epoch",
+    # eval_strategy = "steps"
+    # eval_steps = 1
 )

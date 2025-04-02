@@ -119,8 +119,6 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
         [
             hyper_config.data.model_dump(),
             hyper_config.fast_model_args.max_seq_length,
-            # hf_train_args.per_device_train_batch_size,
-            # hf_train_args.gradient_accumulation_steps,
         ]
     )
     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name
@@ -149,7 +147,8 @@ def get_trainer(
     import logging
     from trl import SFTTrainer
     from datasets import load_from_disk
-
+    from transformers import TrainingArguments
+    LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     lock = dataset_cache_path + ".lock"
 
     def _create_trainer(train_dataset, eval_dataset=None, skip_prepare=True):
@@ -157,6 +156,8 @@ def get_trainer(
         # We use a dataset_kwargs override so that, once the dataset is prepared,
         # it won't attempt the same "prepare" logic again.
         hf_train_args.dataset_kwargs = {"skip_prepare_dataset": skip_prepare}
+        if LOCAL_RANK != 0:
+            hf_train_args.eval_strategy = "no"
         return SFTTrainer(
             model=model,
             tokenizer=tokenizer,
@@ -171,7 +172,6 @@ def get_trainer(
     # ---------------------------
     # CASE 1: Cached dataset exists
     # ---------------------------
-    LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     try:
         if dataset_cache_exists:
             while os.path.exists(lock) and not LOCAL_RANK == 0:
@@ -183,13 +183,8 @@ def get_trainer(
             logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}, this might take a while")
             dataset = load_from_disk(dataset_cache_path)
             logger.info(f"GPU {gpu_ith}: Dataset loaded, Now creating trainer")
-            trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
+            trainer = _create_trainer(dataset['train'], eval_dataset=dataset['eval'], skip_prepare=True)
             logger.info(f"GPU {gpu_ith}: Trainer created")
-            if LOCAL_RANK == 0:
-                # Release the lock file
-                if os.path.exists(lock):
-                    os.remove(lock)
-        # ---------------------------
         # CASE 2: GPU 0 prepares dataset
         # ---------------------------
         elif gpu_ith == 0:
@@ -205,8 +200,15 @@ def get_trainer(
                     ds_train, eval_dataset=ds_test, skip_prepare=False
                 )
                 logger.info(f'Maybe train on responses only')
+                # import ipdb; ipdb.set_trace()
+                from datasets import DatasetDict
+                # _maybe_train_on_responses_only(trainer, hyper_config)
                 
-                trainer.train_dataset.save_to_disk(dataset_cache_path)
+                
+                dataset_to_save = DatasetDict()
+                dataset_to_save["train"] = trainer.train_dataset
+                dataset_to_save["eval"] = trainer.eval_dataset
+                dataset_to_save.save_to_disk(dataset_cache_path)
                 logger.info(f"GPU {gpu_ith}: Dataset saved to {dataset_cache_path}")
 
             # Release the lock file
@@ -224,24 +226,25 @@ def get_trainer(
             while os.path.exists(lock):
                 time.sleep(1)
                 logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
-                if time.time() - start_t > SLEEP_WAIT_DATASET_TIMEOUT:
+                # if time.time() - start_t > SLEEP_WAIT_DATASET_TIMEOUT:
                     # remove the lock and retry
-                    logger.warning(f"GPU {gpu_ith}: Lock not released, now removing the lock and retrying")
-                    os.remove(lock)
-                    return get_trainer(
-                        tokenizer,
-                        hyper_config,
-                        hf_train_args,
-                        gpu_ith,
-                        model,
-                        dataset_cache_path,
-                        dataset_cache_exists,
-                        counter=counter + 1,
-                    )
+                    # logger.warning(f"GPU {gpu_ith}: Lock not released, now removing the lock and retrying")
+                    # os.remove(lock)
+                    # train
+                    # return get_trainer(
+                    #     tokenizer,
+                    #     hyper_config,
+                    #     hf_train_args,
+                    #     gpu_ith,
+                    #     model,
+                    #     dataset_cache_path,
+                    #     dataset_cache_exists,
+                    #     counter=counter + 1,
+                    # )
 
             logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
             dataset = load_from_disk(dataset_cache_path)
-            trainer = _create_trainer(dataset, eval_dataset=None, skip_prepare=True)
+            trainer = _create_trainer(dataset['train'], eval_dataset=dataset['eval'], skip_prepare=True)
     except Exception as e:
         logger.warning(f"GPU {gpu_ith}: Exception occurred: {e}")
         if os.path.exists(lock):
@@ -261,7 +264,6 @@ def get_trainer(
     finally:
         if os.path.exists(lock):
             os.remove(lock)
-    _maybe_train_on_responses_only(trainer, hyper_config)
     return trainer
 
 
