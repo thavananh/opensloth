@@ -2,12 +2,12 @@ from typing import List, Literal, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
 from multiprocessing import cpu_count
 
-CPU_COUNT = min(8, cpu_count() - 2)
+CPU_COUNT = min(1, cpu_count() - 2)
 
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
-    dataset_name_or_path: str = "data/cod_1k.json"
+    dataset_name_or_path: Union[str, list] = "data/cod_1k.json"
     test_ratio: float = 0.00
     dataset_num_proc: int = CPU_COUNT
     instruction_part: str = "Instruction:"

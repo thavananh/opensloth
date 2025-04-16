@@ -12,16 +12,33 @@ from speedy_utils import setup_logger
 
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
-# os.environ['HF_HOME'] = '/data-4090/huggingace-cache'
 warnings.filterwarnings("ignore")
-# os.environ["UNSLOTH_ENABLE_LOGGING"] = "0"
+
 
 def get_run_id(hyper_config_model, training_config_model):
     """
-    Generate a descriptive and concise run ID based on the hyperparameters and training configuration.
+    Generate a shorter run ID and prepend a yyyy_mm_dd/ folder.
     """
+    import datetime
+
+    # Get today's date in yyyy_mm_dd format
+    today_str = datetime.datetime.now().strftime("%Y_%m_%d")
+
+    # Shortened model name (last part only)
     model_name = hyper_config_model.fast_model_args.model_name.split("/")[-1]
-    dataset = hyper_config_model.data.dataset_name_or_path.split("/")[-1].split('.')[0]
+
+    # Shortened dataset name (list or single)
+    if isinstance(hyper_config_model.data.dataset_name_or_path, list):
+        dataset = "_".join(
+            path.split("/")[-1].split(".")[0]
+            for path in hyper_config_model.data.dataset_name_or_path
+        )
+    else:
+        dataset = hyper_config_model.data.dataset_name_or_path.split("/")[-1].split(
+            "."
+        )[0]
+
+    # Gather relevant config fields
     loss_type = hyper_config_model.training.loss_type
     lora_r = hyper_config_model.lora_args.r
     lora_alpha = hyper_config_model.lora_args.lora_alpha
@@ -31,43 +48,64 @@ def get_run_id(hyper_config_model, training_config_model):
     accum_steps = training_config_model.gradient_accumulation_steps
     ngpu = len(hyper_config_model.training.gpus)
     epochs = training_config_model.num_train_epochs
-    seed = training_config_model.seed
-    mmap_sync = "mmap" if hyper_config_model.use_mmap_grad_sync else "no-mmap"
-    
+
     # Calculate global batch size
     global_bz = batch_size * accum_steps * ngpu
 
-    run_id = (
-        f"loss-{loss_type}_lora-r{lora_r}-a{lora_alpha}_"
-        f"seq-{seq_len}_lr-{lr}_global_bz-{global_bz}_"
-        f"epochs-{epochs}_seed-{seed}_{mmap_sync}-{ngpu}gpu"
+    # Construct a shorter run ID string
+    # (Feel free to adjust abbreviations as desired)
+    # Example: "ls-xx_r4_a32_sq1024_lr3e-5_bz128_ep10_sd42_mmap4"
+    short_run_id = (
+        f"ls-{loss_type}"  # e.g. "ls-crossentropy" -> you might abbreviate "ce"
+        f"_r{lora_r}"
+        f"_a{lora_alpha}"
+        f"_sq{seq_len}"
+        f"_lr{lr}"
+        f"_bz{global_bz}"
+        f"_ep{epochs}"
+        f"_{ngpu}"
     )
-    # normalize remove special characters like .
-    run_id = run_id.replace(".", "_").replace("-", "_")
 
-    return f'{model_name}_{dataset}', run_id
+    # Normalize to remove periods and dashes
+    short_run_id = short_run_id.replace(".", "_").replace("-", "_")
+
+    # Final name: prepend yyyy_mm_dd + model + dataset + short_run_id
+    # Example: "2023_07_01/modelname_dataset_ls-crossentropy_r4_a32..."
+    # Return it as one string; or you could keep returning a tuple
+    final_run_id = f"{model_name}_{dataset}_{short_run_id}"
+    # model_name_dataset = f"{model_name}_{dataset}"
+    return f"{model_name}_{today_str}", final_run_id
+
 
 def _get_hp_grad_dir(model_name_dataset, run_id):
-    grad_dir = os.path.join(os.environ["HYPERSLOTH_CACHE_DIR"], model_name_dataset,f"run_{run_id}")
+    grad_dir = os.path.join(
+        os.environ["HYPERSLOTH_CACHE_DIR"], model_name_dataset, f"run_{run_id}"
+    )
     os.makedirs(grad_dir, exist_ok=True)
     return grad_dir
 
+
 def _setup_logger(gpu_id):
     lvl = os.environ.get("HYPERSLOTH_LOG_LEVEL", "D")
-    setup_logger(lvl, disable_grep='mmap_gradient_sync')
+    setup_logger(lvl, disable_grep="mmap_gradient_sync")
     file = f".log/process_{gpu_id}.log"
     if os.path.exists(file):
         os.remove(file)
 
-    
     print(f"Logging to {file}")
+
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
     _setup_logger(f"{gpu}")
-    hf_train_args.output_dir = os.path.join(hf_train_args.output_dir, *get_run_id(hyper_config, hf_train_args))
+    hf_train_args.output_dir = os.path.join(
+        hf_train_args.output_dir, *get_run_id(hyper_config, hf_train_args)
+    )
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
-    from HyperSloth.hp_trainer_setup import setup_model_and_training  # avoid circular import
+    from HyperSloth.hp_trainer_setup import (
+        setup_model_and_training,
+    )  # avoid circular import
+
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
@@ -76,8 +114,12 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
         hf_train_args=hf_train_args,
     )
 
-    if len(hyper_config.training.gpus) > 0 and hyper_config.use_mmap_grad_sync is not None:
+    if (
+        len(hyper_config.training.gpus) > 1
+        and hyper_config.use_mmap_grad_sync is not None
+    ):
         from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
+
         if hyper_config.use_mmap_grad_sync:
             grad_sync_cb = MmapGradSyncCallback(
                 model=trainer.model,
@@ -98,13 +140,13 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
         tokenizer.save_pretrained(hf_train_args.output_dir)
 
 
-
 def load_config_from_path(config_path: str):
     """Load configuration from Python file path."""
     spec = importlib.util.spec_from_file_location("config_module", config_path)
     config_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(config_module)
     return config_module
+
 
 # We'll just detect if the user wants a tmux script:
 
@@ -115,7 +157,7 @@ def build_tmux_script(
     model_name_dataset: str,
     run_id: str,
     config_file: str,
-    gpus: list
+    gpus: list,
 ):
     """
     Build a script that:
@@ -129,9 +171,10 @@ def build_tmux_script(
     lines.append("#!/usr/bin/env bash")
     # remove grad_dir
     lines.append(f"rm -rf {_get_hp_grad_dir(model_name_dataset, run_id)}")
-    lines.append(f"""# Create a new session with first GPU = 0
-tmux new-session -d -s {session_name} -n MAIN""")
-    
+    lines.append(
+        f"""# Create a new session with first GPU = 0
+tmux new-session -d -s {session_name} -n MAIN"""
+    )
 
     # First GPU
     # check tmux session command, if yes, ask user enter "y" to kill the session
@@ -147,9 +190,7 @@ tmux new-session -d -s {session_name} -n MAIN""")
             f"--world_size {len(gpus)}"
         )
         lines.append(f"tmux new-window -t {session_name} -n gpu_{gpu_index}")
-        lines.append(
-            f"tmux send-keys -t {session_name}:gpu_{gpu_index} '{cmd}' Enter"
-        )
+        lines.append(f"tmux send-keys -t {session_name}:gpu_{gpu_index} '{cmd}' Enter")
         lines.append("")
 
     lines.append(f'echo "Attach to this session via: tmux attach -t {session_name}"')
@@ -159,20 +200,31 @@ tmux new-session -d -s {session_name} -n MAIN""")
     with open(script_path, "w") as f:
         f.write(script_body)
     os.chmod(script_path, 0o755)
-    
+
     is_session_exists = os.system(f"tmux has-session -t {session_name}")
     if is_session_exists == 0:
-        logger.warning(f"Session {session_name} exists, please kill it before running the script")
-    else:
-        os.system(f"bash {script_path}")
-        logger.info(f"Script started with session name {session_name}")
-        
-        
+
+        logger.warning(
+            f"Session {session_name} exists, please kill it before running the script"
+        )
+        # as user if they want to kill the session
+        user_input = input(
+            f"Session {session_name} exists, do you want to kill it? (y/n): "
+        )
+        if user_input.lower() == "y":
+            os.system(f"tmux kill-session -t {session_name}")
+            logger.info(f"Session {session_name} killed")
+        else:
+            return
+    os.system(f"bash {script_path}")
+    logger.info(f"Script started with session name {session_name}")
+
 
 @call_parse
-def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: bool = False):
-    
-        
+def train(
+    config_file: str, rank: int = None, world_size: int = None, use_tmux: bool = False
+):
+
     config_file, hyper_config, training_config = initialize_training_config(config_file)
     # clean grad_dir
     # CASE 1: Child process => single GPU
@@ -199,17 +251,21 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
             # session_name = f"train_hp_{model_name_dataset}_{run_id}"
             session_name = f"train_hp"
             script_path = "/tmp/hp_train.sh"
-            build_tmux_script(session_name, script_path, model_name_dataset, run_id, config_file, gpus)
+            build_tmux_script(
+                session_name, script_path, model_name_dataset, run_id, config_file, gpus
+            )
             return
         else:
             # Launch via multi-processing (no tmux).
             logger.info(f"[CASE 2] Running on {len(gpus)} GPUs")
             processes = []
             assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
+
             @threaded(process=True)
             def run_in_process(*args, **kwargs):
                 """Runs _train() in a separate Python process."""
                 _train(*args, **kwargs)
+
             for gpu_index in gpus:
                 p = run_in_process(
                     gpu_index,
@@ -242,13 +298,15 @@ def train(config_file: str, rank: int = None, world_size: int = None, use_tmux: 
             hf_train_args=training_config,
         )
 
+
 def initialize_training_config(config_file):
     # global USE_TMUX
     # USE_TMUX = USE_TMUX or use_tmux
-    """Train entry-point. If rank/world_size are provided, we assume this is 
-    a child process that trains on a single GPU. Otherwise, 
+    """Train entry-point. If rank/world_size are provided, we assume this is
+    a child process that trains on a single GPU. Otherwise,
     we spawn multi-gpu runs either by generating a tmux script or by multi-process.
     """
+
     config_file = os.path.abspath(config_file)
     assert os.path.exists(config_file), f"Config file {config_file} not found"
 
@@ -276,4 +334,4 @@ def initialize_training_config(config_file):
 
     # # of GPUs
     os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
-    return config_file,hyper_config,training_config
+    return config_file, hyper_config, training_config

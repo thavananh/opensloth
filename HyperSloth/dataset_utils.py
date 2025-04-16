@@ -1,3 +1,4 @@
+import random
 from typing import Any
 
 from datasets import Dataset
@@ -8,10 +9,38 @@ from datasets import load_dataset
 from typing import Any
 
 from datasets import load_dataset
-from speedy_utils import load_by_ext, log
+from speedy_utils import jdumps, jloads, load_by_ext, log
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
+
+
+def shuffle_one_messages(one_row):
+    list_convs = one_row["messages"]
+    for conv in list_convs:
+        for message in conv:
+            if message["role"] == "user":
+                if random.random() < 0.5:
+                    continue
+                try:
+                    data_content = jloads(message["content"])
+                    keys = list(data_content.keys())
+                    # if len(keys) > 1:
+                    shuffled_keys = keys[:]
+                    old_order = shuffled_keys[:]
+                    random.shuffle(shuffled_keys)
+                    new_order = shuffled_keys[:]
+                    log(
+                        f"Shuffled keys: {old_order} -> {new_order}",
+                        level="info",
+                        once=True,
+                    )
+                    shuffled_data = {k: data_content[k] for k in shuffled_keys}
+                    message["content"] = jdumps(shuffled_data)
+                except Exception as e:
+                    pass
+    return one_row
+
 
 
 def get_chat_dataset(
@@ -23,6 +52,7 @@ def get_chat_dataset(
     message_key: str = None,
     chat_template=None,
     dataset_already_formated=False,  # when there already a "text" key in the dataset
+    shuffle_user_dict_keys: bool = False,
     **kwargs,
 ) -> tuple[Dataset, Dataset | None]:
     """
@@ -30,6 +60,37 @@ def get_chat_dataset(
 
     Returns train dataset and optional test dataset (if test_ratio > 0).
     """
+    if isinstance(dataset_name_or_path, list):
+        # load one by one then merge
+        train_datasets = []
+        test_datasets = []
+        for dataset_path in dataset_name_or_path:
+            train_dataset, test_dataset = get_chat_dataset(
+                dataset_path,
+                split=split,
+                num_samples=num_samples,
+                test_ratio=test_ratio,
+                tokenizer=tokenizer,
+                message_key=message_key,
+                chat_template=chat_template,
+                dataset_already_formated=dataset_already_formated,
+                **kwargs,
+            )
+            train_datasets.append(train_dataset.to_list())
+            if test_dataset:
+                test_datasets.append(test_dataset.to_list())
+        # # Merge datasets
+        ds_train = Dataset.from_list(
+            [item for sublist in train_datasets for item in sublist]
+        )
+        if test_datasets:
+            ds_test = Dataset.from_list(
+                [item for sublist in test_datasets for item in sublist]
+            )
+        else:
+            ds_test = None
+        return ds_train, ds_test
+        # return ds_train, ds_test
     # Load dataset based on input type
     if os.path.exists(dataset_name_or_path):
         if dataset_name_or_path.endswith(".json"):
@@ -102,12 +163,16 @@ def get_chat_dataset(
                 tokenizer.chat_template = AutoTokenizer.from_pretrained(
                     chat_template
                 ).chat_template
-
+            
             texts = tokenizer.apply_chat_template(
                 examples[messages_key], tokenize=False
             )
             return {"text": texts}
-
+        if shuffle_user_dict_keys or 1:
+            log(
+                "Shuffling user dict keys in the dataset", level="info", once=True
+            )
+            dataset = dataset.map(shuffle_one_messages, batched=True)
         try:
             dataset = dataset.map(apply_chat_template, batched=True)
         except Exception as e:
