@@ -68,13 +68,7 @@ def get_run_id(hyper_config_model, training_config_model):
 
     # Normalize to remove periods and dashes
     short_run_id = short_run_id.replace(".", "_").replace("-", "_")
-
-    # Final name: prepend yyyy_mm_dd + model + dataset + short_run_id
-    # Example: "2023_07_01/modelname_dataset_ls-crossentropy_r4_a32..."
-    # Return it as one string; or you could keep returning a tuple
-    final_run_id = f"{model_name}_{dataset}_{short_run_id}"
-    # model_name_dataset = f"{model_name}_{dataset}"
-    return f"{model_name}_{today_str}", final_run_id
+    return f"{model_name}_{today_str}", short_run_id
 
 
 def _get_hp_grad_dir(model_name_dataset, run_id):
