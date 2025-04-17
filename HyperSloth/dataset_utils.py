@@ -168,7 +168,7 @@ def get_chat_dataset(
                 examples[messages_key], tokenize=False
             )
             return {"text": texts}
-        if shuffle_user_dict_keys or 1:
+        if shuffle_user_dict_keys:
             log(
                 "Shuffling user dict keys in the dataset", level="info", once=True
             )
