@@ -6,7 +6,7 @@ from filelock import FileLock
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 from loguru import logger
 
-TIME_OUT = 300
+TIME_OUT = 1800
 SLEEP_TIME = 0.01
 WAIT_WARNING_THRESHOLD = 2  # Log a warning if waiting longer than this
 
