@@ -70,9 +70,11 @@ def merge_and_save_lora(
 
         file = 'https://huggingface.co/unsloth/gemma-3-12b-it/raw/main/preprocessor_config.json'
         # download the file and put to the lora dir
-        response = requests.get(file)
-        with open(os.path.join(lora_path, "preprocessor_config.json"), "wb") as f:
-            f.write(response.content)
+        cmd = 'wget --no-check-certificate -O {}/preprocessor_config.json {}'.format(lora_path, file)
+        os.system(cmd)
+        # response = requests.get(file)
+        # with open(os.path.join(lora_path, "preprocessor_config.json"), "wb") as f:
+        #     f.write(response.content)
 
     else:
         from transformers import AutoModelForCausalLM
