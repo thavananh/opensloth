@@ -68,7 +68,7 @@ def merge_and_save_lora(
             output_path, max_shard_size="5048MB", safe_serialization=True
         )
 
-        file = 'https://huggingface.co/unsloth/gemma-3-12b-it/blob/main/preprocessor_config.json'
+        file = 'https://huggingface.co/unsloth/gemma-3-12b-it/raw/main/preprocessor_config.json'
         # download the file and put to the lora dir
         response = requests.get(file)
         with open(os.path.join(lora_path, "preprocessor_config.json"), "wb") as f:
