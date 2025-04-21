@@ -41,13 +41,38 @@ def merge_and_save_lora(
     logger.info(f"Base model: {base_model_name_or_path}")
 
     if output_path is None:
-        output_path = f"{lora_path}-merged"
-
+        output_path = f"{lora_path}/merged"
+    logger.info(f"Output path: {output_path}")
     # Load the LoRA model
     if "gemma-3" in base_model_name_or_path.lower() or force_use_unsloth:
         logger.info("Using FastModel for LoRA")
-        model, tokenizer = FastModel.from_pretrained(lora_path, load_in_4bit=False)
-        model.save_pretrained_merged(output_path, tokenizer, save_method="merged_16bit")
+        import requests
+        import torch
+        from PIL import Image
+        from transformers import Gemma3ForConditionalGeneration
+        import peft
+        tokenizer = AutoTokenizer.from_pretrained(
+            base_model_name_or_path,
+            trust_remote_code=True,
+        )
+        tokenizer.save_pretrained(output_path)
+
+
+        model = Gemma3ForConditionalGeneration.from_pretrained(
+            base_model_name_or_path, device_map="cpu", torch_dtype=torch.bfloat16
+        ).eval()
+        # model, tokenizer = FastModel.from_pretrained(lora_path, load_in_4bit=False, dtype=torch.bfloat16)
+        peft_model = peft.PeftModel.from_pretrained(model, lora_path)
+        merged_model = peft_model.merge_and_unload()
+        merged_model.save_pretrained(
+            output_path, max_shard_size="5048MB", safe_serialization=True
+        )
+
+        file = 'https://huggingface.co/unsloth/gemma-3-12b-it/blob/main/preprocessor_config.json'
+        # download the file and put to the lora dir
+        response = requests.get(file)
+        with open(os.path.join(lora_path, "preprocessor_config.json"), "wb") as f:
+            f.write(response.content)
 
     else:
         from transformers import AutoModelForCausalLM
@@ -69,9 +94,11 @@ def merge_and_save_lora(
         merged_model = lora_model.merge_and_unload()
 
         # Save the merged model
+        merged_model = merged_model.to(torch.bfloat16)
         merged_model.save_pretrained(
             output_path, max_shard_size="2048MB", safe_serialization=True
         )
+        # to bf16
 
         # Save the tokenizer from the base model
         tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path)
