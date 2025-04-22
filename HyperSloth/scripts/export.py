@@ -34,10 +34,10 @@ def merge_and_save_lora(
 
     if "qwen" in base_model_name_or_path.lower():
         # replace unsloth/ with Qwen/
-        base_model_name_or_path = base_model_name_or_path.replace("unsloth/", "Qwen/")
+        base_model_name_or_path = base_model_name_or_path.replace("unsloth/", "qwen/")
     if "gemma" in base_model_name_or_path.lower():
         # replace unsloth/ with Gemma/
-        base_model_name_or_path = base_model_name_or_path.replace("unsloth/", "Google/")
+        base_model_name_or_path = base_model_name_or_path.replace("unsloth/", "google/")
     logger.info(f"Base model: {base_model_name_or_path}")
 
     if output_path is None:
