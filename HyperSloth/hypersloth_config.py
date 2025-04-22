@@ -87,7 +87,7 @@ class HyperConfig(BaseModel):
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
     use_mmap_grad_sync: bool = Field(default=True)
     pretrained_lora: Optional[str] = Field(
-        default=None, description="Path to pretrained LoRA model"
+        default=None, description="Path to pretrained LoRA model for continous lora training"
     )
     
 
