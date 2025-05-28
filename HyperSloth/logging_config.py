@@ -413,9 +413,10 @@ class HyperSlothLogger:
 
     def log_step_duration(self, step_name: str, duration: float) -> None:
         """Log the duration of a completed step."""
-        if duration < 0.1:
-            duration_str = f"{duration*1000:.1f}ms"
-        elif duration < 60:
+        # Skip logging very short durations (less than 0.5 seconds) to reduce noise
+        if duration < 3:
+            return
+        if duration < 60:
             duration_str = f"{duration:.2f}s"
         elif duration < 3600:
             duration_str = f"{duration/60:.1f}m"
