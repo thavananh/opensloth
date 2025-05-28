@@ -58,3 +58,4 @@ test.mmap
 HyperSloth/_patch_log.py
 test.bin
 examples
+model_store/
