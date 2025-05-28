@@ -153,7 +153,6 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     enhanced_logger.start_timing("callback_setup")
     grad_sync_cb = HyperSlothNCCLGradSyncCallback.create_for_hypersloth(
         model=trainer.model,
-        grad_dir=os.environ["HYPERSLOTH_RUN_DIR"],
         gpu=gpu,
         gpus=hyper_config.training.gpus,
     )

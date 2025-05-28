@@ -17,23 +17,17 @@ def _compute_reordered_and_shuffled_ids(
 ) -> list[int]:
     from fastcore.all import chunked
 
-    lens = [len(x["input_ids"]) for x in dataset]
+    logger.info("Starting to compute sequence lengths...")
+    lens = [len(x["input_ids"]) for x in dataset]  # type: ignore
+    logger.info(f"Computed {len(lens)} sequence lengths")
+
+    logger.info("Sorting indices by sequence length...")
     sorted_ids = sorted(range(len(lens)), key=lambda k: lens[k])
+    logger.info("Finished sorting indices")
 
     global_bz = int(os.environ["HYPERSLOTH_FORWARD_BZ"])
+    logger.info(f"Creating chunks with batch size: {global_bz}")
     chunked_ids = list(chunked(sorted_ids, global_bz))
-    random.Random(seed + epoch).shuffle(chunked_ids)
-
-    # Log first 10 chunks for debugging
-    for i in range(min(10, len(chunked_ids))):
-        chunk = chunked_ids[i]
-        chunk_lens = [lens[idx] for idx in chunk]
-        logger.info(
-            f"[{i}] Chunk {i} length: {len(chunk)} "
-            f"with mean length {sum(chunk_lens) / len(chunk_lens):.1f} "
-            f"then min length {min(chunk_lens)} "
-            f"and max length {max(chunk_lens)}"
-        )
 
     return [idx for chunk in chunked_ids for idx in chunk]
 
@@ -44,17 +38,19 @@ def reorder_and_shuffle_data(
     seed=42,
 ) -> Dataset:
     ids = _compute_reordered_and_shuffled_ids(dataset, epoch, seed)
+    clock = Clock(start_now=True)
     dataset = dataset.select(ids)
+    clock.log_elapsed_time("Dataset selection")
     return dataset
 
 
-def print_sequence_lengths(dataset: Dataset):
-    lens = [len(x["input_ids"]) for x in dataset]
-    logger.info(f"First 10 sequence lengths: {lens[:10]}")
-    logger.info(f"Last 10 sequence lengths: {lens[-10:]}")
-    logger.info(f"Max sequence length: {max(lens)}")
-    logger.info(f"Min sequence length: {min(lens)}")
-    logger.info(f"Mean sequence length: {sum(lens) / len(lens)}")
+# def print_sequence_lengths(dataset: Dataset):
+#     lens = [len(x["input_ids"]) for x in dataset]
+#     logger.info(f"First 10 sequence lengths: {lens[:10]}")
+#     logger.info(f"Last 10 sequence lengths: {lens[-10:]}")
+#     logger.info(f"Max sequence length: {max(lens)}")
+#     logger.info(f"Min sequence length: {min(lens)}")
+#     logger.info(f"Mean sequence length: {sum(lens) / len(lens)}")
 
 
 def get_callback_shuffle_data(trainer) -> TrainerCallback:

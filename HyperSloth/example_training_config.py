@@ -5,7 +5,6 @@ hyper_config_model = HyperConfig(
     grad_dir="/dev/shm/hypersloth",
     data=DataConfig(
         dataset_name_or_path="mlabonne/FineTome-100k",
-        test_ratio=0.05,
         split="train",
         num_samples=1000,  # for debuging
         instruction_part="<start_of_turn>user\n",  # For gemma it is <bos><start_of_turn>user to train with loss

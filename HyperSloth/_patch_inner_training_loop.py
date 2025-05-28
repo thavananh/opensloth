@@ -390,9 +390,9 @@ def patch_inner_training_loop(trainer):
                 total_updates -= 1
 
             clock = Clock()
-            from ._patch_sampler import print_sequence_lengths
+            # from ._patch_sampler import print_sequence_lengths
 
-            print_sequence_lengths(self.train_dataset)
+            # print_sequence_lengths(self.train_dataset)
             for _ in range(total_updates):
                 update_step += 1
                 num_batches = (

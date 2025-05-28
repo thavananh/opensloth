@@ -152,7 +152,6 @@ class HyperSlothLogger:
             "Data": [
                 "dataset_name_or_path",
                 "num_samples",
-                "test_ratio",
                 "instruction_part",
                 "response_part",
             ],

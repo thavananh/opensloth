@@ -9,7 +9,6 @@ class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
     dataset_name_or_path: Union[str, list] = "data/cod_1k.json"
-    test_ratio: float = 0.00
     dataset_num_proc: int = CPU_COUNT
     instruction_part: str = "<|im_start|>user\n"
     response_part: str = "<|im_start|>assistant\n"
@@ -94,9 +93,6 @@ class HyperConfig(BaseModel):
         """Pydantic configuration for DataConfig."""
 
         extra = "allow"
-
-
-# from transformers import TrainingArguments
 
 
 class TrainingArgsConfig(BaseModel):

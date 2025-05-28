@@ -17,12 +17,10 @@ class NCCLGradSyncCallback(TrainerCallback):
     def __init__(
         self,
         model: torch.nn.Module,
-        grad_dir: str,  # Not used but kept for interface compatibility
         gpu: int,
         gpus: List[int],
     ):
         self.model = model
-        self.grad_dir = grad_dir  # Kept for compatibility, not used
         self.gpu = gpu
         self.gpus = gpus
         self.local_rank = gpus.index(gpu)
@@ -48,7 +46,7 @@ class NCCLGradSyncCallback(TrainerCallback):
                 f"Expected rank {self.local_rank} but got {dist.get_rank()}"
             )
 
-        logger.info(
+        print(
             f"[GPU={self.gpu}] NCCLGradSyncCallback initialized for "
             f"rank {self.local_rank}/{self.world_size}"
         )
@@ -69,7 +67,7 @@ class NCCLGradSyncCallback(TrainerCallback):
             # Average by dividing by world size
             param.grad.div_(self.world_size)
 
-        logger.debug(
+        print(
             f"[GPU={self.gpu}] Gradient sync step {step}: "
             f"{params / 1e6:.2f}M params"
         )
@@ -80,7 +78,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called before optimizer step - synchronize gradients."""
         step = state.global_step
 
-        logger.debug(
+        print(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"starting gradient synchronization"
         )
@@ -88,7 +86,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         # Synchronize gradients across all ranks
         self._sync_gradients(self.model, step)
 
-        logger.debug(
+        print(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"gradient synchronization complete"
         )
@@ -99,7 +97,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called after optimizer step - cleanup if needed."""
         step = state.global_step
 
-        logger.debug(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
+        print(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
 
         # No cleanup needed for NCCL-based sync
         # This method is kept for interface compatibility
@@ -125,13 +123,13 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     os.environ["MASTER_PORT"] = "29500"  # Default port
 
     # Log all set environment variables
-    logger.info(
+    print(
         f'[GPU={gpu}] NCCL env: RANK={os.environ["RANK"]}, WORLD_SIZE={os.environ["WORLD_SIZE"]}, MASTER_ADDR={os.environ["MASTER_ADDR"]}, MASTER_PORT={os.environ["MASTER_PORT"]}'
     )
 
     # Set the current CUDA device to the specific GPU
 
-    logger.info(f"[GPU={gpu}] Setting current CUDA device to:0")
+    print(f"[GPU={gpu}] Setting current CUDA device to:0")
     torch.cuda.set_device(0)
 
     # Retry logic for NCCL initialization
@@ -145,20 +143,20 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                 backend="nccl", init_method="env://", rank=rank, world_size=world_size
             )
 
-            logger.info(
+            print(
                 f"[GPU={gpu}] NCCL setup complete: "
                 f"rank={rank}, world_size={world_size}, attempt={attempt + 1}"
             )
             return
 
         except Exception as e:
-            logger.warning(
+            print(
                 f"[GPU={gpu}] NCCL init attempt {attempt + 1}/{max_retries} "
                 f"failed: {e}"
             )
 
             if attempt < max_retries - 1:
-                logger.info(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
+                print(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
                 time.sleep(retry_delay)
 
                 # Clean up any partial initialization
@@ -168,7 +166,7 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                     except:
                         pass
             else:
-                logger.error(
+                print(
                     f"[GPU={gpu}] Failed to initialize NCCL after "
                     f"{max_retries} attempts: {e}"
                 )
@@ -182,7 +180,6 @@ class HyperSlothNCCLGradSyncCallback(NCCLGradSyncCallback):
     def create_for_hypersloth(
         cls,
         model: torch.nn.Module,
-        grad_dir: str,  # Kept for compatibility
         gpu: int,
         gpus: list,
     ):
@@ -192,4 +189,4 @@ class HyperSlothNCCLGradSyncCallback(NCCLGradSyncCallback):
         #     # This will retry until success or max retries exceeded
         #     setup_nccl_for_hypersloth(gpu, gpus)
 
-        return cls(model=model, grad_dir=grad_dir, gpu=gpu, gpus=gpus)
+        return cls(model=model, gpu=gpu, gpus=gpus)
