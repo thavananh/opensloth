@@ -560,26 +560,26 @@ def get_hypersloth_logger(
     return logger
 
 
-def setup_logger_format(gpu_id: Optional[str] = None, log_level: str = "INFO") -> None:
-    """Setup a global logger that's safe to use everywhere with proper gpu_id binding."""
-    # Only setup if no handlers exist or if explicitly requested
-    if len(logger._core.handlers) == 0:  # type: ignore
-        # Simple format without gpu_id for global usage
-        simple_format = (
-            "<green>{time:HH:mm:ss}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{file}:{line}</cyan>"
-            "<level>{message}</level>"
-        )
+# def setup_logger_format(gpu_id: Optional[str] = None, log_level: str = "INFO") -> None:
+#     """Setup a global logger that's safe to use everywhere with proper gpu_id binding."""
+#     # Only setup if no handlers exist or if explicitly requested
+#     if len(logger._core.handlers) == 0:  # type: ignore
+#         # Simple format without gpu_id for global usage
+#         simple_format = (
+#             "<green>{time:HH:mm:ss}</green> | "
+#             "<level>{level: <8}</level> | "
+#             "<cyan>{file}:{line}</cyan> |"
+#             "<level>{message}</level>"
+#         )
 
-        # Console handler
-        logger.add(
-            sys.stderr,
-            format=simple_format,
-            level=log_level.upper(),
-            colorize=True,
-            enqueue=True,
-        )
+#         # Console handler
+#         logger.add(
+#             sys.stderr,
+#             format=simple_format,
+#             level=log_level.upper(),
+#             colorize=True,
+#             enqueue=True,
+#         )
 
 
 def format_config_display(hyper_config: Any, training_config: Any) -> Dict[str, Any]:

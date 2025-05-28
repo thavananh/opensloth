@@ -11,9 +11,9 @@ from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 from loguru import logger
 
 # Setup a simple global logger for script-level operations
-from HyperSloth.logging_config import setup_logger_format
+# from HyperSloth.logging_config import setup_logger_format
 
-setup_logger_format(gpu_id="main", log_level="INFO")
+# setup_logger_format(gpu_id="main", log_level="INFO")
 
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"

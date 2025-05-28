@@ -103,23 +103,19 @@ class TrainingArgsConfig(BaseModel):
     learning_rate: float = 2e-4
     gradient_accumulation_steps: int = 16
     logging_steps: int = 1
-    report_to: str = "tensorboard"
     num_train_epochs: int = 1
     lr_scheduler_type: str = "linear"
     warmup_steps: int = 5
     save_total_limit: int = 2
-    bf16: bool = True
-    fp16: bool = False
+    # bf16: bool = True
+    # fp16: bool = False
     optim: str = "adamw_8bit"
     weight_decay: float = 0.01
     save_only_model: bool = True
-    seed: int = 42
-    save_only_model: bool = True
 
+    seed: int = 42
+    report_to: str = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
-    per_device_eval_batch_size: int = 2
-    include_num_input_tokens_seen: bool = True
-    include_tokens_per_second: bool = True
 
     class Config:
         """Pydantic configuration for DataConfig."""
