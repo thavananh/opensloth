@@ -85,9 +85,7 @@ def create_trainer(
 
     enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
 
-    enhanced_logger.start_timing("dataset_identification")
     dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
-    enhanced_logger.finish_timing("dataset_identification")
 
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 

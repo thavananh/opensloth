@@ -12,7 +12,7 @@ hyper_config_model = HyperConfig(
         response_part="<start_of_turn>model\n",  # For gemma it is <start_of_response> to train with loss
     ),
     training=TrainingConfig(
-        gpus=range(2),  # Change this to the number of GPUs you have
+        gpus=[0, 1],  # Change this to the number of GPUs you have
         loss_type="response_only",  # all or response_only, the loss will only be calculated on the response part of the input
     ),
     fast_model_args=FastModelArgs(

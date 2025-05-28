@@ -73,7 +73,7 @@ class HyperSlothLogger:
             "<green>{time:HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
             "<cyan>GPU{extra[gpu_id]}</cyan> | "
-            "<cyan>{file}:{line}</cyan> <cyan>({function})</cyan> - "
+            "<cyan>{file}:{line}</cyan>"
             "<level>{message}</level>"
         )
 
@@ -275,7 +275,7 @@ class HyperSlothLogger:
         rank_info = f"GPU {gpu} (Rank {self.gpu_id}/{world_size-1})"
 
         if model_name:
-            rank_info += f" | Model: [cyan]{model_name}[/cyan]"
+            rank_info += f" | Model: {model_name}[/cyan]"
 
         self._log_with_depth("info", f"🔧 {rank_info}", depth=2)
 
@@ -422,12 +422,12 @@ class HyperSlothLogger:
         else:
             duration_str = f"{duration/3600:.1f}h"
 
-        self._log_with_depth("info", f"⏱️  {step_name}: {duration_str}", depth=2)
+        self._log_with_depth("info", f"⏱️  {step_name}: {duration_str}", depth=3)
 
     def start_total_training_timer(self) -> None:
         """Start the total training timer."""
         self.total_training_start = time.time()
-        self._log_with_depth("info", "🚀 Starting total training timer", depth=2)
+        self._log_with_depth("info", "🚀 Starting total training timer", depth=3)
 
     def log_training_summary(self) -> None:
         """Log a summary of all timing information."""

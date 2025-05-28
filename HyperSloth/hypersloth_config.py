@@ -11,10 +11,11 @@ class DataConfig(BaseModel):
     dataset_name_or_path: Union[str, list] = "data/cod_1k.json"
     test_ratio: float = 0.00
     dataset_num_proc: int = CPU_COUNT
-    instruction_part: str = "Instruction:"
-    response_part: str = "Response:"
+    instruction_part: str = "<|im_start|>user\n"
+    response_part: str = "<|im_start|>assistant\n"
     num_samples: Optional[int] = None
     group_by_length: bool = True
+    split: str = "train"
 
     class Config:
         """Pydantic configuration for DataConfig."""
@@ -45,7 +46,7 @@ class FastModelArgs(BaseModel):
     """Configuration for Unsloth's FastModel initialization."""
 
     model_name: str = "unsloth/gemma-3-4b-it"
-    max_seq_length: int = None
+    max_seq_length: Optional[int] = None
     load_in_4bit: bool = True
     load_in_8bit: bool = False
     full_finetuning: bool = False
