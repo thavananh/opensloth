@@ -275,7 +275,7 @@ class HyperSlothLogger:
         rank_info = f"GPU {gpu} (Rank {self.gpu_id}/{world_size-1})"
 
         if model_name:
-            rank_info += f" | Model: {model_name}[/cyan]"
+            rank_info += f" | Model: {model_name}"
 
         self._log_with_depth("info", f"🔧 {rank_info}", depth=3)
 
