@@ -170,7 +170,7 @@ class HyperSlothLogger:
                 "logging_steps",
                 "eval_steps",
             ],
-            "Hardware": ["gpus", "bf16", "fp16", "packing"],
+            "Hardware": ["gpus", "bf16", "fp16"],
             "Output": ["output_dir", "save_total_limit", "eval_strategy"],
         }
 

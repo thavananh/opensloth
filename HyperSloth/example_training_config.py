@@ -32,12 +32,10 @@ training_config_model = TrainingArgsConfig(
     gradient_accumulation_steps=16,  # More GA help to reduce total communication time
     learning_rate=0.0002,
     per_device_eval_batch_size=2,
-    eval_steps=100,
     logging_steps=1,
     num_train_epochs=1,
     lr_scheduler_type="linear",
     warmup_steps=5,
     save_total_limit=2,
     weight_decay=0.01,
-    packing=False,
 )

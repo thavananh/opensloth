@@ -30,9 +30,6 @@ class TrainingConfig(BaseModel):
         default="response_only",
         description="Loss calculation type: 'all' or 'response_only'",
     )
-    packing: bool = Field(
-        default=False, description="Whether to use packing for training data"
-    )
     chat_template: Optional[Union[str, List[str]]] = Field(
         default=None,
         description="Chat template for formatting input data",
@@ -118,13 +115,11 @@ class TrainingArgsConfig(BaseModel):
     fp16: bool = False
     optim: str = "adamw_8bit"
     weight_decay: float = 0.01
-    packing: bool = False
     save_only_model: bool = True
     seed: int = 42
     save_only_model: bool = True
 
-    eval_strategy: str = "steps"
-    eval_steps: int = 100
+    eval_strategy: str = "no"  # must be no, when using multigpus
     per_device_eval_batch_size: int = 2
     include_num_input_tokens_seen: bool = True
     include_tokens_per_second: bool = True
