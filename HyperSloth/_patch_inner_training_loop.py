@@ -65,9 +65,9 @@ def patch_inner_training_loop(trainer):
     _patch_log(Trainer)
 
     # Get enhanced logger for timing
-    from .logging_config import setup_enhanced_logger
+    from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = setup_enhanced_logger(gpu_id=str(HP_LOCAL_RANK))
+    enhanced_logger = get_hypersloth_logger(gpu_id=str(HP_LOCAL_RANK))
 
     @patch
     def _inner_training_loop(
@@ -329,6 +329,7 @@ def patch_inner_training_loop(trainer):
         self.state.init_training_references(self, max_steps, num_train_epochs, trial)
 
         # tr_loss is a tensor to avoid synchronization of TPUs through .item()
+        # _total_loss_scalar is updated everytime .item() has to be called on tr_loss and stores the sum of all losses
         tr_loss = torch.tensor(0.0).to(args.device)
         # _total_loss_scalar is updated everytime .item() has to be called on tr_loss and stores the sum of all losses
         self._total_loss_scalar = 0.0
@@ -405,7 +406,7 @@ def patch_inner_training_loop(trainer):
                     epoch_iterator, num_batches
                 )
 
-                def select(inputs):
+                def select(inputs):  # -> dict[str, Any]:
                     max_gpu_need = min(HP_WOLRD_SIZE, len(inputs["input_ids"]))
                     local_rank = HP_LOCAL_RANK
                     if HP_LOCAL_RANK >= max_gpu_need:
@@ -414,16 +415,6 @@ def patch_inner_training_loop(trainer):
                         )
                         local_rank = HP_LOCAL_RANK % max_gpu_need
 
-                    # get the list of attention percentage per row
-                    attention_rows = [
-                        inputs["attention_mask"][i].sum().item()
-                        / inputs["attention_mask"][i].numel()
-                        for i in range(len(inputs["attention_mask"]))
-                    ]
-                    attention_rows_formated = ", ".join(
-                        f"{attention_row:.2f}" for attention_row in attention_rows
-                    )
-                    print(f"[{local_rank}] Attention rows: {attention_rows_formated}")
                     return {
                         "input_ids": inputs["input_ids"][local_rank::max_gpu_need],
                         "attention_mask": inputs["attention_mask"][
@@ -432,9 +423,68 @@ def patch_inner_training_loop(trainer):
                         "labels": inputs["labels"][local_rank::max_gpu_need],
                     }
 
+                # Print table for whole batch_samples less frequently (every 50 steps) and only on rank 0
+                def log_attention_ratio():
+                    import tabulate
+
+                    table_data = []
+                    headers = ["GPU", "Batch", "Attention Tokens", "Step"]
+
+                    for batch_idx, inputs in enumerate(batch_samples):
+                        for local_rank in range(HP_WOLRD_SIZE):
+                            # Calculate which samples this GPU will process
+                            max_gpu_need = min(HP_WOLRD_SIZE, len(inputs["input_ids"]))
+                            if local_rank < max_gpu_need:
+                                gpu_samples = list(
+                                    range(
+                                        local_rank,
+                                        len(inputs["input_ids"]),
+                                        max_gpu_need,
+                                    )
+                                )
+
+                                # Format attention tokens for this GPU's samples
+                                attention_tokens = []
+                                for sample_idx in gpu_samples:
+                                    if sample_idx < len(inputs["attention_mask"]):
+                                        num_not_masked = (
+                                            inputs["attention_mask"][sample_idx]
+                                            .sum()
+                                            .item()
+                                        )
+                                        total_tokens = inputs["attention_mask"][
+                                            sample_idx
+                                        ].numel()
+                                        attention_tokens.append(
+                                            f"{num_not_masked}/{total_tokens}"
+                                        )
+
+                                table_data.append(
+                                    [
+                                        local_rank,
+                                        batch_idx,
+                                        attention_tokens,
+                                        update_step,
+                                    ]
+                                )
+
+                    print(
+                        "\n"
+                        + tabulate.tabulate(
+                            table_data, headers=headers, tablefmt="grid"
+                        )
+                        + "\n"
+                    )
+
+                if HP_LOCAL_RANK == 0 and (update_step % 100 == 0 or update_step < 5):
+                    log_attention_ratio()
+
                 for i, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
                     step += 1
+
+                    # Start timing for forward pass
+                    enhanced_logger.start_timing("forward_pass")
 
                     do_sync_step = (
                         step + 1
@@ -474,6 +524,7 @@ def patch_inner_training_loop(trainer):
                                 self.state.num_trained_tokens_seen
                                 / self.state.num_input_tokens_seen
                             ).item()
+
                     if rng_to_sync:
                         self._load_rng_state(resume_from_checkpoint)
                         rng_to_sync = False

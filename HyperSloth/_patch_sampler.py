@@ -6,10 +6,8 @@ from datasets import Dataset
 from fastcore.all import patch
 from torch.utils.data import SequentialSampler
 from transformers import Trainer, TrainerCallback
-from .logging_config import get_safe_logger
 
-# Use safe logger that handles gpu_id properly
-logger = get_safe_logger()
+from loguru import logger
 
 
 def _compute_reordered_and_shuffled_ids(
@@ -22,7 +20,7 @@ def _compute_reordered_and_shuffled_ids(
     lens = [len(x["input_ids"]) for x in dataset]
     sorted_ids = sorted(range(len(lens)), key=lambda k: lens[k])
 
-    global_bz = int(os.environ["HYPERSLOTH_GLOBAL_BATCH_SIZE"])
+    global_bz = int(os.environ["HYPERSLOTH_FORWARD_BZ"])
     chunked_ids = list(chunked(sorted_ids, global_bz))
     random.Random(seed + epoch).shuffle(chunked_ids)
 

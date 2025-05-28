@@ -98,6 +98,9 @@ class HyperConfig(BaseModel):
         extra = "allow"
 
 
+# from transformers import TrainingArguments
+
+
 class TrainingArgsConfig(BaseModel):
     """Configuration for Hugging Face TrainingArguments."""
 
@@ -123,6 +126,8 @@ class TrainingArgsConfig(BaseModel):
     eval_strategy: str = "steps"
     eval_steps: int = 100
     per_device_eval_batch_size: int = 2
+    include_num_input_tokens_seen: bool = True
+    include_tokens_per_second: bool = True
 
     class Config:
         """Pydantic configuration for DataConfig."""

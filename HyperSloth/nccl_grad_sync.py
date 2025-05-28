@@ -2,10 +2,9 @@ import torch
 import torch.distributed as dist
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 from typing import List, Optional
-from .logging_config import get_safe_logger
+from loguru import logger
 
 # Use safe logger that handles gpu_id properly
-logger = get_safe_logger()
 
 
 class NCCLGradSyncCallback(TrainerCallback):

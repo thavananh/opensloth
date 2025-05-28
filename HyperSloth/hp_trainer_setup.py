@@ -12,10 +12,7 @@ from HyperSloth._utils import (
 )
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
-from .logging_config import get_safe_logger
-
-# Use safe logger that handles gpu_id properly
-logger = get_safe_logger()
+from loguru import logger
 
 
 def _change_compiler_location():
@@ -43,9 +40,9 @@ def setup_model_and_training(
     num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
 
     # Get enhanced logger for timing
-    from .logging_config import setup_enhanced_logger
+    from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = setup_enhanced_logger(gpu_id=str(gpu_ith))
+    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
 
     # Start total setup timing
     enhanced_logger.start_timing("total_setup")
@@ -53,9 +50,9 @@ def setup_model_and_training(
     _change_compiler_location()
 
     # Time batch size configuration
-    enhanced_logger.start_timing("batch_size_config")
+    # enhanced_logger.start_timing("batch_size_config")
     configure_batch_size(hf_train_args, gpu_ith, num_gpus)
-    enhanced_logger.finish_timing("batch_size_config")
+    # enhanced_logger.finish_timing("batch_size_config")
 
     # Time model initialization
     enhanced_logger.start_timing("model_init")

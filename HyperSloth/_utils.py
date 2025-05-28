@@ -6,14 +6,13 @@ Handles weight synchronization, model setup, and distributed training coordinati
 import os
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
-from .logging_config import get_safe_logger
 
 # Get enhanced logger for timing
-from .logging_config import setup_enhanced_logger
+from .logging_config import get_hypersloth_logger
 
 
 gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
-enhanced_logger = setup_enhanced_logger(gpu_id=gpu_id)
+enhanced_logger = get_hypersloth_logger(gpu_id=gpu_id)
 from loguru import logger
 
 
@@ -82,9 +81,9 @@ def create_trainer(
     """Load or prepare the dataset and create the SFTTrainer."""
 
     # Get enhanced logger for timing
-    from .logging_config import setup_enhanced_logger
+    from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = setup_enhanced_logger(gpu_id=str(gpu_ith))
+    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
 
     enhanced_logger.start_timing("dataset_identification")
     dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
@@ -146,9 +145,9 @@ def get_trainer(
     """Load or prepare the dataset and create the SFTTrainer."""
 
     # Get enhanced logger for timing
-    from .logging_config import setup_enhanced_logger
+    from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = setup_enhanced_logger(gpu_id=str(gpu_ith))
+    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
 
     enhanced_logger.start_timing("dataset_loading_total")
     enhanced_logger.start_timing("dataset_identification")
@@ -220,6 +219,14 @@ def get_trainer(
     from datasets import load_from_disk
     from trl import SFTTrainer
 
+    # Get enhanced logger for timing
+    from .logging_config import get_hypersloth_logger
+
+    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
+
+    # Start timing for the overall dataset loading process
+    enhanced_logger.start_timing("dataset_loading_total")
+
     LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     lock = dataset_cache_path + ".lock"
 
@@ -271,7 +278,7 @@ def get_trainer(
             logger.info(f"GPU {gpu_ith}: Dataset loaded, Now creating trainer")
             enhanced_logger.start_timing("trainer_creation_from_cache")
             trainer = _create_trainer(
-                dataset["train"], eval_dataset=dataset["eval"], skip_prepare=True
+                dataset["train"], eval_dataset=None, skip_prepare=True
             )
             enhanced_logger.finish_timing("trainer_creation_from_cache")
             logger.info(f"GPU {gpu_ith}: Trainer created")
@@ -285,15 +292,13 @@ def get_trainer(
                 from HyperSloth.dataset_utils import get_chat_dataset
 
                 enhanced_logger.start_timing("dataset_processing")
-                ds_train, ds_test = get_chat_dataset(
+                ds_train = get_chat_dataset(
                     tokenizer=tokenizer, **hyper_config.data.model_dump()
                 )
                 enhanced_logger.finish_timing("dataset_processing")
 
                 enhanced_logger.start_timing("trainer_creation_from_raw")
-                trainer = _create_trainer(
-                    ds_train, eval_dataset=ds_test, skip_prepare=False
-                )
+                trainer = _create_trainer(ds_train, skip_prepare=False)
                 enhanced_logger.finish_timing("trainer_creation_from_raw")
 
                 logger.info(f"Maybe train on responses only")
@@ -304,7 +309,6 @@ def get_trainer(
                 enhanced_logger.start_timing("dataset_caching")
                 dataset_to_save = DatasetDict()
                 dataset_to_save["train"] = trainer.train_dataset
-                dataset_to_save["eval"] = trainer.eval_dataset
                 dataset_to_save.save_to_disk(dataset_cache_path)
                 enhanced_logger.finish_timing("dataset_caching")
 
@@ -353,7 +357,7 @@ def get_trainer(
 
             enhanced_logger.start_timing("trainer_creation_after_wait")
             trainer = _create_trainer(
-                dataset["train"], eval_dataset=dataset["eval"], skip_prepare=True
+                dataset["train"], eval_dataset=None, skip_prepare=True
             )
             enhanced_logger.finish_timing("trainer_creation_after_wait")
     except Exception as e:

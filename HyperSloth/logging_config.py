@@ -59,21 +59,21 @@ class HyperSlothLogger:
         # Create a new logger instance by copying the base logger
         self.logger = base_logger.bind(gpu_id=self.gpu_id)
 
+        base_logger.remove()
         # Only remove handlers if this is the first GPU (to avoid conflicts)
-        if self.gpu_id == "0":
-            # Remove default handler only once
-            try:
-                base_logger.remove()
-            except ValueError:
-                # Handler already removed
-                pass
+        # if self.gpu_id == "0":
+        #     # Remove default handler only once
+        #     try:
+        #     except ValueError:
+        #         # Handler already removed
+        #         pass
 
-        # Custom format with GPU info and better spacing
+        # Custom format with GPU info, caller info and better spacing
         log_format = (
             "<green>{time:HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
             "<cyan>GPU{extra[gpu_id]}</cyan> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+            "<cyan>{file}:{line}</cyan> <cyan>({function})</cyan> - "
             "<level>{message}</level>"
         )
 
@@ -126,6 +126,15 @@ class HyperSlothLogger:
                 enqueue=True,
                 filter=lambda record: record["extra"].get("gpu_id") is not None,
             )
+
+    def _log_with_depth(self, level: str, message: str, depth: int = 2) -> None:
+        """Log message with loguru's built-in caller information."""
+        # getattr(self.logger, level.lower())(message)
+        # Convert level to uppercase since loguru levels are case-sensitive
+        level_upper = level.upper()
+        self.logger.opt(depth=depth).log(
+            level_upper, message, extra={"gpu_id": self.gpu_id}
+        )
 
     def log_config_table(
         self, config_dict: Dict[str, Any], title: str = "Configuration"
@@ -263,14 +272,12 @@ class HyperSlothLogger:
 
     def log_gpu_info(self, gpu: int, world_size: int, model_name: str = "") -> None:
         """Log GPU-specific information."""
-        rank_info = (
-            f"[bold green]GPU {gpu}[/bold green] (Rank {self.gpu_id}/{world_size-1})"
-        )
+        rank_info = f"GPU {gpu} (Rank {self.gpu_id}/{world_size-1})"
 
         if model_name:
             rank_info += f" | Model: [cyan]{model_name}[/cyan]"
 
-        self.logger.info(f"🔧 {rank_info}")
+        self._log_with_depth("info", f"🔧 {rank_info}", depth=2)
 
     def log_progress_step(
         self,
@@ -299,7 +306,7 @@ class HyperSlothLogger:
             progress_parts.append(f"{tokens_per_sec:.0f} tok/s")
 
         progress_msg = " | ".join(progress_parts)
-        self.logger.info(f"📈 {progress_msg}")
+        self._log_with_depth("info", f"📈 {progress_msg}", depth=2)
 
     def log_model_info(self, model_name: str, num_params: Optional[int] = None) -> None:
         """Log model information."""
@@ -314,7 +321,7 @@ class HyperSlothLogger:
                 param_str = f"{num_params:,}"
             model_info += f" | Parameters: [green]{param_str}[/green]"
 
-        self.logger.info(model_info)
+        self._log_with_depth("info", model_info, depth=2)
 
     def log_dataset_info(
         self,
@@ -331,7 +338,7 @@ class HyperSlothLogger:
         if cache_path:
             dataset_info += f" | Cache: [cyan]{cache_path}[/cyan]"
 
-        self.logger.info(dataset_info)
+        self._log_with_depth("info", dataset_info, depth=2)
 
     def log_performance_metrics(self, metrics: Dict[str, float]) -> None:
         """Log performance metrics in a formatted table."""
@@ -366,15 +373,15 @@ class HyperSlothLogger:
 
     def log_error(self, error_msg: str, exc_info: bool = False) -> None:
         """Log error with enhanced formatting."""
-        self.logger.error(f"❌ {error_msg}", exc_info=exc_info)
+        self._log_with_depth("error", f"❌ {error_msg}", depth=2)
 
     def log_warning(self, warning_msg: str) -> None:
         """Log warning with enhanced formatting."""
-        self.logger.warning(f"⚠️  {warning_msg}")
+        self._log_with_depth("warning", f"⚠️  {warning_msg}", depth=2)
 
     def log_success(self, success_msg: str) -> None:
         """Log success message with enhanced formatting."""
-        self.logger.success(f"✅ {success_msg}")
+        self._log_with_depth("success", f"✅ {success_msg}", depth=2)
 
     # === TIMING METHODS ===
     def start_timing(self, step_name: str) -> None:
@@ -383,12 +390,14 @@ class HyperSlothLogger:
         if step_name not in self.step_durations:
             self.step_durations[step_name] = []
 
-        self.logger.debug(f"⏱️  Started timing: {step_name}")
+        self._log_with_depth("debug", f"⏱️  Started timing: {step_name}", depth=2)
 
     def finish_timing(self, step_name: str, log_result: bool = True) -> float:
         """Finish timing a step and optionally log the result."""
         if step_name not in self.step_timers:
-            self.logger.warning(f"⚠️  Timer '{step_name}' was not started")
+            self._log_with_depth(
+                "warning", f"⚠️  Timer '{step_name}' was not started", depth=2
+            )
             return 0.0
 
         timer = self.step_timers[step_name]
@@ -413,12 +422,12 @@ class HyperSlothLogger:
         else:
             duration_str = f"{duration/3600:.1f}h"
 
-        self.logger.info(f"⏱️  {step_name}: {duration_str}")
+        self._log_with_depth("info", f"⏱️  {step_name}: {duration_str}", depth=2)
 
     def start_total_training_timer(self) -> None:
         """Start the total training timer."""
         self.total_training_start = time.time()
-        self.logger.info("🚀 Starting total training timer")
+        self._log_with_depth("info", "🚀 Starting total training timer", depth=2)
 
     def log_training_summary(self) -> None:
         """Log a summary of all timing information."""
@@ -501,7 +510,7 @@ class HyperSlothLogger:
         )
 
         if current_step % 10 == 0 or current_step == total_steps:  # Log every 10 steps
-            self.logger.info(progress_msg)
+            self._log_with_depth("info", progress_msg, depth=2)
 
     def _format_duration(self, duration: float) -> str:
         """Format duration consistently."""
@@ -515,24 +524,22 @@ class HyperSlothLogger:
             return f"{duration/3600:.1f}h"
 
 
-def setup_enhanced_logger(
-    gpu_id: Optional[str] = None, log_level: str = "DEBUG"
+def get_hypersloth_logger(
+    gpu_id: Optional[str] = None, log_level: str = "INFO"
 ) -> HyperSlothLogger:
     """Setup and return enhanced logger instance."""
     return HyperSlothLogger(gpu_id=gpu_id, log_level=log_level)
 
 
-def setup_global_safe_logger(
-    gpu_id: Optional[str] = None, log_level: str = "DEBUG"
-) -> None:
+def setup_logger_format(gpu_id: Optional[str] = None, log_level: str = "INFO") -> None:
     """Setup a global logger that's safe to use everywhere with proper gpu_id binding."""
     # Only setup if no handlers exist or if explicitly requested
-    if len(logger._core.handlers) == 0:
+    if len(logger._core.handlers) == 0:  # type: ignore
         # Simple format without gpu_id for global usage
         simple_format = (
             "<green>{time:HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+            "<cyan>{file}:{line}</cyan>"
             "<level>{message}</level>"
         )
 
@@ -544,14 +551,6 @@ def setup_global_safe_logger(
             colorize=True,
             enqueue=True,
         )
-
-
-def get_safe_logger(gpu_id: Optional[str] = None) -> Any:
-    """Get a logger instance that's safe to use with proper gpu_id binding."""
-    if gpu_id is None:
-        gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "main")
-
-    return logger.bind(gpu_id=gpu_id)
 
 
 def format_config_display(hyper_config: Any, training_config: Any) -> Dict[str, Any]:

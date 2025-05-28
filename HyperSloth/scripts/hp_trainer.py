@@ -8,14 +8,12 @@ from fastcore.all import threaded, call_parse
 import tabulate
 
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
-from speedy_utils import setup_logger
+from loguru import logger
 
 # Setup a simple global logger for script-level operations
-from HyperSloth.logging_config import setup_global_safe_logger, get_safe_logger
+from HyperSloth.logging_config import setup_logger_format
 
-setup_global_safe_logger(gpu_id="main", log_level="INFO")
-logger = get_safe_logger(gpu_id="main")
-
+setup_logger_format(gpu_id="main", log_level="INFO")
 
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
@@ -104,10 +102,10 @@ def _get_hp_grad_dir(model_name_dataset, run_id):
 
 def _setup_logger(gpu_id):
     """Setup enhanced logging for HyperSloth."""
-    from HyperSloth.logging_config import setup_enhanced_logger
+    from HyperSloth.logging_config import get_hypersloth_logger
 
     log_level = os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO")
-    enhanced_logger = setup_enhanced_logger(gpu_id=str(gpu_id), log_level=log_level)
+    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_id), log_level=log_level)
 
     # Store logger instance for use in training
     os.environ[f"HYPERSLOTH_ENHANCED_LOGGER_{gpu_id}"] = "1"
@@ -382,10 +380,10 @@ def initialize_training_config(config_file):
         raise ValueError("No training configuration found")
 
     # Display combined config with enhanced formatting
-    from HyperSloth.logging_config import format_config_display, setup_enhanced_logger
+    from HyperSloth.logging_config import format_config_display, get_hypersloth_logger
 
     # Setup temporary logger for config display
-    temp_logger = setup_enhanced_logger(gpu_id="0", log_level="INFO")
+    temp_logger = get_hypersloth_logger(gpu_id="0", log_level="INFO")
     combined_config = format_config_display(hyper_config, training_config)
     temp_logger.log_config_table(
         combined_config, "🔧 HyperSloth Training Configuration"
@@ -393,9 +391,9 @@ def initialize_training_config(config_file):
 
     # # of GPUs
     os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
-    os.environ["HYPERSLOTH_GLOBAL_BATCH_SIZE"] = str(
+    os.environ["HYPERSLOTH_FORWARD_BZ"] = str(
         training_config.per_device_train_batch_size
-        * training_config.gradient_accumulation_steps
+        # * training_config.gradient_accumulation_steps
         * len(hyper_config.training.gpus)
     )
     return config_file, hyper_config, training_config
