@@ -15,18 +15,30 @@ from loguru import logger
 from speedy_utils import load_json_or_pickle
 from torch import nn
 from torch.cuda import amp
-from transformers.trainer import (TRAINER_STATE_NAME, DebugOption,
-                                  DebugUnderflowOverflow, DistributedType,
-                                  ExportableState, OptimizerNames,
-                                  ParallelMode, Trainer, TrainerState,
-                                  TrainOutput, _is_peft_model, deepspeed_init,
-                                  deepspeed_load_checkpoint, dist,
-                                  get_model_param_count,
-                                  is_accelerate_available,
-                                  is_sagemaker_mp_enabled,
-                                  is_torch_xla_available, skip_first_batches,
-                                  speed_metrics, tpu_spmd_dataloader,
-                                  unwrap_model)
+from transformers.trainer import (
+    TRAINER_STATE_NAME,
+    DebugOption,
+    DebugUnderflowOverflow,
+    DistributedType,
+    ExportableState,
+    OptimizerNames,
+    ParallelMode,
+    Trainer,
+    TrainerState,
+    TrainOutput,
+    _is_peft_model,
+    deepspeed_init,
+    deepspeed_load_checkpoint,
+    dist,
+    get_model_param_count,
+    is_accelerate_available,
+    is_sagemaker_mp_enabled,
+    is_torch_xla_available,
+    skip_first_batches,
+    speed_metrics,
+    tpu_spmd_dataloader,
+    unwrap_model,
+)
 
 from HyperSloth._patch_log import _patch_log
 
@@ -43,9 +55,6 @@ else:
     IS_XLA_FSDPV2_POST_2_2 = False
 
 
-
-
-
 def patch_inner_training_loop(trainer):
     from speedy_utils import Clock
 
@@ -54,6 +63,12 @@ def patch_inner_training_loop(trainer):
     HP_WOLRD_SIZE = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
     Trainer = type(trainer)
     _patch_log(Trainer)
+
+    # Get enhanced logger for timing
+    from .logging_config import setup_enhanced_logger
+
+    enhanced_logger = setup_enhanced_logger(gpu_id=str(HP_LOCAL_RANK))
+
     @patch
     def _inner_training_loop(
         self: Trainer,  # type: ignore
@@ -63,6 +78,7 @@ def patch_inner_training_loop(trainer):
         trial=None,
         ignore_keys_for_eval=None,
     ):
+        logger.debug("Some thing before die")
 
         self.accelerator.free_memory()
         self._train_batch_size = batch_size
@@ -368,15 +384,13 @@ def patch_inner_training_loop(trainer):
             if remainder == 0:
                 remainder = args.gradient_accumulation_steps
             update_step = -1
-            total_updates = (
-                steps_in_epoch // (args.gradient_accumulation_steps ) + 1
-            )
+            total_updates = steps_in_epoch // (args.gradient_accumulation_steps) + 1
             if args.gradient_accumulation_steps == 1:
                 total_updates -= 1
-                
-            
+
             clock = Clock()
             from ._patch_sampler import print_sequence_lengths
+
             print_sequence_lengths(self.train_dataset)
             for _ in range(total_updates):
                 update_step += 1
@@ -390,25 +404,43 @@ def patch_inner_training_loop(trainer):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
-                
+
                 def select(inputs):
-                    max_gpu_need = min(HP_WOLRD_SIZE, len(inputs['input_ids']))
+                    max_gpu_need = min(HP_WOLRD_SIZE, len(inputs["input_ids"]))
                     local_rank = HP_LOCAL_RANK
                     if HP_LOCAL_RANK >= max_gpu_need:
-                        logger.warning(f"HP_LOCAL_RANK {HP_LOCAL_RANK} for now bypass by selecting the first gpu which might cause the gradient to be wrong")
+                        logger.warning(
+                            f"HP_LOCAL_RANK {HP_LOCAL_RANK} for now bypass by selecting the first gpu which might cause the gradient to be wrong"
+                        )
                         local_rank = HP_LOCAL_RANK % max_gpu_need
+
+                    # get the list of attention percentage per row
+                    attention_rows = [
+                        inputs["attention_mask"][i].sum().item()
+                        / inputs["attention_mask"][i].numel()
+                        for i in range(len(inputs["attention_mask"]))
+                    ]
+                    attention_rows_formated = ", ".join(
+                        f"{attention_row:.2f}" for attention_row in attention_rows
+                    )
+                    print(f"[{local_rank}] Attention rows: {attention_rows_formated}")
                     return {
-                        'input_ids': inputs['input_ids'][local_rank::max_gpu_need],
-                        'attention_mask': inputs['attention_mask'][local_rank::max_gpu_need],
-                        'labels': inputs['labels'][local_rank::max_gpu_need],
+                        "input_ids": inputs["input_ids"][local_rank::max_gpu_need],
+                        "attention_mask": inputs["attention_mask"][
+                            local_rank::max_gpu_need
+                        ],
+                        "labels": inputs["labels"][local_rank::max_gpu_need],
                     }
-                from speedy_utils import log
+
                 for i, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
                     step += 1
-                    log(f"Input shape: {inputs['input_ids'].shape}, Attention masked ratio: {inputs['attention_mask'].sum().item() / inputs['attention_mask'].numel()}", interval=60)
 
-                    do_sync_step = (step + 1) % args.gradient_accumulation_steps == 0 or (step + 1) == steps_in_epoch
+                    do_sync_step = (
+                        step + 1
+                    ) % args.gradient_accumulation_steps == 0 or (
+                        step + 1
+                    ) == steps_in_epoch
                     # Since we perform prefetching, we need to manually set sync_gradients
                     self.accelerator.gradient_state._set_sync_gradients(do_sync_step)
 
@@ -501,10 +533,15 @@ def patch_inner_training_loop(trainer):
                         # wait until all item in NUM_ITEMS_IN_BATCH !=0
 
                         clock.update_task("2. forward")
+                        enhanced_logger.finish_timing("forward_pass", log_result=False)
+                        enhanced_logger.start_timing("gradient_sync")
+
                         self.control = self.callback_handler.on_pre_optimizer_step(
                             args, self.state, self.control
                         )
                         clock.update_task("3. sync gradients")
+                        enhanced_logger.finish_timing("gradient_sync", log_result=False)
+                        enhanced_logger.start_timing("optimizer_step")
                         # <<<<< HYPER SLOTH=====
                         self.accelerator.gradient_state._set_sync_gradients(True)
                         # Perform allreduce before gradient update
@@ -570,6 +607,18 @@ def patch_inner_training_loop(trainer):
                             start_time,
                         )
                         clock.update_task("4. optimizer step")
+                        enhanced_logger.finish_timing(
+                            "optimizer_step", log_result=False
+                        )
+
+                        # Log step timing progress every 10 steps
+                        if self.state.global_step % 10 == 0:
+                            enhanced_logger.log_step_timing_progress(
+                                "forward_pass",
+                                self.state.global_step,
+                                self.state.max_steps,
+                            )
+
                         if (
                             os.getenv("HYPERSLOTH_LOCAL_RANK", "0") == "0"
                             and self.state.global_step > 1
@@ -644,7 +693,7 @@ def patch_inner_training_loop(trainer):
             elif args.parallel_mode == ParallelMode.DISTRIBUTED:
                 dist.barrier()
             elif is_sagemaker_mp_enabled():
-                smp.barrier() # type: ignore
+                smp.barrier()  # type: ignore
 
             self._load_best_model()
 
@@ -703,5 +752,3 @@ def patch_inner_training_loop(trainer):
             self._deactivate_neftune(self.model)
 
         return TrainOutput(self.state.global_step, train_loss, metrics)
-
-    

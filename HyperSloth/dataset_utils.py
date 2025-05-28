@@ -42,7 +42,6 @@ def shuffle_one_messages(one_row):
     return one_row
 
 
-
 def get_chat_dataset(
     dataset_name_or_path: str,
     split: str = None,
@@ -109,6 +108,7 @@ def get_chat_dataset(
     else:
         try:
             from unsloth_zoo.dataset_utils import standardize_data_formats
+
             dataset = load_dataset(dataset_name_or_path, split=split)
             # Check if dataset is empty
             dataset[0]
@@ -163,15 +163,14 @@ def get_chat_dataset(
                 tokenizer.chat_template = AutoTokenizer.from_pretrained(
                     chat_template
                 ).chat_template
-            
+
             texts = tokenizer.apply_chat_template(
                 examples[messages_key], tokenize=False
             )
             return {"text": texts}
+
         if shuffle_user_dict_keys:
-            log(
-                "Shuffling user dict keys in the dataset", level="info", once=True
-            )
+            log("Shuffling user dict keys in the dataset", level="info", once=True)
             dataset = dataset.map(shuffle_one_messages, batched=True)
         try:
             dataset = dataset.map(apply_chat_template, batched=True)
@@ -189,7 +188,9 @@ def get_chat_dataset(
     if test_ratio > 0:
         ds = dataset.train_test_split(test_size=test_ratio, shuffle=True, seed=42)
         ds_train, ds_test = ds["train"], ds["test"]
-        log(f'Splitting dataset into train and test sets, test_ratio={test_ratio}, seed=42, Num test samples={len(ds_test)}')
+        log(
+            f"Splitting dataset into train and test sets, test_ratio={test_ratio}, seed=42, Num test samples={len(ds_test)}"
+        )
     else:
         ds_train, ds_test = dataset, None
 

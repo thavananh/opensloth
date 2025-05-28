@@ -4,6 +4,7 @@ from multiprocessing import cpu_count
 
 CPU_COUNT = min(1, cpu_count() - 2)
 
+
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
@@ -36,6 +37,7 @@ class TrainingConfig(BaseModel):
         default=None,
         description="Chat template for formatting input data",
     )
+
     class Config:
         """Pydantic configuration for DataConfig."""
 
@@ -50,7 +52,6 @@ class FastModelArgs(BaseModel):
     load_in_4bit: bool = True
     load_in_8bit: bool = False
     full_finetuning: bool = False
-    token: Optional[str] = None
 
     class Config:
         """Pydantic configuration for DataConfig."""
@@ -87,9 +88,9 @@ class HyperConfig(BaseModel):
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
     use_mmap_grad_sync: bool = Field(default=True)
     pretrained_lora: Optional[str] = Field(
-        default=None, description="Path to pretrained LoRA model for continous lora training"
+        default=None,
+        description="Path to pretrained LoRA model for continous lora training",
     )
-    
 
     class Config:
         """Pydantic configuration for DataConfig."""
@@ -118,7 +119,7 @@ class TrainingArgsConfig(BaseModel):
     save_only_model: bool = True
     seed: int = 42
     save_only_model: bool = True
-    
+
     eval_strategy: str = "steps"
     eval_steps: int = 100
     per_device_eval_batch_size: int = 2

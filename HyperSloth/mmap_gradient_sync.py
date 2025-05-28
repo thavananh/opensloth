@@ -1,10 +1,20 @@
+"""
+Memory-mapped gradient synchronization for distributed training.
+
+WARNING: This module is deprecated and will be removed in a future version.
+Please use the native distributed training capabilities of your framework instead.
+"""
+
 import os
 import time
 import numpy as np
 import torch
 from filelock import FileLock
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
-from loguru import logger
+from .logging_config import get_safe_logger
+
+# Use safe logger that handles gpu_id properly
+logger = get_safe_logger()
 
 TIME_OUT = 1800
 SLEEP_TIME = 0.01

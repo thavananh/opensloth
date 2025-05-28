@@ -1,20 +1,26 @@
 import os
+import os
 import sys
 import time
 import warnings
 import importlib.util
 from fastcore.all import threaded, call_parse
-from loguru import logger
 import tabulate
 
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 from speedy_utils import setup_logger
 
+# Setup a simple global logger for script-level operations
+from HyperSloth.logging_config import setup_global_safe_logger, get_safe_logger
+
+setup_global_safe_logger(gpu_id="main", log_level="INFO")
+logger = get_safe_logger(gpu_id="main")
 
 
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
 warnings.filterwarnings("ignore")
+
 
 def get_current_python_path():
     """
@@ -30,6 +36,7 @@ def get_current_python_path():
     except subprocess.CalledProcessError as e:
         logger.error(f"Error getting Python path: {e}")
         return None
+
 
 def get_run_id(hyper_config_model, training_config_model):
     """
@@ -96,34 +103,56 @@ def _get_hp_grad_dir(model_name_dataset, run_id):
 
 
 def _setup_logger(gpu_id):
-    lvl = os.environ.get("HYPERSLOTH_LOG_LEVEL", "D")
-    setup_logger(lvl, disable_grep="mmap_gradient_sync")
-    file = f".log/process_{gpu_id}.log"
-    if os.path.exists(file):
-        os.remove(file)
+    """Setup enhanced logging for HyperSloth."""
+    from HyperSloth.logging_config import setup_enhanced_logger
 
-    print(f"Logging to {file}")
+    log_level = os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO")
+    enhanced_logger = setup_enhanced_logger(gpu_id=str(gpu_id), log_level=log_level)
+
+    # Store logger instance for use in training
+    os.environ[f"HYPERSLOTH_ENHANCED_LOGGER_{gpu_id}"] = "1"
+
+    return enhanced_logger
 
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
     from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
     from HyperSloth.nccl_grad_sync import HyperSlothNCCLGradSyncCallback
     from HyperSloth.hp_trainer_setup import setup_model_and_training
+
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
     os.environ["HYPERSLOTH_LOCAL_GPU_IDX"] = str(gpu)
-    _setup_logger(f"{gpu}")
+
+    # Setup enhanced logger
+    enhanced_logger = _setup_logger(f"{gpu}")
+
     hf_train_args.output_dir = os.path.join(
         hf_train_args.output_dir, *get_run_id(hyper_config, hf_train_args)
     )
+
+    # Use enhanced logging
+    enhanced_logger.log_gpu_info(
+        gpu=gpu,
+        world_size=len(hyper_config.training.gpus),
+        model_name=hyper_config.fast_model_args.model_name,
+    )
+
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
+
+    # Start total training timer
+    enhanced_logger.start_total_training_timer()
 
     # setup_nccl_for_hypersloth(gpu, hyper_config.training.gpus)
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+
+    enhanced_logger.start_timing("model_and_training_setup")
     trainer, model, tokenizer = setup_model_and_training(
         hyper_config=hyper_config,
         hf_train_args=hf_train_args,
     )
+    enhanced_logger.finish_timing("model_and_training_setup")
 
+    enhanced_logger.start_timing("callback_setup")
     grad_sync_cb = HyperSlothNCCLGradSyncCallback.create_for_hypersloth(
         model=trainer.model,
         grad_dir=os.environ["HYPERSLOTH_RUN_DIR"],
@@ -132,23 +161,29 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     )
     logger.info(f"Using gradient sync callback for GPU {gpu}")
     trainer.add_callback(grad_sync_cb)
-    print("----")
-    print(os.environ)
-    print("----")
+    enhanced_logger.finish_timing("callback_setup")
+
+    enhanced_logger.start_timing("actual_training")
     trainer.train()
+    enhanced_logger.finish_timing("actual_training")
 
     # Save once from rank=0
     if gpu == hyper_config.training.gpus[0]:
+        enhanced_logger.start_timing("model_saving")
         logger.info(f"Save model to {hf_train_args.output_dir}")
         model.save_pretrained(hf_train_args.output_dir)
         tokenizer.save_pretrained(hf_train_args.output_dir)
+        enhanced_logger.finish_timing("model_saving")
+
+        # Log training summary
+        enhanced_logger.log_training_summary()
 
 
 def load_config_from_path(config_path: str):
     """Load configuration from Python file path."""
     spec = importlib.util.spec_from_file_location("config_module", config_path)
-    config_module = importlib.util.module_from_spec(spec) # type: ignore
-    spec.loader.exec_module(config_module) # type: ignore
+    config_module = importlib.util.module_from_spec(spec)  # type: ignore
+    spec.loader.exec_module(config_module)  # type: ignore
     return config_module
 
 
@@ -183,7 +218,7 @@ tmux new-session -d -s {session_name} -n MAIN"""
 
     # First GPU
     # check tmux session command, if yes, ask user enter "y" to kill the session
-    # check_if_session_exists_then_ask_to_kill = f"tmux has-session -t {session_name} 
+    # check_if_session_exists_then_ask_to_kill = f"tmux has-session -t {session_name}
     # && read -p 'Session exists, kill it? (y/n): ' kill_session &&
     #  [ $kill_session == 'y' ] && tmux kill-session -t {session_name}"
     # lines.append(check_if_session_exists_then_ask_to_kill)
@@ -232,7 +267,11 @@ tmux new-session -d -s {session_name} -n MAIN"""
 
 @call_parse
 def train(
-    config_file: str, rank: int = None, world_size: int = None, tmux: str = None, y: bool = False
+    config_file: str,
+    rank: int = None,
+    world_size: int = None,
+    tmux: str = None,
+    y: bool = False,
 ):
 
     config_file, hyper_config, training_config = initialize_training_config(config_file)
@@ -261,7 +300,13 @@ def train(
             session_name = tmux if tmux is not None else f"train_hp"
             script_path = "/tmp/hp_train.sh"
             build_tmux_script(
-                session_name, script_path, model_name_dataset, run_id, config_file, gpus, auto_kill=y
+                session_name,
+                script_path,
+                model_name_dataset,
+                run_id,
+                config_file,
+                gpus,
+                auto_kill=y,
             )
             return
         else:
@@ -336,11 +381,21 @@ def initialize_training_config(config_file):
     else:
         raise ValueError("No training configuration found")
 
-    # Display combined config
-    combined_config = {**hyper_config.model_dump(), **training_config.model_dump()}
-    config_table = tabulate.tabulate(combined_config.items(), headers=["Key", "Value"])
-    logger.info("\n" + config_table)
+    # Display combined config with enhanced formatting
+    from HyperSloth.logging_config import format_config_display, setup_enhanced_logger
+
+    # Setup temporary logger for config display
+    temp_logger = setup_enhanced_logger(gpu_id="0", log_level="INFO")
+    combined_config = format_config_display(hyper_config, training_config)
+    temp_logger.log_config_table(
+        combined_config, "🔧 HyperSloth Training Configuration"
+    )
 
     # # of GPUs
     os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
+    os.environ["HYPERSLOTH_GLOBAL_BATCH_SIZE"] = str(
+        training_config.per_device_train_batch_size
+        * training_config.gradient_accumulation_steps
+        * len(hyper_config.training.gpus)
+    )
     return config_file, hyper_config, training_config
