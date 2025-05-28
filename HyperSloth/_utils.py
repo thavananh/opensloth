@@ -19,8 +19,16 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
             f"Loading model from {hyper_config.pretrained_lora} with LoRA weights"
         )
         hyper_config.fast_model_args.model_name = hyper_config.pretrained_lora
+    from HyperSloth.nccl_grad_sync import setup_nccl_for_hypersloth
+    
     model, tokenizer = FastModel.from_pretrained(
         **hyper_config.fast_model_args.model_dump()
+    )
+    logger.info(f'Model created at {os.environ['CUDA_VISIBLE_DEVICES']}, ')
+    setup_nccl_for_hypersloth(gpu=int(os.environ["HYPERSLOTH_LOCAL_RANK"]), gpus=hyper_config.training.gpus)
+    model_device = model.device
+    logger.info(
+        f"Model loaded on device {model_device}, tokenizer: {tokenizer.__class__.__name__}"
     )
     if (
         not hyper_config.fast_model_args.full_finetuning
@@ -33,7 +41,7 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
         hasattr(hyper_config.training, "chat_template")
         and hyper_config.training.chat_template is not None
     ):
-        from transformers import AutoTokenizer
+        from transformers import AutoTokenizer # type: ignore
 
         new_template = AutoTokenizer.from_pretrained(
             hyper_config.training.chat_template
@@ -49,7 +57,7 @@ def create_trainer(
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
     gpu_ith: int,
-    model: any,
+    model,
 ):
     """Load or prepare the dataset and create the SFTTrainer."""
 
@@ -142,12 +150,16 @@ def get_trainer(
     # ---------------------------
     try:
         if dataset_cache_exists:
+            wait_counter = 0
+            clock_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
             while os.path.exists(lock) and not LOCAL_RANK == 0:
                 time.sleep(1)
-                logger.warning(
-                    f"GPU {gpu_ith}: Dataset file exist but lock file exists... waiting"
-                )
+                wait_counter += 1
+                clock_icon = clock_chars[wait_counter % len(clock_chars)]
+                print(f'\rGPU {gpu_ith}: Dataset exists but locked {clock_icon} waiting for {wait_counter}s', end='', flush=True)
 
+            if wait_counter > 0:
+                print()  # New line after waiting animation
             logger.info(
                 f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}, this might take a while"
             )
@@ -190,12 +202,25 @@ def get_trainer(
         # ---------------------------
         else:
             logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
+            wait_counter = 0
+            clock_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
             while not os.path.exists(dataset_cache_path) and not os.path.exists(lock):
                 time.sleep(1)
+                wait_counter += 1
+                clock_icon = clock_chars[wait_counter % len(clock_chars)]
+                print(f'\rGPU {gpu_ith}: Waiting for dataset preparation {clock_icon} {wait_counter}s', end='', flush=True)
 
+            if wait_counter > 0:
+                print()  # New line after waiting animation
+            
+            wait_counter = 0
             while os.path.exists(lock):
                 time.sleep(1)
-                logger.info(f"GPU {gpu_ith}: Waiting for lock to be released")
+                wait_counter += 1
+                clock_icon = clock_chars[wait_counter % len(clock_chars)]
+                print(f'\rGPU {gpu_ith}: Waiting for lock release {clock_icon} {wait_counter}s', end='', flush=True)
+            if wait_counter > 0:
+                print()  # New line after waiting animation
             logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
             dataset = load_from_disk(dataset_cache_path)
             trainer = _create_trainer(

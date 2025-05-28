@@ -10,10 +10,26 @@ import tabulate
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 from speedy_utils import setup_logger
 
+
+
 if not "HYPERSLOTH_CACHE_DIR" in os.environ:
     os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
 warnings.filterwarnings("ignore")
 
+def get_current_python_path():
+    """
+    Return output of which python
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["which", "python"], capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error getting Python path: {e}")
+        return None
 
 def get_run_id(hyper_config_model, training_config_model):
     """
@@ -90,41 +106,35 @@ def _setup_logger(gpu_id):
 
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
+    from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
+    from HyperSloth.nccl_grad_sync import HyperSlothNCCLGradSyncCallback
+    from HyperSloth.hp_trainer_setup import setup_model_and_training
+    os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
+    os.environ["HYPERSLOTH_LOCAL_GPU_IDX"] = str(gpu)
     _setup_logger(f"{gpu}")
     hf_train_args.output_dir = os.path.join(
         hf_train_args.output_dir, *get_run_id(hyper_config, hf_train_args)
     )
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
-    from HyperSloth.hp_trainer_setup import (
-        setup_model_and_training,
-    )  # avoid circular import
-
-    os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
+    # setup_nccl_for_hypersloth(gpu, hyper_config.training.gpus)
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-
     trainer, model, tokenizer = setup_model_and_training(
         hyper_config=hyper_config,
         hf_train_args=hf_train_args,
     )
 
-    if (
-        len(hyper_config.training.gpus) > 1
-        and hyper_config.use_mmap_grad_sync is not None
-    ):
-        from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-
-        if hyper_config.use_mmap_grad_sync:
-            grad_sync_cb = MmapGradSyncCallback(
-                model=trainer.model,
-                grad_dir=os.environ["HYPERSLOTH_RUN_DIR"],
-                gpu=gpu,
-                gpus=hyper_config.training.gpus,
-            )
-            logger.info(f"Using gradient sync callback for GPU {gpu}")
-            trainer.add_callback(grad_sync_cb)
-    else:
-        logger.warning("Gradient sync is not enabled, will use normal unsloth training")
+    grad_sync_cb = HyperSlothNCCLGradSyncCallback.create_for_hypersloth(
+        model=trainer.model,
+        grad_dir=os.environ["HYPERSLOTH_RUN_DIR"],
+        gpu=gpu,
+        gpus=hyper_config.training.gpus,
+    )
+    logger.info(f"Using gradient sync callback for GPU {gpu}")
+    trainer.add_callback(grad_sync_cb)
+    print("----")
+    print(os.environ)
+    print("----")
     trainer.train()
 
     # Save once from rank=0
@@ -137,8 +147,8 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
 def load_config_from_path(config_path: str):
     """Load configuration from Python file path."""
     spec = importlib.util.spec_from_file_location("config_module", config_path)
-    config_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(config_module)
+    config_module = importlib.util.module_from_spec(spec) # type: ignore
+    spec.loader.exec_module(config_module) # type: ignore
     return config_module
 
 
@@ -152,6 +162,7 @@ def build_tmux_script(
     run_id: str,
     config_file: str,
     gpus: list,
+    auto_kill: bool = False,
 ):
     """
     Build a script that:
@@ -172,13 +183,15 @@ tmux new-session -d -s {session_name} -n MAIN"""
 
     # First GPU
     # check tmux session command, if yes, ask user enter "y" to kill the session
-    # check_if_session_exists_then_ask_to_kill = f"tmux has-session -t {session_name} && read -p 'Session exists, kill it? (y/n): ' kill_session && [ $kill_session == 'y' ] && tmux kill-session -t {session_name}"
+    # check_if_session_exists_then_ask_to_kill = f"tmux has-session -t {session_name} 
+    # && read -p 'Session exists, kill it? (y/n): ' kill_session &&
+    #  [ $kill_session == 'y' ] && tmux kill-session -t {session_name}"
     # lines.append(check_if_session_exists_then_ask_to_kill)
     # Remaining GPUs
     for local_rank, gpu_index in enumerate(gpus):
         cmd = (
             f"USE_TMUX=0 "
-            f"python {sys.argv[0]} "
+            f"{get_current_python_path()} {sys.argv[0]} "
             f"{config_file} "
             f"--rank {local_rank} "
             f"--world_size {len(gpus)}"
@@ -197,26 +210,29 @@ tmux new-session -d -s {session_name} -n MAIN"""
 
     is_session_exists = os.system(f"tmux has-session -t {session_name}")
     if is_session_exists == 0:
-
-        logger.warning(
-            f"Session {session_name} exists, please kill it before running the script"
-        )
-        # as user if they want to kill the session
-        user_input = input(
-            f"Session {session_name} exists, do you want to kill it? (y/n): "
-        )
-        if user_input.lower() == "y":
+        if auto_kill:
+            logger.info(f"Auto-killing existing session {session_name}")
             os.system(f"tmux kill-session -t {session_name}")
-            logger.info(f"Session {session_name} killed")
         else:
-            return
+            logger.warning(
+                f"Session {session_name} exists, please kill it before running the script"
+            )
+            # ask user if they want to kill the session
+            user_input = input(
+                f"Session {session_name} exists, do you want to kill it? (y/n): "
+            )
+            if user_input.lower() == "y":
+                os.system(f"tmux kill-session -t {session_name}")
+                logger.info(f"Session {session_name} killed")
+            else:
+                return
     os.system(f"bash {script_path}")
     logger.info(f"Script started with session name {session_name}")
 
 
 @call_parse
 def train(
-    config_file: str, rank: int = None, world_size: int = None, use_tmux: bool = False
+    config_file: str, rank: int = None, world_size: int = None, tmux: str = None, y: bool = False
 ):
 
     config_file, hyper_config, training_config = initialize_training_config(config_file)
@@ -240,13 +256,12 @@ def train(
 
     # If multiple GPUs:
     if len(gpus) > 1:
-        if os.environ.get("USE_TMUX", "0") == "1" or use_tmux:
+        if os.environ.get("USE_TMUX", "0") == "1" or tmux is not None:
             # Build a tmux script that the user can run manually
-            # session_name = f"train_hp_{model_name_dataset}_{run_id}"
-            session_name = f"train_hp"
+            session_name = tmux if tmux is not None else f"train_hp"
             script_path = "/tmp/hp_train.sh"
             build_tmux_script(
-                session_name, script_path, model_name_dataset, run_id, config_file, gpus
+                session_name, script_path, model_name_dataset, run_id, config_file, gpus, auto_kill=y
             )
             return
         else:
@@ -285,7 +300,7 @@ def train(
 
     else:
         # Single GPU
-        assert not use_tmux, "Cannot use tmux with a single GPU"
+        assert tmux is None, "Cannot use tmux with a single GPU"
         _train(
             gpu=gpus[0],
             hyper_config=hyper_config,
