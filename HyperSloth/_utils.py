@@ -13,7 +13,10 @@ from .logging_config import get_hypersloth_logger
 
 gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
 enhanced_logger = get_hypersloth_logger(gpu_id=gpu_id)
-from loguru import logger
+from HyperSloth.logging_config import get_hypersloth_logger
+
+
+logger = get_hypersloth_logger()
 
 
 def init_model_and_tokenizer(hyper_config: HyperConfig):

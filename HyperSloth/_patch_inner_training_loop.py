@@ -11,7 +11,10 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from fastcore.all import patch
-from loguru import logger
+from HyperSloth.logging_config import get_hypersloth_logger
+
+
+logger = get_hypersloth_logger()
 from speedy_utils import load_json_or_pickle
 from torch import nn
 from torch.cuda import amp
@@ -213,6 +216,7 @@ def patch_inner_training_loop(trainer):
             self.create_optimizer_and_scheduler(num_training_steps=max_steps)
 
         # prepare using `accelerator` prepare
+        print(f"RUNNING step {self.state.global_step} with accelerator.prepare")
         if use_accelerator_prepare:
             self.model.train()
             if hasattr(self.lr_scheduler, "step"):

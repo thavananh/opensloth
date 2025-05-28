@@ -2,7 +2,10 @@ import torch
 import torch.distributed as dist
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 from typing import List, Optional
-from loguru import logger
+from HyperSloth.logging_config import get_hypersloth_logger
+
+
+logger = get_hypersloth_logger()
 
 # Use safe logger that handles gpu_id properly
 
@@ -46,7 +49,7 @@ class NCCLGradSyncCallback(TrainerCallback):
                 f"Expected rank {self.local_rank} but got {dist.get_rank()}"
             )
 
-        print(
+        logger.info(
             f"[GPU={self.gpu}] NCCLGradSyncCallback initialized for "
             f"rank {self.local_rank}/{self.world_size}"
         )
@@ -67,7 +70,7 @@ class NCCLGradSyncCallback(TrainerCallback):
             # Average by dividing by world size
             param.grad.div_(self.world_size)
 
-        print(
+        logger.debug(
             f"[GPU={self.gpu}] Gradient sync step {step}: "
             f"{params / 1e6:.2f}M params"
         )
@@ -78,7 +81,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called before optimizer step - synchronize gradients."""
         step = state.global_step
 
-        print(
+        logger.debug(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"starting gradient synchronization"
         )
@@ -86,7 +89,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         # Synchronize gradients across all ranks
         self._sync_gradients(self.model, step)
 
-        print(
+        logger.debug(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"gradient synchronization complete"
         )
@@ -97,7 +100,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called after optimizer step - cleanup if needed."""
         step = state.global_step
 
-        print(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
+        logger.debug(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
 
         # No cleanup needed for NCCL-based sync
         # This method is kept for interface compatibility
@@ -123,13 +126,13 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     os.environ["MASTER_PORT"] = "29500"  # Default port
 
     # Log all set environment variables
-    print(
+    logger.debug(
         f'[GPU={gpu}] NCCL env: RANK={os.environ["RANK"]}, WORLD_SIZE={os.environ["WORLD_SIZE"]}, MASTER_ADDR={os.environ["MASTER_ADDR"]}, MASTER_PORT={os.environ["MASTER_PORT"]}'
     )
 
     # Set the current CUDA device to the specific GPU
 
-    print(f"[GPU={gpu}] Setting current CUDA device to:0")
+    logger.debug(f"[GPU={gpu}] Setting current CUDA device to:0")
     torch.cuda.set_device(0)
 
     # Retry logic for NCCL initialization
@@ -143,20 +146,20 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                 backend="nccl", init_method="env://", rank=rank, world_size=world_size
             )
 
-            print(
+            logger.debug(
                 f"[GPU={gpu}] NCCL setup complete: "
                 f"rank={rank}, world_size={world_size}, attempt={attempt + 1}"
             )
             return
 
         except Exception as e:
-            print(
+            logger.debug(
                 f"[GPU={gpu}] NCCL init attempt {attempt + 1}/{max_retries} "
                 f"failed: {e}"
             )
 
             if attempt < max_retries - 1:
-                print(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
+                logger.debug(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
                 time.sleep(retry_delay)
 
                 # Clean up any partial initialization
@@ -166,7 +169,7 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                     except:
                         pass
             else:
-                print(
+                logger.debug(
                     f"[GPU={gpu}] Failed to initialize NCCL after "
                     f"{max_retries} attempts: {e}"
                 )

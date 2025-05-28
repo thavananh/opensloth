@@ -6,13 +6,14 @@ import os
 import sys
 import time
 from typing import Optional, Dict, Any
-from loguru import logger
+
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, TimeElapsedColumn, BarColumn, TextColumn
 from rich.text import Text
 import tabulate
+from loguru import logger
 
 
 class StepTimer:
@@ -40,7 +41,7 @@ class HyperSlothLogger:
     """Enhanced logger for HyperSloth with better formatting and GPU-aware logging."""
 
     def __init__(self, gpu_id: Optional[str] = None, log_level: str = "INFO"):
-        self.gpu_id = gpu_id or os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
+        self.gpu_id = gpu_id or os.environ.get("HYPERSLOTH_LOCAL_RANK", "UNKNOWN")
         self.log_level = log_level.upper()
         self.console = Console()
 
@@ -98,8 +99,8 @@ class HyperSlothLogger:
         log_file = f"{log_dir}/gpu_{self.gpu_id}.log"
 
         # Remove existing log file
-        if os.path.exists(log_file):
-            os.remove(log_file)
+        # if os.path.exists(log_file):
+        #     os.remove(log_file)
 
         base_logger.add(
             log_file,
@@ -523,12 +524,40 @@ class HyperSlothLogger:
         else:
             return f"{duration/3600:.1f}h"
 
+    def info(self, *args, **kwargs) -> None:
+        """Log info message with GPU context."""
+        self._log_with_depth("info", *args, **kwargs)
+
+    def debug(self, *args, **kwargs) -> None:
+        """Log debug message with GPU context."""
+        self._log_with_depth("debug", *args, **kwargs)
+
+    def warning(self, *args, **kwargs) -> None:
+        """Log warning message with GPU context."""
+        self._log_with_depth("warning", *args, **kwargs)
+
+    def error(self, *args, **kwargs) -> None:
+        """Log error message with GPU context."""
+        self._log_with_depth("error", *args, **kwargs)
+
+
+VALID_LOGGER = None
+
 
 def get_hypersloth_logger(
     gpu_id: Optional[str] = None, log_level: str = "INFO"
 ) -> HyperSlothLogger:
     """Setup and return enhanced logger instance."""
-    return HyperSlothLogger(gpu_id=gpu_id, log_level=log_level)
+    global VALID_LOGGER
+    if VALID_LOGGER is not None:
+        return VALID_LOGGER
+    if gpu_id is None:
+        return HyperSlothLogger(gpu_id=gpu_id, log_level=log_level)
+    gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", None)
+    logger = HyperSlothLogger(gpu_id=gpu_id, log_level=log_level)
+    if gpu_id is not None:
+        VALID_LOGGER = logger
+    return logger
 
 
 def setup_logger_format(gpu_id: Optional[str] = None, log_level: str = "INFO") -> None:

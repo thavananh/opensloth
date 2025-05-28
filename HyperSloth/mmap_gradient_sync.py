@@ -11,7 +11,10 @@ import numpy as np
 import torch
 from filelock import FileLock
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
-from loguru import logger
+from HyperSloth.logging_config import get_hypersloth_logger
+
+
+logger = get_hypersloth_logger()
 
 # Use safe logger that handles gpu_id properly
 

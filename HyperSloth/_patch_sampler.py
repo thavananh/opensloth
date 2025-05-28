@@ -7,7 +7,11 @@ from fastcore.all import patch
 from torch.utils.data import SequentialSampler
 from transformers import Trainer, TrainerCallback
 
-from loguru import logger
+from HyperSloth.logging_config import get_hypersloth_logger
+
+
+logger = get_hypersloth_logger()
+from fastcore.all import num_cpus
 
 
 def _compute_reordered_and_shuffled_ids(
@@ -17,31 +21,36 @@ def _compute_reordered_and_shuffled_ids(
 ) -> list[int]:
     from fastcore.all import chunked
 
-    logger.info("Starting to compute sequence lengths...")
-    lens = [len(x["input_ids"]) for x in dataset]  # type: ignore
-    logger.info(f"Computed {len(lens)} sequence lengths")
+    # gen lens by map the input_ids
+    lens = dataset.map(
+        lambda x: {"len": len(x["input_ids"])},
+        remove_columns=dataset.column_names,
+        desc="Computing sequence lengths",
+        num_proc=num_cpus() - 2,  # type: ignore
+    )
+    lens = [x["len"] for x in lens]  # type: ignore
 
-    logger.info("Sorting indices by sequence length...")
     sorted_ids = sorted(range(len(lens)), key=lambda k: lens[k])
-    logger.info("Finished sorting indices")
 
     global_bz = int(os.environ["HYPERSLOTH_FORWARD_BZ"])
-    logger.info(f"Creating chunks with batch size: {global_bz}")
     chunked_ids = list(chunked(sorted_ids, global_bz))
+
+    R = random.Random(seed + epoch)
+    R.shuffle(chunked_ids)
 
     return [idx for chunk in chunked_ids for idx in chunk]
 
 
-def reorder_and_shuffle_data(
-    dataset: Dataset,
-    epoch,
-    seed=42,
-) -> Dataset:
-    ids = _compute_reordered_and_shuffled_ids(dataset, epoch, seed)
-    clock = Clock(start_now=True)
-    dataset = dataset.select(ids)
-    clock.log_elapsed_time("Dataset selection")
-    return dataset
+# def reorder_and_shuffle_data(
+#     dataset: Dataset,
+#     epoch,
+#     seed=42,
+# ) -> Dataset:
+#     ids = _compute_reordered_and_shuffled_ids(dataset, epoch, seed)
+#     clock = Clock(start_now=True)
+#     dataset = dataset.select(ids)
+#     clock.log_elapsed_time("Dataset selection")
+#     return dataset
 
 
 # def print_sequence_lengths(dataset: Dataset):
@@ -116,7 +125,10 @@ def patch_sampler(trainer: Trainer):
     def _get_train_sampler(self: Trainer) -> CustomSampler:
         """Get a custom sampler for the training dataset."""
         logger.info(f"Total samples in dataset: {len(self.train_dataset)}")
-        return CustomSampler(self.train_dataset)
+        assert isinstance(
+            self.train_dataset, Dataset
+        ), "train_dataset must be a Dataset"
+        return CustomSampler(self.train_dataset)  # type: ignore
 
     trainer.add_callback(get_callback_shuffle_data(trainer))
     clock.log_elapsed_time()
