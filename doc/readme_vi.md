@@ -77,6 +77,16 @@ _Tại sao tên "Sloth" (con lười) mà lại nhanh? Vì đời là thế, ngh
 | ---------------------------------------------- | -------------------------------------------------- |
 | ![HyperSloth TB](../images/hyper-sloth-tb.png) | ![LlamaFactory TB](../images/llama-factory-tb.png) |
 
+### Hỗ Trợ Quantization & Multi-GPU
+
+| Framework      | 4-bit | 8-bit | Full FT | Multi-GPU | Ghi Chú                    |
+| -------------- | ----- | ----- | ------- | --------- | -------------------------- |
+| **HyperSloth** | ✅    | ✅    | ✅      | ✅        | _Unsloth + nhiều GPU!_     |
+| LlamaFactory   | ✅    | ✅    | ✅      | ✅        | _Chậm và tốn VRAM_         |
+| Unsloth        | ✅    | ✅    | ✅      | ❌        | _Chỉ 1 GPU thôi_           |
+
+> 🚀 **HyperSloth**: Tất cả tính năng của Unsloth + sức mạnh multi-GPU!
+
 ---
 
 ## 🛠️ Cài Đặt _(3 Bước Đơn Giản)_
