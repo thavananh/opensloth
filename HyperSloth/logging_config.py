@@ -277,7 +277,7 @@ class HyperSlothLogger:
         if model_name:
             rank_info += f" | Model: {model_name}[/cyan]"
 
-        self._log_with_depth("info", f"🔧 {rank_info}", depth=2)
+        self._log_with_depth("info", f"🔧 {rank_info}", depth=3)
 
     def log_progress_step(
         self,
