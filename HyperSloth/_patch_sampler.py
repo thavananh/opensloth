@@ -23,11 +23,14 @@ def _compute_reordered_and_shuffled_ids(
     from fastcore.all import chunked
 
     # gen lens by map the input_ids
+    nproc = len(dataset) // 5_000
+    if nproc > num_cpus() - 2:
+        nproc = num_cpus() - 2
     lens = dataset.map(
         lambda x: {"len": len(x["input_ids"])},
         remove_columns=dataset.column_names,
         desc="Computing sequence lengths",
-        num_proc=num_cpus() - 2,  # type: ignore
+        num_proc=nproc,  # type: ignore
     )
     lens = [x["len"] for x in lens]  # type: ignore
 

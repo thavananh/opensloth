@@ -649,11 +649,12 @@ def patch_inner_training_loop(trainer):
                 if update_step% 100 == 0 or update_step < 5:
                     import tabulate
                     table_data = []
-                    headers = ["GPU",  "Attention Tokens", "Total Tokens"]
+                    headers = ["Attention Tokens", "Total Tokens"]
                     for gpu_id, (num_not_masked, total_tokens) in attention_table_log.items():
                         table_data.append(
                             [
-                                gpu_id,
+                                # gpu_id,
+                                # accumulate_step,
                                 num_not_masked,
                                 total_tokens,
                             ]
