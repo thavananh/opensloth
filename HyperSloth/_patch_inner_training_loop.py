@@ -63,7 +63,7 @@ def patch_inner_training_loop(trainer):
 
     # from transformers import Trainer
     HP_LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
-    HP_WOLRD_SIZE = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
+    HP_WZ = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
     Trainer = type(trainer)
     _patch_log(Trainer)
 
@@ -409,83 +409,31 @@ def patch_inner_training_loop(trainer):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches
                 )
+                inputs = batch_samples[0] if len(batch_samples) > 0 else None
 
                 def select(inputs):  # -> dict[str, Any]:
-                    max_gpu_need = min(HP_WOLRD_SIZE, len(inputs["input_ids"]))
-                    local_rank = HP_LOCAL_RANK
-                    if HP_LOCAL_RANK >= max_gpu_need:
-                        logger.warning(
-                            f"HP_LOCAL_RANK {HP_LOCAL_RANK} for now bypass by selecting the first gpu which might cause the gradient to be wrong"
-                        )
-                        local_rank = HP_LOCAL_RANK % max_gpu_need
-
+                    # has inputs["input_ids"] num_gpus*perdevice_train_bz
+                    # start = HP_LOCAL_RANK * args.per_device_train_batch_size
+                    # end = start + args.per_device_train_batch_size
                     return {
-                        "input_ids": inputs["input_ids"][local_rank::max_gpu_need],
-                        "attention_mask": inputs["attention_mask"][
-                            local_rank::max_gpu_need
-                        ],
-                        "labels": inputs["labels"][local_rank::max_gpu_need],
+                        "input_ids": inputs["input_ids"][HP_LOCAL_RANK::HP_WZ],
+                        "attention_mask": inputs["attention_mask"][HP_LOCAL_RANK::HP_WZ],
+                        "labels": inputs["labels"][HP_LOCAL_RANK::HP_WZ],
                     }
 
-                # Print table for whole batch_samples less frequently (every 50 steps) and only on rank 0
-                def log_attention_ratio():
-                    import tabulate
+                attention_table_log = {}
 
-                    table_data = []
-                    headers = ["GPU", "Batch", "Attention Tokens", "Step"]
-
-                    for batch_idx, inputs in enumerate(batch_samples):
-                        for local_rank in range(HP_WOLRD_SIZE):
-                            # Calculate which samples this GPU will process
-                            max_gpu_need = min(HP_WOLRD_SIZE, len(inputs["input_ids"]))
-                            if local_rank < max_gpu_need:
-                                gpu_samples = list(
-                                    range(
-                                        local_rank,
-                                        len(inputs["input_ids"]),
-                                        max_gpu_need,
-                                    )
-                                )
-
-                                # Format attention tokens for this GPU's samples
-                                attention_tokens = []
-                                for sample_idx in gpu_samples:
-                                    if sample_idx < len(inputs["attention_mask"]):
-                                        num_not_masked = (
-                                            inputs["attention_mask"][sample_idx]
-                                            .sum()
-                                            .item()
-                                        )
-                                        total_tokens = inputs["attention_mask"][
-                                            sample_idx
-                                        ].numel()
-                                        attention_tokens.append(
-                                            f"{num_not_masked}/{total_tokens}"
-                                        )
-
-                                table_data.append(
-                                    [
-                                        local_rank,
-                                        batch_idx,
-                                        attention_tokens,
-                                        update_step,
-                                    ]
-                                )
-
-                    print(
-                        "\n"
-                        + tabulate.tabulate(
-                            table_data, headers=headers, tablefmt="grid"
-                        )
-                        + "\n"
-                    )
-
-                if HP_LOCAL_RANK == 0 and (update_step % 100 == 0 or update_step < 5):
-                    log_attention_ratio()
-
-                for i, inputs in enumerate(batch_samples):
+                for accumulate_step, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
+
+                    
+                    #=== Just for logging
+                    num_of_attention_token = inputs["attention_mask"].sum().item()
+                    total_tokens = inputs["attention_mask"].numel()
+                    attention_table_log[f'GPU{HP_LOCAL_RANK}_AccumulateStep{accumulate_step}'] = (num_of_attention_token, total_tokens)
+                    #<<< Just for logging
                     step += 1
+                    
 
                     # Start timing for forward pass
                     enhanced_logger.start_timing("forward_pass")
@@ -499,7 +447,7 @@ def patch_inner_training_loop(trainer):
                     self.accelerator.gradient_state._set_sync_gradients(do_sync_step)
 
                     if (
-                        self.args.include_num_input_tokens_seen or True
+                        self.args.include_num_input_tokens_seen 
                     ):  # HYPER SLOTH: Always include num_input_tokens_seen for debugging
                         # === Track the number of tokens seen and how many of them have been trained ===
                         main_input_name = getattr(
@@ -553,7 +501,7 @@ def patch_inner_training_loop(trainer):
                     # We explicitly want to avoid relying on `accelerator.accumulate` for generation training
                     context = (
                         functools.partial(self.accelerator.no_sync, model=model)
-                        if i != len(batch_samples) - 1
+                        if accumulate_step != len(batch_samples) - 1
                         and self.accelerator.distributed_type
                         != DistributedType.DEEPSPEED
                         else contextlib.nullcontext
@@ -696,6 +644,28 @@ def patch_inner_training_loop(trainer):
                         break
                 # We also need to break out of the nested loop
 
+                
+                # peritoicly log the attention table
+                if update_step% 100 == 0 or update_step < 5:
+                    import tabulate
+                    table_data = []
+                    headers = ["GPU",  "Attention Tokens", "Total Tokens"]
+                    for gpu_id, (num_not_masked, total_tokens) in attention_table_log.items():
+                        table_data.append(
+                            [
+                                gpu_id,
+                                num_not_masked,
+                                total_tokens,
+                            ]
+                        )
+                    print(
+                        "\n"
+                        + tabulate.tabulate(
+                            table_data, headers=headers, tablefmt="grid"
+                        )
+                        + "\n"
+                    )
+                
                 # NUM_ITEMS_IN_BATCH[:] = 0
                 if self.control.should_epoch_stop or self.control.should_training_stop:
                     if is_torch_xla_available():

@@ -395,4 +395,16 @@ def initialize_training_config(config_file):
         # * training_config.gradient_accumulation_steps
         * len(hyper_config.training.gpus)
     )
+    os.environ["HYPERSLOTH_GLOBAL_BZ"] = str(
+        training_config.per_device_train_batch_size
+        * training_config.gradient_accumulation_steps
+        * len(hyper_config.training.gpus)
+    )
+    os.environ["HYPERSLOTH_SHUFFLE_MODE"] = hyper_config.training.shuffle_mode
+    os.environ["HYPERSLOTH_ACCUMULATION_STEPS"] = str(
+        training_config.gradient_accumulation_steps
+    )
+    os.environ["HYPERSLOTH_PER_DEVICE_TRAIN_BZ"] = str(
+        training_config.per_device_train_batch_size
+    )
     return config_file, hyper_config, training_config

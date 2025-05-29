@@ -74,7 +74,7 @@ class HyperSlothLogger:
             "<green>{time:HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
             "<cyan>GPU{extra[gpu_id]}</cyan> | "
-            "<cyan>{file}:{line}</cyan>"
+            "<cyan>{file}:{line}</cyan> | "
             "<level>{message}</level>"
         )
 

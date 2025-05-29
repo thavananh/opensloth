@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Iterator
+from typing import Iterator, Literal
 
 from datasets import Dataset
 from fastcore.all import patch
@@ -18,6 +18,7 @@ def _compute_reordered_and_shuffled_ids(
     dataset: Dataset,
     epoch,
     seed=42,
+    mode=None, # not use
 ) -> list[int]:
     from fastcore.all import chunked
 
@@ -39,6 +40,8 @@ def _compute_reordered_and_shuffled_ids(
     R.shuffle(chunked_ids)
 
     return [idx for chunk in chunked_ids for idx in chunk]
+
+
 
 
 # def reorder_and_shuffle_data(
@@ -103,12 +106,13 @@ from torch.utils.data.sampler import SequentialSampler
 
 
 class CustomSampler(SequentialSampler):
-    def __init__(self, data_source) -> None:
+    def __init__(self, data_source, shuffle_mode: str = "on_dataset") -> None:
         self.data_source = data_source
         self.ids = _compute_reordered_and_shuffled_ids(
             data_source,
             epoch=0,
             seed=42,
+            mode=shuffle_mode,
         )
 
     def __iter__(self) -> Iterator[int]:
@@ -128,7 +132,15 @@ def patch_sampler(trainer: Trainer):
         assert isinstance(
             self.train_dataset, Dataset
         ), "train_dataset must be a Dataset"
-        return CustomSampler(self.train_dataset)  # type: ignore
+
+        # Get shuffle mode from trainer's hypersloth config if available
+        shuffle_mode = getattr(
+            getattr(self, "hypersloth_config", None), "shuffle_mode", "on_dataset"
+        )
+        return CustomSampler(
+            self.train_dataset,
+            shuffle_mode=os.environ.get("HYPERSLOTH_SHUFFLE_MODE", shuffle_mode),
+        )
 
     trainer.add_callback(get_callback_shuffle_data(trainer))
     clock.log_elapsed_time()

@@ -89,12 +89,11 @@ def create_trainer(
     enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
 
     dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
-
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 
     # CASE 1: Dataset cache already exists, just load it
     enhanced_logger.start_timing("trainer_setup")
-    trainer = get_trainer(
+    trainer = _get_trainer(
         tokenizer,
         hyper_config,
         hf_train_args,
@@ -133,72 +132,7 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
     return dataset_cache_path
 
 
-def get_trainer(
-    tokenizer,
-    hyper_config: HyperConfig,
-    hf_train_args: TrainingArgsConfig,
-    gpu_ith,
-    model,
-    dataset_cache_path,
-    dataset_cache_exists,
-    counter=0,
-):
-    """Load or prepare the dataset and create the SFTTrainer."""
-
-    # Get enhanced logger for timing
-    from .logging_config import get_hypersloth_logger
-
-    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
-
-    enhanced_logger.start_timing("dataset_loading_total")
-    enhanced_logger.start_timing("dataset_identification")
-    dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
-    enhanced_logger.finish_timing("dataset_identification")
-
-    dataset_cache_exists = os.path.exists(dataset_cache_path)
-
-    # CASE 1: Dataset cache already exists, just load it
-    enhanced_logger.start_timing("trainer_setup")
-    trainer = get_trainer(
-        tokenizer,
-        hyper_config,
-        hf_train_args,
-        gpu_ith,
-        model,
-        dataset_cache_path,
-        dataset_cache_exists,
-    )
-    enhanced_logger.finish_timing("trainer_setup")
-
-    from HyperSloth._patch_inner_training_loop import patch_inner_training_loop
-    from HyperSloth._patch_sampler import patch_sampler
-
-    if hyper_config.use_mmap_grad_sync:
-        enhanced_logger.start_timing("training_loop_patch")
-        patch_inner_training_loop(trainer)
-        enhanced_logger.finish_timing("training_loop_patch")
-
-    patch_sampler(trainer)
-    return trainer
-
-
-def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
-    from speedy_utils import identify
-
-    tokenizer_name = identify(str(tokenizer))
-    # hash the dataset name and max_seq_length to create a unique cache name
-    dataset_name = identify(
-        [
-            hyper_config.data.model_dump(),
-            hyper_config.fast_model_args.max_seq_length,
-        ]
-    )
-    dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name
-    dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
-    return dataset_cache_path
-
-
-def get_trainer(
+def _get_trainer(
     tokenizer,
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
