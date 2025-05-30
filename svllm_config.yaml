@@ -1,0 +1,6 @@
+model: MODEL_NAME
+gpus: "0,1"
+host_port: localhost:8151
+base_model: './model_store/unsloth/Qwen3-8B/'
+loras: lora:outputs/8B_selfeval_retranslate-bnb-4bit/Qwen3-8B-bnb-4bit_2025_05_30/ls_response_only_r64_a128_sq8192_lr0_0001_bz64_ep1_4/checkpoint-404/
+eager: true
