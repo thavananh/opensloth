@@ -5,7 +5,7 @@ Handles weight synchronization, model setup, and distributed training coordinati
 
 import os
 
-from HyperSloth._utils import (
+from HyperSloth.init_modules import (
     configure_batch_size,
     create_trainer,
     init_model_and_tokenizer,
