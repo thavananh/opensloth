@@ -1,6 +1,7 @@
 from datasets import Dataset
 from HyperSloth import HYPERSLOTH_DATA_DIR
 from pathlib import Path
+from typing import Optional
 
 
 def get_chat_dataset(path: str | Path) -> Dataset:
@@ -19,3 +20,26 @@ def get_chat_dataset(path: str | Path) -> Dataset:
         raise ValueError("Dataset must contain a 'text' column")
 
     return data
+
+
+def get_sharegpt_dataset(
+    dataset_path: str,
+    tokenizer_name: str,
+    num_samples: Optional[int] = None,
+    seed: int = 3407,
+    instruction_part: Optional[str] = None,
+    response_part: Optional[str] = None,
+    print_samples: bool = False,
+) -> Dataset:
+    from HyperSloth.scripts.build_dataset import build_sharegpt_dataset
+
+    share_gpt_path = build_sharegpt_dataset(
+        dataset_path=dataset_path,
+        tokenizer_name=tokenizer_name,
+        num_samples=num_samples,
+        seed=seed,
+        instruction_part=instruction_part,
+        response_part=response_part,
+        print_samples=print_samples,
+    )
+    return get_chat_dataset(share_gpt_path)
