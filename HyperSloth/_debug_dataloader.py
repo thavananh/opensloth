@@ -1,12 +1,11 @@
 import os
 
 
-def _debug_dataloader(dataloader, tokenizer, n_example=10):
+def debug_chat_dataloader_for_training(dataloader, tokenizer, n_example=10):
     """
     Debug function to log samples from the training dataloader in an HTML format.
     Outputs to both terminal (with colors) and an HTML file with CSS styling.
     """
-    from copy import deepcopy
 
     g = iter(dataloader)
     html_path = ".log/dataloader_examples.html"
@@ -111,3 +110,6 @@ def _debug_dataloader(dataloader, tokenizer, n_example=10):
         html_file.write("</body>\n</html>")
 
     print(f"More training debug examples written to {html_path}")
+
+
+__all__ = ["debug_chat_dataloader_for_training"]

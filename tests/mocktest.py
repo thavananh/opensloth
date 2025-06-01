@@ -1,13 +1,11 @@
 import os
 import time
 import random
-import numpy as np
 import torch
 import multiprocessing
 from loguru import logger
 
 # Import your MmapGradientSync, or paste its code here
-from filelock import FileLock
 
 from HyperSloth.mmap_gradient_sync import MmapGradientSync
 R = random.Random(42)  # For reproducibility

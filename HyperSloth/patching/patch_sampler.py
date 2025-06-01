@@ -21,10 +21,10 @@ class ShuffleData(TrainerCallback):
         logger.info(f"🔄 Starting epoch {state.epoch + 1}")
 
         try:
-            from .._debug_dataloader import _debug_dataloader
+            from .._debug_dataloader import debug_chat_dataloader_for_training
 
             tok = kwargs["processing_class"]
-            _debug_dataloader(train_dataloader, tokenizer=tok)
+            debug_chat_dataloader_for_training(train_dataloader, tokenizer=tok)
             logger.info(
                 "📋 Dataloader examples logged to " ".log/dataloader_examples.html"
             )

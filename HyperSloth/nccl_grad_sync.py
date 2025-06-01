@@ -58,7 +58,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Synchronize gradients across all ranks using NCCL all-reduce."""
         params = 0
 
-        for name, param in model.named_parameters():
+        for _, param in model.named_parameters():
             if param.grad is None:
                 continue
 

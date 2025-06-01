@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from typing import Dict, Tuple
 from safetensors.torch import load_file
 from loguru import logger
@@ -12,7 +10,7 @@ def ensure_close_weight(
     """Ensure that the weights in two dictionaries are close within a tolerance."""
     for key in dict1.keys():
         assert torch.allclose(dict1[key], dict2[key], atol=1e-6)
-        distance = torch.dist(dict1[key], dict2[key])
+        distance = torch.dist(dict1[key], dict2[key]) # type: ignore
 
 
 def compare_weights(

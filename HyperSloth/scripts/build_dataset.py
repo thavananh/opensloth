@@ -3,16 +3,17 @@
 
 import argparse
 import json
-import os
 from pathlib import Path
-from typing import Any, Dict, Optional
-from speedy_utils.all import jdumps, load_by_ext
+from typing import Optional
+from speedy_utils.all import jdumps
 import pandas as pd
 from datasets import Dataset, load_dataset
 from loguru import logger
-
+from HyperSloth import HYPERSLOTH_DATA_DIR
 from unsloth.chat_templates import standardize_sharegpt
 
+hypersloth_path = Path(__file__).parents[3]
+print(f"Using hypersloth path: {hypersloth_path}")
 
 mapping_chattemplate = {
     "chatgpt": {
@@ -30,7 +31,7 @@ def build_hf_dataset(
     dataset_name: str,
     tokenizer_name: str,
     num_samples: int = 1000,
-    output_dir: str = "./data/built_dataset",
+    output_dir: str = HYPERSLOTH_DATA_DIR,
     seed=3407,
     split: str = "train",
     instruction_part: Optional[str] = None,
@@ -66,11 +67,12 @@ def build_hf_dataset(
         if "gemma" in tokenizer_lower:
             detected_type = "gemma"
         else:
-            logger.warning(
-                f"Tokenizer {tokenizer_name} does not match any known template types. "
-                f"Defaulting to chatgpt template with instruction_part and response_part are {mapping_chattemplate['chatgpt']}"
-            )
             detected_type = "chatgpt"  # Default to chatgpt if not gemma
+        logger.info(
+            f"Tokenizer {tokenizer_name} - "
+            f"Defaulting to chatgpt template with instruction_part and response_part: "
+            f'{mapping_chattemplate["chatgpt"]}'
+        )
 
         if instruction_part is None:
             instruction_part = mapping_chattemplate[detected_type]["instruction_part"]
@@ -121,7 +123,7 @@ def build_hf_dataset(
     processed_dataset.save_to_disk(str(dataset_path))
 
     # Update dataset registry - use standardized location
-    registry_path = Path("data/data_config.json")
+    registry_path = Path(HYPERSLOTH_DATA_DIR) / "data_config.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry = []
     if registry_path.exists():
@@ -132,7 +134,7 @@ def build_hf_dataset(
     try:
         # Convert both to absolute paths for comparison
         abs_dataset_path = dataset_path.resolve()
-        abs_data_path = Path("data").resolve()
+        abs_data_path = Path(HYPERSLOTH_DATA_DIR).resolve()
         relative_dataset_path = abs_dataset_path.relative_to(abs_data_path)
     except ValueError:
         # If dataset is not under data directory, store absolute path
@@ -172,7 +174,7 @@ def build_sharegpt_dataset(
     dataset_path: str,
     tokenizer_name: str,
     num_samples: Optional[int] = None,
-    output_dir: str = "./data/built_dataset",
+    output_dir: str = HYPERSLOTH_DATA_DIR,
     seed: int = 3407,
     instruction_part: Optional[str] = None,
     response_part: Optional[str] = None,
@@ -305,7 +307,7 @@ def build_sharegpt_dataset(
     processed_dataset.save_to_disk(str(dataset_save_path))
 
     # Update dataset registry
-    registry_path = Path("data/data_config.json")
+    registry_path = Path(HYPERSLOTH_DATA_DIR) / "data_config.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry = []
     if registry_path.exists():
@@ -315,7 +317,7 @@ def build_sharegpt_dataset(
     # Store relative path from data directory
     try:
         abs_dataset_path = dataset_save_path.resolve()
-        abs_data_path = Path("data").resolve()
+        abs_data_path = Path(HYPERSLOTH_DATA_DIR).resolve()
         relative_dataset_path = abs_dataset_path.relative_to(abs_data_path)
     except ValueError:
         relative_dataset_path = dataset_save_path.resolve()
@@ -375,7 +377,7 @@ def main():
     parser.add_argument("--split", default="train", help="Dataset split to use")
     parser.add_argument(
         "--output_path",
-        default="./data/built_dataset",
+        default=HYPERSLOTH_DATA_DIR,
         help="Output path for the dataset",
     )
     parser.add_argument(
@@ -422,7 +424,7 @@ def main():
     # Success message with usage instructions
     success_msg = f"""Dataset "{dataset_name}" has been successfully built and saved!
 
-📁 Registry: data/data_config.json
+📁 Registry: {Path(HYPERSLOTH_DATA_DIR) / "data_config.json"}
 🚀 Usage in training scripts:
 
 from HyperSloth.hypersloth_config import HyperConfig, DataConfig

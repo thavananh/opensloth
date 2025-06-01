@@ -10,10 +10,7 @@ from typing import Optional, Dict, Any
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.progress import Progress, TimeElapsedColumn, BarColumn, TextColumn
 from rich.text import Text
-import tabulate
-from loguru import logger
 
 
 class StepTimer:

@@ -1,7 +1,5 @@
 from speedy_utils import *
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 
 def smart_partition_batches(all_batches: list, num_devices: int) -> dict:

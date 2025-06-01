@@ -2,9 +2,7 @@ import argparse
 from speedy_utils.all import load_by_ext, logger
 import torch
 import peft
-from peft import AutoPeftModelForCausalLM
 from transformers import AutoTokenizer
-from unsloth import FastModel
 
 
 def merge_and_save_lora(

@@ -161,7 +161,7 @@ def _get_trainer(
 
     import filelock
     from datasets import load_from_disk
-    from trl import SFTTrainer, SFTConfig
+    from trl import SFTTrainer
 
     # Get enhanced logger for timing
     from .logging_config import get_hypersloth_logger

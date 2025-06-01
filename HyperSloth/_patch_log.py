@@ -5,7 +5,6 @@ import numpy as np
 from filelock import FileLock, BaseFileLock  # Import FileLock
 from fastcore.all import patch
 from loguru import logger
-from transformers.trainer import Trainer
 from transformers.trainer_utils import speed_metrics
 
 # Assuming the Flag class from the 'safe lock' example is available
@@ -16,7 +15,6 @@ import os
 import time
 import numpy as np
 from filelock import FileLock
-from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 
 TIME_OUT = 300
 SLEEP_TIME = 0.01  # Use a small sleep time for waiting loops

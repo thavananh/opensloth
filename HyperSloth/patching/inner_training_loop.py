@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from fastcore.all import patch
 from transformers.trainer import Trainer, TrainerState
 from HyperSloth.logging_config import get_hypersloth_logger
