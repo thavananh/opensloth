@@ -1,13 +1,11 @@
 import os
 import random
-from typing import Iterator, Union
-from warnings import warn
+from typing import Iterator
 
 from datasets import Dataset, IterableDataset
-from fastcore.all import patch, num_cpus, chunked
+from fastcore.all import patch
 from torch.utils.data.sampler import SequentialSampler
 from transformers import Trainer, TrainerCallback
-from speedy_utils import Clock
 
 from HyperSloth.logging_config import get_hypersloth_logger
 
@@ -69,7 +67,7 @@ def patch_sampler(trainer: Trainer):
             train_dataset, (Dataset, IterableDataset)
         ), "train_dataset must be a Dataset or IterableDataset"
 
-        return RandomSamplerSeededByEpoch(train_dataset)
+        return RandomSamplerSeededByEpoch(train_dataset)  # type: ignore
 
     logger.info(f"Add callback ShuffleData to Trainer {trainer.__class__.__name__}")
     trainer.add_callback(ShuffleData())
