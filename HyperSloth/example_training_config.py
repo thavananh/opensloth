@@ -5,10 +5,10 @@ from HyperSloth.hypersloth_config import *
 hyper_config_model = HyperConfig(
     data=DataConfigHF(
         dataset_name="mlabonne/FineTome-100k",
-        tokenizer_name="Qwen/Qwen3-8B",
+        tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
         num_samples=10000,
         split="train",
-        name="finetom-10k",
+        name="finetom-10k",  # local name for later reference
     ),
     training=TrainingConfig(
         gpus=[0, 1],
