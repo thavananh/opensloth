@@ -187,7 +187,9 @@ def parse_data(data):
         data = DataConfig.from_dataset_name(
             dataset_name=dataset_name,
         )
-
+    elif isinstance(data, DataConfig):
+        # Already a DataConfig, return as-is
+        pass
     else:
         raise TypeError(
             f"Unsupported data type: {type(data)}. "
@@ -229,141 +231,155 @@ def _get_trainer(
     LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     lock = dataset_cache_path + ".lock"
 
-    def _create_trainer(train_dataset, eval_dataset=None, skip_prepare=True):
+    def _create_trainer(train_dataset, skip_prepare=True):
         """Helper to build an SFTTrainer from given train/eval datasets."""
         # We use a dataset_kwargs override so that, once the dataset is prepared,
         # it won't attempt the same "prepare" logic again.
         hf_train_args.dataset_kwargs = {"skip_prepare_dataset": skip_prepare}
-        if LOCAL_RANK != 0 or eval_dataset is None:
-            hf_train_args.eval_strategy = "no"
         hf_train_args.dataset_batch_size = hf_train_args.per_device_train_batch_size
         return SFTTrainer(
             model=model,
             processing_class=tokenizer,
             train_dataset=train_dataset,
-            eval_dataset=eval_dataset,
             dataset_text_field="text",
             dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
         )
 
     hyper_config.data = parse_data(hyper_config.data)
-    # ---------------------------
-    # CASE 1: Cached dataset exists
-    # ---------------------------
-    try:
-        if dataset_cache_exists:
-            hp_logger.start_timing("dataset_cache_loading")
-            wait_counter = 0
-            clock_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-            while os.path.exists(lock) and not LOCAL_RANK == 0:
-                time.sleep(1)
-                wait_counter += 1
-                clock_icon = clock_chars[wait_counter % len(clock_chars)]
-                print(
-                    f"\rGPU {gpu_ith}: Dataset exists but locked {clock_icon} waiting for {wait_counter}s",
-                    end="",
-                    flush=True,
-                )
 
-            if wait_counter > 0:
-                print()  # New line after waiting animation
-            logger.info(
-                f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}, this might take a while"
-            )
-            dataset = load_from_disk(dataset_cache_path)
-            hp_logger.finish_timing("dataset_cache_loading")
+    # Ensure path_tokenized is set and valid
+    if not hyper_config.data.path_tokenized:
+        raise ValueError(
+            f"Dataset path_tokenized is None. "
+            f"Please ensure the dataset was properly built and registered."
+        )
 
-            logger.info(f"GPU {gpu_ith}: Dataset loaded, Now creating trainer")
-            hp_logger.start_timing("trainer_creation_from_cache")
-            trainer = _create_trainer(
-                dataset["train"], eval_dataset=None, skip_prepare=True
-            )
-            hp_logger.finish_timing("trainer_creation_from_cache")
-            logger.info(f"GPU {gpu_ith}: Trainer created")
-        # CASE 2: GPU 0 prepares dataset
-        # ---------------------------
-        elif gpu_ith == 0:
-            hp_logger.start_timing("dataset_preparation")
-            with filelock.FileLock(lock):
-                logger.info(f"GPU {gpu_ith}: Preparing dataset -> {dataset_cache_path}")
+    if not os.path.exists(hyper_config.data.path_tokenized):
+        raise FileNotFoundError(
+            f"Tokenized dataset not found at {hyper_config.data.path_tokenized}. "
+            f"Please rebuild the dataset or check the path."
+        )
 
-                from HyperSloth.dataset_utils import get_chat_dataset
+    dataset = load_from_disk(hyper_config.data.path_tokenized)
+    trainer = _create_trainer(dataset, skip_prepare=True)
 
-                hp_logger.start_timing("dataset_processing")
+    # # ---------------------------
+    # # CASE 1: Cached dataset exists
+    # # ---------------------------
+    # try:
+    #     if dataset_cache_exists:
+    #         hp_logger.start_timing("dataset_cache_loading")
+    #         wait_counter = 0
+    #         clock_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    #         while os.path.exists(lock) and not LOCAL_RANK == 0:
+    #             time.sleep(1)
+    #             wait_counter += 1
+    #             clock_icon = clock_chars[wait_counter % len(clock_chars)]
+    #             print(
+    #                 f"\rGPU {gpu_ith}: Dataset exists but locked {clock_icon} waiting for {wait_counter}s",
+    #                 end="",
+    #                 flush=True,
+    #             )
 
-                ds_train = get_chat_dataset(hyper_config.data)
+    #         if wait_counter > 0:
+    #             print()  # New line after waiting animation
+    #         logger.info(
+    #             f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}, this might take a while"
+    #         )
+    #         dataset = load_from_disk(dataset_cache_path)
+    #         hp_logger.finish_timing("dataset_cache_loading")
 
-                hp_logger.finish_timing("dataset_processing")
+    #         logger.info(f"GPU {gpu_ith}: Dataset loaded, Now creating trainer")
+    #         hp_logger.start_timing("trainer_creation_from_cache")
+    #         trainer = _create_trainer(
+    #             dataset["train"], eval_dataset=None, skip_prepare=True
+    #         )
+    #         hp_logger.finish_timing("trainer_creation_from_cache")
+    #         logger.info(f"GPU {gpu_ith}: Trainer created")
+    #     # CASE 2: GPU 0 prepares dataset
+    #     # ---------------------------
+    #     elif gpu_ith == 0:
+    #         hp_logger.start_timing("dataset_preparation")
+    #         with filelock.FileLock(lock):
+    #             logger.info(f"GPU {gpu_ith}: Preparing dataset -> {dataset_cache_path}")
 
-                hp_logger.start_timing("trainer_creation_from_raw")
-                trainer = _create_trainer(ds_train, skip_prepare=False)
+    #             from HyperSloth.dataset_utils import get_chat_dataset
 
-                hp_logger.finish_timing("trainer_creation_from_raw")
+    #             hp_logger.start_timing("dataset_processing")
 
-                logger.info(f"Maybe train on responses only")
+    #             ds_train = get_chat_dataset(hyper_config.data)
 
-                from datasets import DatasetDict
+    #             hp_logger.finish_timing("dataset_processing")
 
-                hp_logger.start_timing("dataset_caching")
-                dataset_to_save = DatasetDict()
-                dataset_to_save["train"] = trainer.train_dataset
-                dataset_to_save.save_to_disk(dataset_cache_path)
-                hp_logger.finish_timing("dataset_caching")
+    #             hp_logger.start_timing("trainer_creation_from_raw")
+    #             trainer = _create_trainer(ds_train, skip_prepare=False)
 
-                logger.info(f"GPU {gpu_ith}: Dataset saved to {dataset_cache_path}")
-            hp_logger.finish_timing("dataset_preparation")
+    #             hp_logger.finish_timing("trainer_creation_from_raw")
 
-            # Release the lock file
-            if os.path.exists(lock):
-                os.remove(lock)
-        # ---------------------------
-        # CASE 3: Other GPUs wait for GPU 0
-        # ---------------------------
-        else:
-            hp_logger.start_timing("dataset_wait_for_gpu0")
-            logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
-            wait_counter = 0
-            clock_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-            while not os.path.exists(dataset_cache_path) and not os.path.exists(lock):
-                time.sleep(1)
-                wait_counter += 1
-                clock_icon = clock_chars[wait_counter % len(clock_chars)]
-                print(
-                    f"\rGPU {gpu_ith}: Waiting for dataset preparation {clock_icon} {wait_counter}s",
-                    end="",
-                    flush=True,
-                )
+    #             logger.info(f"Maybe train on responses only")
 
-            if wait_counter > 0:
-                print()  # New line after waiting animation
+    #             from datasets import DatasetDict
 
-            wait_counter = 0
-            while os.path.exists(lock):
-                time.sleep(1)
-                wait_counter += 1
-                clock_icon = clock_chars[wait_counter % len(clock_chars)]
-                print(
-                    f"\rGPU {gpu_ith}: Waiting for lock release {clock_icon} {wait_counter}s",
-                    end="",
-                    flush=True,
-                )
-            if wait_counter > 0:
-                print()  # New line after waiting animation
-            logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
-            dataset = load_from_disk(dataset_cache_path)
-            hp_logger.finish_timing("dataset_wait_for_gpu0")
+    #             hp_logger.start_timing("dataset_caching")
+    #             dataset_to_save = DatasetDict()
+    #             dataset_to_save["train"] = trainer.train_dataset
+    #             dataset_to_save.save_to_disk(dataset_cache_path)
+    #             hp_logger.finish_timing("dataset_caching")
 
-            hp_logger.start_timing("trainer_creation_after_wait")
-            trainer = _create_trainer(
-                dataset["train"], eval_dataset=None, skip_prepare=True
-            )
-            hp_logger.finish_timing("trainer_creation_after_wait")
-    except Exception as e:
-        raise e
-    finally:
-        if os.path.exists(lock):
-            os.remove(lock)
+    #             logger.info(f"GPU {gpu_ith}: Dataset saved to {dataset_cache_path}")
+    #         hp_logger.finish_timing("dataset_preparation")
+
+    #         # Release the lock file
+    #         if os.path.exists(lock):
+    #             os.remove(lock)
+    #     # ---------------------------
+    #     # CASE 3: Other GPUs wait for GPU 0
+    #     # ---------------------------
+    #     else:
+    #         hp_logger.start_timing("dataset_wait_for_gpu0")
+    #         logger.info(f"GPU {gpu_ith}: Waiting for dataset to be prepared by GPU 0")
+    #         wait_counter = 0
+    #         clock_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    #         while not os.path.exists(dataset_cache_path) and not os.path.exists(lock):
+    #             time.sleep(1)
+    #             wait_counter += 1
+    #             clock_icon = clock_chars[wait_counter % len(clock_chars)]
+    #             print(
+    #                 f"\rGPU {gpu_ith}: Waiting for dataset preparation {clock_icon} {wait_counter}s",
+    #                 end="",
+    #                 flush=True,
+    #             )
+
+    #         if wait_counter > 0:
+    #             print()  # New line after waiting animation
+
+    #         wait_counter = 0
+    #         while os.path.exists(lock):
+    #             time.sleep(1)
+    #             wait_counter += 1
+    #             clock_icon = clock_chars[wait_counter % len(clock_chars)]
+    #             print(
+    #                 f"\rGPU {gpu_ith}: Waiting for lock release {clock_icon} {wait_counter}s",
+    #                 end="",
+    #                 flush=True,
+    #             )
+    #         if wait_counter > 0:
+    #             print()  # New line after waiting animation
+    #         logger.info(f"GPU {gpu_ith}: Loading dataset from {dataset_cache_path}")
+    #         dataset = load_from_disk(dataset_cache_path)
+    #         hp_logger.finish_timing("dataset_wait_for_gpu0")
+
+    #         hp_logger.start_timing("trainer_creation_after_wait")
+    #         trainer = _create_trainer(
+    #             dataset["train"], eval_dataset=None, skip_prepare=True
+    #         )
+    #         hp_logger.finish_timing("trainer_creation_after_wait")
+    # except Exception as e:
+    #     raise e
+    # finally:
+    #     if os.path.exists(lock):
+    #         os.remove(lock)
     _maybe_train_on_responses_only(trainer, hyper_config)
     hp_logger.finish_timing("dataset_loading_total")
     return trainer

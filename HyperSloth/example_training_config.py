@@ -6,10 +6,9 @@ hyper_config_model = HyperConfig(
     data=DataConfigHF(
         dataset_name="mlabonne/FineTome-100k",
         tokenizer_name="Qwen/Qwen3-8B",
-        num_samples=1000,
+        num_samples=10000,
         split="train",
-        name="1k",
-        print_samples=True,
+        name="finetom-10k",
     ),
     training=TrainingConfig(
         gpus=[0, 1],

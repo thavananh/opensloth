@@ -11,9 +11,13 @@ CPU_COUNT = min(1, cpu_count() - 2)
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
-    path_to_text_dataset: str = Field(
-        default="data/finetome_1000_samples",
-        description="Path to the dataset directory",
+    # path_to_text_dataset: str = Field(
+    #     default="data/finetome_1000_samples",
+    #     description="Path to the dataset directory",
+    # )
+    path_tokenized: Optional[str] = Field(
+        default=None,
+        description="Path to the tokenized dataset directory",
     )
     instruction_part: str = "<|im_start|>user\n"
     response_part: str = "<|im_start|>assistant\n"
@@ -78,18 +82,18 @@ class DataConfig(BaseModel):
             )
 
         # Build full path
-        if "path" in dataset_config:
-            dataset_path = dataset_config["path"]
-            if not dataset_path.startswith("/"):
+        if "path_tokenized" in dataset_config:
+            path_tokenized = dataset_config["path_tokenized"]
+            if not path_tokenized.startswith("/"):
                 # Make relative paths absolute relative to data directory
                 data_dir = registry_path.parent
-                dataset_path = str(data_dir / dataset_path)
+                path_tokenized = str(data_dir / path_tokenized)
         else:
             raise ValueError(f'Dataset "{dataset_name}" missing path in registry')
 
         # Create DataConfig with loaded settings
         return cls(
-            path_to_text_dataset=dataset_path,
+            path_tokenized=path_tokenized,
             instruction_part=dataset_config.get(
                 "instruction_part", "<|im_start|>user\n"
             ),
