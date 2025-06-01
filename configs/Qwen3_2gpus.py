@@ -38,7 +38,7 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="outputs/qwen3-0.6b-2card/",
+    output_dir="outputs/qwen3-0.6b-2card.1/",
     per_device_train_batch_size=2,
     gradient_accumulation_steps=4,
     learning_rate=0.0002,
