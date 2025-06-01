@@ -109,6 +109,19 @@ def create_trainer(
     patch_inner_training_loop(trainer)
     enhanced_logger.finish_timing("training_loop_patch")
 
+    # DEBUG: change the sampler to sequential sampler for debugging
+    from ._patch_sampler import patch_sampler
+
+    trainer = patch_sampler(trainer)
+
+    # from torch.utils.data import DataLoader, SequentialSampler  # type: ignore
+    # from torch.utils.data.distributed import DistributedSampler  # type: ignore
+
+    # def _get_sampler(self, dataset):
+    #     """Override to use SequentialSampler for debugging."""
+    #     return SequentialSampler(dataset)
+
+    # trainer._get_train_sampler = _get_sampler
     return trainer
 
 

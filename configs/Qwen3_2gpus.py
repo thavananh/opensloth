@@ -51,5 +51,5 @@ training_config_model = TrainingArgsConfig(
     max_steps=30,  # Adding max_steps from original script
     optim="adamw_8bit",  # Using 8bit optimizer from original
     seed=3407,  # Adding seed for reproducibility
-    report_to="none",  # Disable reporting
+    report_to="tensorboard",  # Disable reporting
 )
