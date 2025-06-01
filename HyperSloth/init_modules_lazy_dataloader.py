@@ -11,7 +11,7 @@
 # from .logging_config import get_hypersloth_logger
 
 # gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
-# enhanced_logger = get_hypersloth_logger(log_level="INFO")
+# hp_logger = get_hypersloth_logger(log_level="INFO")
 # logger = get_hypersloth_logger(log_level="INFO")
 
 
@@ -19,7 +19,7 @@
 #     """Initialize and optionally set up LoRA for the model."""
 #     from unsloth import FastLanguageModel
 
-#     enhanced_logger.start_timing("model_loading")
+#     hp_logger.start_timing("model_loading")
 
 #     if hyper_config.pretrained_lora:
 #         logger.info(
@@ -32,15 +32,15 @@
 #     model, tokenizer = FastLanguageModel.from_pretrained(
 #         **hyper_config.fast_model_args.model_dump()
 #     )
-#     enhanced_logger.finish_timing("model_loading")
+#     hp_logger.finish_timing("model_loading")
 
 #     logger.info(f"Model created at {os.environ['CUDA_VISIBLE_DEVICES']}")
 
-#     enhanced_logger.start_timing("nccl_setup")
+#     hp_logger.start_timing("nccl_setup")
 #     setup_nccl_for_hypersloth(
 #         gpu=int(os.environ["HYPERSLOTH_LOCAL_RANK"]), gpus=hyper_config.training.gpus
 #     )
-#     enhanced_logger.finish_timing("nccl_setup")
+#     hp_logger.finish_timing("nccl_setup")
 
 #     model_device = model.device
 #     logger.info(
@@ -52,11 +52,11 @@
 #         not hyper_config.fast_model_args.full_finetuning
 #         and not hyper_config.pretrained_lora
 #     ):
-#         enhanced_logger.start_timing("lora_setup")
+#         hp_logger.start_timing("lora_setup")
 #         model = FastLanguageModel.get_peft_model(
 #             model, **hyper_config.lora_args.model_dump()
 #         )
-#         enhanced_logger.finish_timing("lora_setup")
+#         hp_logger.finish_timing("lora_setup")
 
 #     # Allow custom chat templates
 #     if (
@@ -84,9 +84,9 @@
 #     """Create the SFTTrainer with lazy dataset loading."""
 #     from .logging_config import get_hypersloth_logger
 
-#     enhanced_logger = get_hypersloth_logger(log_level="INFO")
+#     hp_logger = get_hypersloth_logger(log_level="INFO")
 
-#     enhanced_logger.start_timing("trainer_setup")
+#     hp_logger.start_timing("trainer_setup")
 #     trainer = _create_lazy_trainer(
 #         tokenizer,
 #         hyper_config,
@@ -94,7 +94,7 @@
 #         gpu_ith,
 #         model,
 #     )
-#     enhanced_logger.finish_timing("trainer_setup")
+#     hp_logger.finish_timing("trainer_setup")
 
 #     from HyperSloth._patch_inner_training_loop import patch_inner_training_loop
 
@@ -192,9 +192,9 @@
 #     from transformers import DataCollatorForLanguageModeling
 
 #     # # Load raw dataset from JSON
-#     # enhanced_logger.start_timing("dataset_loading")
+#     # hp_logger.start_timing("dataset_loading")
 #     # raw_dataset = _load_json_dataset(hyper_config.data.dataset_name_or_path)
-#     # enhanced_logger.finish_timing("dataset_loading")
+#     # hp_logger.finish_timing("dataset_loading")
 
 #     # # Create tokenization transform function
 #     # def tokenize_transform(sample):
@@ -203,9 +203,9 @@
 #     #     )
 
 #     # # Set the transform for on-the-fly tokenization
-#     # enhanced_logger.start_timing("dataset_transform_setup")
+#     # hp_logger.start_timing("dataset_transform_setup")
 #     # raw_dataset.set_transform(tokenize_transform)
-#     # enhanced_logger.finish_timing("dataset_transform_setup")
+#     # hp_logger.finish_timing("dataset_transform_setup")
 
 #     # # Create data collator
 #     # collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
@@ -240,7 +240,7 @@
 #     hf_train_args.remove_unused_columns = False
 
 #     logger.info(f"GPU {gpu_ith}: Creating trainer with lazy dataset loading")
-#     enhanced_logger.start_timing("trainer_creation")
+#     hp_logger.start_timing("trainer_creation")
 
 #     trainer = SFTTrainer(
 #         model=model,
@@ -252,7 +252,7 @@
 #     )
 #     next_batch = next())
 
-#     enhanced_logger.finish_timing("trainer_creation")
+#     hp_logger.finish_timing("trainer_creation")
 
 #     # Apply response-only training if configured
 #     # trainer = _maybe_train_on_responses_only(trainer, hyper_config)

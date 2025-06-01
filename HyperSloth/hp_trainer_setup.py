@@ -16,7 +16,7 @@ from loguru import logger
 
 
 def _change_compiler_location() -> None:
-    import unsloth # type: ignore
+    import unsloth  # type: ignore
     from unsloth_zoo import compiler
 
     # ====== Patching the compiler location to avoid race conditions as it is shared between GPUs
@@ -42,10 +42,10 @@ def setup_model_and_training(
     # Get enhanced logger for timing
     from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = get_hypersloth_logger(log_level="INFO")
+    hp_logger = get_hypersloth_logger(log_level="INFO")
 
     # Start total setup timing
-    enhanced_logger.start_timing("total_setup")
+    hp_logger.start_timing("total_setup")
 
     _change_compiler_location()
 
@@ -53,16 +53,16 @@ def setup_model_and_training(
     configure_batch_size(hf_train_args, gpu_ith, num_gpus)
 
     # Time model initialization
-    enhanced_logger.start_timing("model_init")
+    hp_logger.start_timing("model_init")
     model, tokenizer = init_model_and_tokenizer(hyper_config)
-    enhanced_logger.finish_timing("model_init")
+    hp_logger.finish_timing("model_init")
 
     # Time trainer creation
-    enhanced_logger.start_timing("trainer_creation")
+    hp_logger.start_timing("trainer_creation")
     trainer = create_trainer(tokenizer, hyper_config, hf_train_args, gpu_ith, model)
-    enhanced_logger.finish_timing("trainer_creation")
+    hp_logger.finish_timing("trainer_creation")
 
     # Finish total setup timing
-    enhanced_logger.finish_timing("total_setup")
+    hp_logger.finish_timing("total_setup")
 
     return trainer, model, tokenizer

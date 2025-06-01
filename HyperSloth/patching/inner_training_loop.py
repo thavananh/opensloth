@@ -104,7 +104,7 @@ def patch_inner_training_loop(trainer):
     _patch_log(trainer_class)
 
     # Get enhanced logger
-    enhanced_logger = get_hypersloth_logger()
+    hp_logger = get_hypersloth_logger()
 
     # Initialize counters for padding token savings
     batch_counter = 0
@@ -176,7 +176,7 @@ def patch_inner_training_loop(trainer):
             # Log periodically
             if batch_counter % log_interval == 0 and hp_local_rank == 0:
                 padding_percentage = (total_tokens_saved / total_possible_tokens) * 100
-                enhanced_logger.info(
+                hp_logger.info(
                     f"Padding savings (batch {batch_counter}): "
                     f"{total_tokens_saved:,} tokens saved out of "
                     f"{total_possible_tokens:,} total "
@@ -185,7 +185,7 @@ def patch_inner_training_loop(trainer):
 
             return processed_samples, num_items_in_batch
 
-    enhanced_logger.info(
+    hp_logger.info(
         f"HyperSloth ultra-minimal patches applied successfully "
         f"(rank {hp_local_rank}/{hp_wolrd_size})"
     )
