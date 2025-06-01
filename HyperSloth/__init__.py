@@ -1,4 +1,3 @@
-# from . import app_config
 import pathlib
 
 

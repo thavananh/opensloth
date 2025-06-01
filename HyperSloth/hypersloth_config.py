@@ -37,7 +37,12 @@ class DataConfig(BaseModel):
             ValueError: If dataset_name is not found in registry
         """
         # Try to find data_config.json relative to current working directory
-        registry_path = Path("data/data_config.json")
+        from HyperSloth import HYPERSLOTH_DATA_DIR
+
+        registry_path = HYPERSLOTH_DATA_DIR / "data_config.json"
+        assert isinstance(
+            registry_path, Path
+        ), "HYPERSLOTH_DATA_DIR must be a Path object"
         if not registry_path.exists():
             # Try relative to this file's directory
             config_dir = Path(__file__).parent.parent
