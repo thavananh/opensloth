@@ -176,17 +176,17 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                 raise
 
 
-class HyperSlothNCCLGradSyncCallback(NCCLGradSyncCallback):
-    """HyperSloth-compatible NCCL gradient sync callback."""
+# class HyperSlothNCCLGradSyncCallback(NCCLGradSyncCallback):
+#     """HyperSloth-compatible NCCL gradient sync callback."""
 
-    @classmethod
-    def create_for_hypersloth(
-        cls,
-        model: torch.nn.Module,
-        gpu: int,
-        gpus: list,
-    ):
-        """Create callback with automatic NCCL setup for HyperSloth."""
+#     @classmethod
+#     def create_for_hypersloth(
+#         cls,
+#         model: torch.nn.Module,
+#         gpu: int,
+#         gpus: list,
+#     ):
+#         """Create callback with automatic NCCL setup for HyperSloth."""
 
 
-        return cls(model=model, gpu=gpu, gpus=gpus)
+#         return cls(model=model, gpu=gpu, gpus=gpus)

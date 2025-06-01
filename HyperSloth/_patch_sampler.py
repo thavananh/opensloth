@@ -24,8 +24,9 @@ def _compute_reordered_and_shuffled_ids(
 
     # gen lens by map the input_ids
     nproc = len(dataset) // 5_000
-    if nproc > num_cpus() - 2:
-        nproc = num_cpus() - 2
+    cpu_count = num_cpus()
+    if cpu_count is not None and nproc > cpu_count - 2:
+        nproc = cpu_count - 2
     nproc = max(nproc, 1)  # ensure at least one process
     lens = dataset.map(
         lambda x: {"len": len(x["input_ids"])},

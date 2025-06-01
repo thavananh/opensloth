@@ -114,8 +114,8 @@ def _setup_logger(gpu_id):
 
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
-    from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
-    from HyperSloth.nccl_grad_sync import HyperSlothNCCLGradSyncCallback
+    # from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
+    from HyperSloth.nccl_grad_sync import NCCLGradSyncCallback
     from HyperSloth.hp_trainer_setup import setup_model_and_training
 
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
@@ -151,7 +151,8 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     enhanced_logger.finish_timing("model_and_training_setup")
 
     enhanced_logger.start_timing("callback_setup")
-    grad_sync_cb = HyperSlothNCCLGradSyncCallback.create_for_hypersloth(
+    assert trainer.model is not None, "Trainer model is None"
+    grad_sync_cb = NCCLGradSyncCallback(
         model=trainer.model,
         gpu=gpu,
         gpus=hyper_config.training.gpus,

@@ -1,5 +1,5 @@
 import random
-from typing import Any
+from typing import Any, Optional
 
 from datasets import Dataset
 
@@ -17,10 +17,10 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 def get_chat_dataset(
     dataset_name_or_path: str,
-    split: str = None,
-    num_samples: int = None,
+    split: Optional[str] = None,
+    num_samples: Optional[int] = None,
     tokenizer: Any = None,
-    message_key: str = None,
+    message_key: Optional[str] = None,
     chat_template=None,
     dataset_already_formated=False,  # when there already a "text" key in the dataset
     **kwargs,
