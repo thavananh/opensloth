@@ -63,7 +63,7 @@ def train_qwen3_model():
         args=SFTConfig(
             output_dir="outputs/qwen3-minimal",
             dataset_text_field="text",
-            per_device_train_batch_size=1,
+            per_device_train_batch_size=2,
             gradient_accumulation_steps=16,
             warmup_steps=5,
             # max_steps=30,
