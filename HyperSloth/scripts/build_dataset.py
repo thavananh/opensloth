@@ -51,7 +51,7 @@ def build_hf_dataset(
         custom_name: Custom name for the dataset
 
     Returns:
-        Path to saved dataset
+        Dataset name for use with DataConfig.from_dataset_name()
     """
     from transformers import AutoTokenizer
 
@@ -165,7 +165,7 @@ def build_hf_dataset(
     print(f"Dataset saved to: {dataset_path}")
     print(f"Registry updated: {registry_path}")
 
-    return str(dataset_path)
+    return dataset_filename
 
 
 def build_sharegpt_dataset(
@@ -193,7 +193,7 @@ def build_sharegpt_dataset(
         custom_name: Custom name for the dataset
 
     Returns:
-        Path to saved dataset
+        Dataset name for use with DataConfig.from_dataset_name()
     """
     from transformers import AutoTokenizer
 
@@ -347,7 +347,7 @@ def build_sharegpt_dataset(
     print(f"Dataset saved to: {dataset_save_path}")
     print(f"Registry updated: {registry_path}")
 
-    return str(dataset_save_path)
+    return dataset_filename
 
 
 def main():
@@ -356,7 +356,7 @@ def main():
         description="Build and save processed datasets for training"
     )
     parser.add_argument(
-        "dataset_name", help="HuggingFace dataset name (e.g., mlabonne/FineTome-100k)"
+        "--hf_dataset", help="HuggingFace dataset name (e.g., mlabonne/FineTome-100k)"
     )
     parser.add_argument(
         "--local_path",
@@ -398,7 +398,7 @@ def main():
 
     # Build dataset with parsed arguments
     if args.local_path:
-        dataset_path = build_sharegpt_dataset(
+        dataset_name = build_sharegpt_dataset(
             dataset_path=args.local_path,
             tokenizer_name=args.tokenizer_name,
             num_samples=args.num_samples,
@@ -408,8 +408,8 @@ def main():
             print_samples=args.print_samples,
         )
     else:
-        dataset_path = build_hf_dataset(
-            dataset_name=args.dataset_name,
+        dataset_name = build_hf_dataset(
+            dataset_name=args.hf_dataset,
             tokenizer_name=args.tokenizer_name,
             num_samples=args.num_samples,
             output_dir=args.output_path,
@@ -419,7 +419,19 @@ def main():
             print_samples=args.print_samples,
         )
 
-    print(f"Dataset built successfully: {dataset_path}")
+    # Success message with usage instructions
+    success_msg = f"""Dataset "{dataset_name}" has been successfully built and saved!
+
+📁 Registry: data/data_config.json
+🚀 Usage in training scripts:
+
+from HyperSloth.hypersloth_config import HyperConfig, DataConfig
+
+hyper_config_model = HyperConfig(
+    data=DataConfig.from_dataset_name("{dataset_name}"),
+)
+"""
+    logger.success(success_msg)
 
 
 if __name__ == "__main__":

@@ -30,14 +30,6 @@ def get_current_python_path():
         return None
 
 
-# def _get_hp_grad_dir(output_dir):
-#     grad_dir = os.path.join(
-#         os.environ["HYPERSLOTH_CACHE_DIR"], "gradients", os.path.basename(output_dir)
-#     )
-#     os.makedirs(grad_dir, exist_ok=True)
-#     return grad_dir
-
-
 def _setup_logger(gpu_id, allow_unknown_gpu=False):
     """Setup enhanced logging for HyperSloth."""
     from HyperSloth.logging_config import get_hypersloth_logger
