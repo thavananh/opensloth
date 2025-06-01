@@ -1,3 +1,16 @@
+"""
+LEGACY PATCH FILE - Contains full training loop replacement
+
+This file contains a complete replacement of the _inner_training_loop method
+with extensive HyperSloth customizations. While functional, it duplicates
+most of the original Transformers code.
+
+For new implementations, consider using:
+- _patch_inner_training_loop_ultra_minimal.py: Minimal patches that only modify necessary parts
+- PATCH_OPTIMIZATION_GUIDE.md: Comprehensive guide on optimization approaches
+
+This file is kept for backward compatibility and reference.
+"""
 import contextlib
 import functools
 import os

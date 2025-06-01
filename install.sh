@@ -1,5 +1,3 @@
-# Install torch first as it's required for building xformers
-# uv pip install torch torchvision torchaudio
-uv pip install unsloth -U
-# uv pip install transformers -U 
+conda create -n hypersloth -f environment.yml -y
+pip install uv poetry
 uv pip install -e ./
