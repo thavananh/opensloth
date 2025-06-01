@@ -168,7 +168,8 @@ tmux new-session -d -s {session_name} -n MAIN"""
         lines.append(f"tmux send-keys -t {session_name}:gpu_{gpu_index} '{cmd}' Enter")
         lines.append("")
 
-    lines.append(f'echo "Attach to this session via: tmux attach -t {session_name}"')
+    lines.append(f'echo "Automatically attaching to session {session_name}..."')
+    lines.append(f"tmux attach -t {session_name}")
 
     # Write out the script
     script_body = "\n".join(lines)
@@ -195,7 +196,7 @@ tmux new-session -d -s {session_name} -n MAIN"""
             else:
                 return
     os.system(f"bash {script_path}")
-    logger.info(f"Script started with session name {session_name}")
+    logger.info(f"Training sessions started and attached to session {session_name}")
 
 
 @call_parse

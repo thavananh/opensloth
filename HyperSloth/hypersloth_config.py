@@ -199,7 +199,7 @@ class TrainingArgsConfig(BaseModel):
     seed: int = 42
     report_to: str = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
-    max_steps: Optional[int] = None
+    max_steps: Optional[int] = int(1e6)  # Set to a large number to avoid early stopping
 
     class Config:
         """Pydantic configuration for DataConfig."""
