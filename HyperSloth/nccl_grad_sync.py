@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
-from typing import List, Optional
+from typing import List
 from HyperSloth.logging_config import get_hypersloth_logger
 
 
@@ -70,7 +70,7 @@ class NCCLGradSyncCallback(TrainerCallback):
             # Average by dividing by world size
             param.grad.div_(self.world_size)
 
-        logger.debug(
+        logger.info(
             f"[GPU={self.gpu}] Gradient sync step {step}: "
             f"{params / 1e6:.2f}M params"
         )
@@ -81,7 +81,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called before optimizer step - synchronize gradients."""
         step = state.global_step
 
-        logger.debug(
+        logger.info(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"starting gradient synchronization"
         )
@@ -89,7 +89,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         # Synchronize gradients across all ranks
         self._sync_gradients(self.model, step)
 
-        logger.debug(
+        logger.info(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"gradient synchronization complete"
         )
@@ -100,7 +100,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called after optimizer step - cleanup if needed."""
         step = state.global_step
 
-        logger.debug(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
+        logger.info(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
 
         # No cleanup needed for NCCL-based sync
         # This method is kept for interface compatibility
@@ -157,16 +157,28 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
         master_port = _find_available_port(host="127.0.0.1", start_port=29500)
         os.environ["MASTER_PORT"] = str(master_port)
     except RuntimeError as e:
+        logger.error(f"[GPU={gpu}] Error finding available port for NCCL: {e}")
         raise RuntimeError(f"[GPU={gpu}] Could not find available port for NCCL: {e}")
 
     # Log all set environment variables
-    logger.debug(
+    logger.info(
         f'[GPU={gpu}] NCCL env: RANK={os.environ["RANK"]}, WORLD_SIZE={os.environ["WORLD_SIZE"]}, MASTER_ADDR={os.environ["MASTER_ADDR"]}, MASTER_PORT={os.environ["MASTER_PORT"]}'
     )
+    is_master_port_available = _check_port_available(
+        os.environ["MASTER_ADDR"], int(os.environ["MASTER_PORT"])
+    )
+    if not is_master_port_available:
+        logger.error(
+            f"[GPU={gpu}] Master port {os.environ['MASTER_PORT']} is not available. "
+            "Please ensure it is not in use by another process."
+        )
+        raise RuntimeError(
+            f"[GPU={gpu}] Master port {os.environ['MASTER_PORT']} is not available."
+        )
 
     # Set the current CUDA device to the specific GPU
 
-    logger.debug(f"[GPU={gpu}] Setting current CUDA device to:0")
+    logger.info(f"[GPU={gpu}] Setting current CUDA device to:0")
     torch.cuda.set_device(0)
 
     # Retry logic for NCCL initialization
@@ -180,7 +192,7 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                 backend="nccl", init_method="env://", rank=rank, world_size=world_size
             )
 
-            logger.debug(
+            logger.info(
                 f"[GPU={gpu}] NCCL setup complete: "
                 f"rank={rank}, world_size={world_size}, attempt={attempt + 1}"
             )

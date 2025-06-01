@@ -182,7 +182,6 @@ def patch_inner_training_loop(trainer):
                     f"{total_possible_tokens:,} total "
                     f"({padding_percentage:.2f}% padding skipped)"
                 )
-
             return processed_samples, num_items_in_batch
 
     hp_logger.info(
