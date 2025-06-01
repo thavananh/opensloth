@@ -188,6 +188,10 @@ def build_hf_dataset(
     name: Optional[str] = None,
     print_samples: bool = True,
     use_cache: bool = True,
+    columns: Optional[str] = [
+        "conversations",
+        "messages",
+    ],  # Default columns for conversational datasets
 ) -> str:
     """
     Build and save HuggingFace dataset in conversational format.
@@ -294,8 +298,17 @@ def build_hf_dataset(
 
         dataset = standardize_sharegpt(dataset)
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        # detect column
+        for column in columns:
+            if column in dataset.column_names:
+                break
+        else:
+            raise ValueError(
+                f"None of the specified columns {columns} found in dataset. "
+                f"Available columns: {dataset.column_names}"
+            )
         conversations = tokenizer.apply_chat_template(
-            dataset["conversations"],
+            dataset[column],
             tokenize=False,
         )
 
@@ -773,6 +786,11 @@ def main():
         action="store_true",
         help="Disable caching and force rebuild dataset",
     )
+    parser.add_argument(
+        "--columns",
+        default="conversations,messages",
+        help="Comma-separated list of columns to use for conversational datasets",
+    )
 
     args = parser.parse_args()
 
@@ -799,6 +817,7 @@ def main():
             name=args.name,
             print_samples=args.print_samples,
             use_cache=not args.no_cache,
+            columns=args.columns.split(",") if args.columns else None,
         )
 
     # Success message with usage instructions

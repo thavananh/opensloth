@@ -124,6 +124,10 @@ class DataConfigHF(DataConfig):
     response_part: Optional[str] = None
     name: Optional[str] = None
     seed: int = 3407
+    columns: Optional[List[str]] = Field(
+        default=list(['conversations', 'messages']),
+        description="List of columns to use from the dataset only match one of them is required",
+    )
 
 
 class TrainingConfig(BaseModel):

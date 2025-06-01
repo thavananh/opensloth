@@ -179,6 +179,7 @@ def parse_data(data):
             instruction_part=data.instruction_part,
             response_part=data.response_part,
             name=data.name,
+            columns=data.columns,
         )
         data = DataConfig.from_dataset_name(
             dataset_name=dataset_name,

@@ -3,12 +3,17 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
+    # data=DataConfigHF(
+    #     dataset_name="mlabonne/FineTome-100k",
+    #     tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
+    #     num_samples=10000,
+    #     split="train",
+    #     name="finetom-10k",  # local name for later reference
+    # ),
     data=DataConfigHF(
-        dataset_name="mlabonne/FineTome-100k",
-        tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
-        num_samples=10000,
+        dataset_name="llamafactory/OpenThoughts-114k",
         split="train",
-        name="finetom-10k",  # local name for later reference
+        tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
     ),
     training=TrainingConfig(
         gpus=[0, 1],
