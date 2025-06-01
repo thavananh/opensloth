@@ -240,13 +240,10 @@ def _get_trainer(
 
                 enhanced_logger.start_timing("trainer_creation_from_raw")
                 trainer = _create_trainer(ds_train, skip_prepare=False)
-                import ipdb
 
-                ipdb.set_trace()
                 enhanced_logger.finish_timing("trainer_creation_from_raw")
 
                 logger.info(f"Maybe train on responses only")
-                # import ipdb; ipdb.set_trace()
 
                 from datasets import DatasetDict
 
@@ -311,6 +308,9 @@ def _get_trainer(
             os.remove(lock)
     _maybe_train_on_responses_only(trainer, hyper_config)
     enhanced_logger.finish_timing("dataset_loading_total")
+    import ipdb
+
+    ipdb.set_trace()
     return trainer
 
 
@@ -335,10 +335,13 @@ def _maybe_train_on_responses_only(trainer, hyper_config: HyperConfig):
 
 def configure_batch_size(hf_train_args, gpu_ith, num_gpus):
     if num_gpus != 1:
-        logger.info(
-            f"Hypersloth will change the batch size to {hf_train_args.per_device_train_batch_size * num_gpus} so each gpu will have {hf_train_args.per_device_train_batch_size} x {hf_train_args.gradient_accumulation_steps} per update step."
-        )
         hf_train_args.per_device_train_batch_size *= num_gpus  # This is the total batch size loaded by dataloader, the trainer later will chose the correct batch size for each GPU
+        global_batch_size = (
+            hf_train_args.per_device_train_batch_size
+            * hf_train_args.gradient_accumulation_steps
+            * num_gpus
+        )
+        logger.info(f"Global batch size: {global_batch_size} ")
     if not gpu_ith == 0:
         # disable reporting for all GPUs except the first one
         hf_train_args.report_to = "none"
