@@ -70,7 +70,7 @@ class NCCLGradSyncCallback(TrainerCallback):
             # Average by dividing by world size
             param.grad.div_(self.world_size)
 
-        logger.info(
+        logger.debug(
             f"[GPU={self.gpu}] Gradient sync step {step}: "
             f"{params / 1e6:.2f}M params"
         )

@@ -52,10 +52,17 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
         self.logger.debug(
             f"🎲 Sampler epoch {self.epoch}: emitting {dataset_size} indices"
         )
-
+        yeild_ids = []
         for idx in ids:
-            self.logger.info(f"📤 Emitting index: {idx}")
+            # self.logger.info(f"📤 Emitting index: {idx}")
+            yeild_ids.append(idx)
             yield idx
+        # write to log for debugging
+        self.logger.debug(
+            f"🎲 Sampler epoch {self.epoch}: dataset_size={dataset_size}\n"
+            f"   📋 First 10 indices: {yeild_ids[:10]}\n"
+            f"   📋 Last 10 indices: {yeild_ids[-10:]}"
+        )
 
 
 def apply_patch_sampler(trainer: Trainer):
