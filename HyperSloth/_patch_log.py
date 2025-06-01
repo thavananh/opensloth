@@ -176,29 +176,29 @@ def _patch_log(T: type):
     try:
         HYPERSLOTH_LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
         n = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
-        HYPERSLOTH_RUN_DIR = os.environ["HYPERSLOTH_RUN_DIR"]
+        LOG_CACHE_DIR = ".cache"
         is_main = HYPERSLOTH_LOCAL_RANK == 0
 
         logger.info(
-            f"[{HYPERSLOTH_LOCAL_RANK=}] Patching log function. Run Dir: {HYPERSLOTH_RUN_DIR}, Num GPUs: {n}"
+            f"[{HYPERSLOTH_LOCAL_RANK=}] Patching log function. Run Dir: {LOG_CACHE_DIR}, Num GPUs: {n}"
         )
 
         # Create run directory if it doesn't exist (master should do this)
         if is_main:
-            os.makedirs(HYPERSLOTH_RUN_DIR, exist_ok=True)
+            os.makedirs(LOG_CACHE_DIR, exist_ok=True)
         else:
             # Workers wait briefly for the directory to be created
             t0 = time.time()
-            while not os.path.exists(HYPERSLOTH_RUN_DIR):
+            while not os.path.exists(LOG_CACHE_DIR):
                 time.sleep(SLEEP_TIME)
                 if time.time() - t0 > 60:  # 1 minute timeout for dir creation
                     raise TimeoutError(
-                        f"Worker {HYPERSLOTH_LOCAL_RANK} timed out waiting for run directory {HYPERSLOTH_RUN_DIR}"
+                        f"Worker {HYPERSLOTH_LOCAL_RANK} timed out waiting for run directory {LOG_CACHE_DIR}"
                     )
 
         # Initialize mmaps and locks
         for key in support_keys:
-            mmap_path = f"{HYPERSLOTH_RUN_DIR}/log_{key}.mmap"
+            mmap_path = f"{LOG_CACHE_DIR}/log_{key}.mmap"
             lock_path = mmap_path + ".lock"
             LOG_LOCKS[key] = FileLock(lock_path)
 
@@ -260,7 +260,7 @@ def _patch_log(T: type):
                     LOG_MMAP[key].flush()
 
         # Initialize the synchronization Flag
-        log_sync_flag_path = f"{HYPERSLOTH_RUN_DIR}/log_sync_flag.dat"
+        log_sync_flag_path = f"{LOG_CACHE_DIR}/log_sync_flag.dat"
         log_sync_flag = Flag(
             world_size=n, file_path=log_sync_flag_path, is_master=is_main
         )

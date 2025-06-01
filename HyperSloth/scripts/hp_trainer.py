@@ -10,13 +10,7 @@ import tabulate
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 from loguru import logger
 
-# Setup a simple global logger for script-level operations
-# from HyperSloth.logging_config import setup_logger_format
 
-# setup_logger_format(gpu_id="main", log_level="INFO")
-
-if not "HYPERSLOTH_CACHE_DIR" in os.environ:
-    os.environ["HYPERSLOTH_CACHE_DIR"] = "/dev/shm/hypersloth/"
 warnings.filterwarnings("ignore")
 
 
@@ -36,68 +30,12 @@ def get_current_python_path():
         return None
 
 
-def get_run_id(hyper_config_model, training_config_model):
-    """
-    Generate a shorter run ID and prepend a yyyy_mm_dd/ folder.
-    """
-    import datetime
-
-    # Get today's date in yyyy_mm_dd format
-    today_str = datetime.datetime.now().strftime("%Y_%m_%d")
-
-    # Shortened model name (last part only)
-    model_name = hyper_config_model.fast_model_args.model_name.split("/")[-1]
-
-    # Shortened dataset name (list or single)
-    if isinstance(hyper_config_model.data.dataset_name_or_path, list):
-        dataset = "_".join(
-            path.split("/")[-1].split(".")[0]
-            for path in hyper_config_model.data.dataset_name_or_path
-        )
-    else:
-        dataset = hyper_config_model.data.dataset_name_or_path.split("/")[-1].split(
-            "."
-        )[0]
-
-    # Gather relevant config fields
-    loss_type = hyper_config_model.training.loss_type
-    lora_r = hyper_config_model.lora_args.r
-    lora_alpha = hyper_config_model.lora_args.lora_alpha
-    seq_len = hyper_config_model.fast_model_args.max_seq_length
-    lr = training_config_model.learning_rate
-    batch_size = training_config_model.per_device_train_batch_size
-    accum_steps = training_config_model.gradient_accumulation_steps
-    ngpu = len(hyper_config_model.training.gpus)
-    epochs = training_config_model.num_train_epochs
-
-    # Calculate global batch size
-    global_bz = batch_size * accum_steps * ngpu
-
-    # Construct a shorter run ID string
-    # (Feel free to adjust abbreviations as desired)
-    # Example: "ls-xx_r4_a32_sq1024_lr3e-5_bz128_ep10_sd42_mmap4"
-    short_run_id = (
-        f"ls-{loss_type}"  # e.g. "ls-crossentropy" -> you might abbreviate "ce"
-        f"_r{lora_r}"
-        f"_a{lora_alpha}"
-        f"_sq{seq_len}"
-        f"_lr{lr}"
-        f"_bz{global_bz}"
-        f"_ep{epochs}"
-        f"_{ngpu}"
-    )
-
-    # Normalize to remove periods and dashes
-    short_run_id = short_run_id.replace(".", "_").replace("-", "_")
-    return f"{model_name}_{today_str}", short_run_id
-
-
-def _get_hp_grad_dir(model_name_dataset, run_id):
-    grad_dir = os.path.join(
-        os.environ["HYPERSLOTH_CACHE_DIR"], model_name_dataset, f"run_{run_id}"
-    )
-    os.makedirs(grad_dir, exist_ok=True)
-    return grad_dir
+# def _get_hp_grad_dir(output_dir):
+#     grad_dir = os.path.join(
+#         os.environ["HYPERSLOTH_CACHE_DIR"], "gradients", os.path.basename(output_dir)
+#     )
+#     os.makedirs(grad_dir, exist_ok=True)
+#     return grad_dir
 
 
 def _setup_logger(gpu_id, allow_unknown_gpu=False):
@@ -125,10 +63,6 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
 
     # Setup enhanced logger
     enhanced_logger = _setup_logger(f"{gpu}")
-
-    hf_train_args.output_dir = os.path.join(
-        hf_train_args.output_dir, *get_run_id(hyper_config, hf_train_args)
-    )
 
     # Use enhanced logging
     enhanced_logger.log_gpu_info(
@@ -193,8 +127,7 @@ def load_config_from_path(config_path: str):
 def build_tmux_script(
     session_name: str,
     script_path: str,
-    model_name_dataset: str,
-    run_id: str,
+    output_dir: str,
     config_file: str,
     gpus: list,
     auto_kill: bool = False,
@@ -210,7 +143,7 @@ def build_tmux_script(
     lines = []
     lines.append("#!/usr/bin/env bash")
     # remove grad_dir
-    lines.append(f"rm -rf {_get_hp_grad_dir(model_name_dataset, run_id)}")
+    # lines.append(f"rm -rf {_get_hp_grad_dir(output_dir)}")
     lines.append(
         f"""# Create a new session with first GPU = 0
 tmux new-session -d -s {session_name} -n MAIN"""
@@ -275,12 +208,11 @@ def train(
 ):
 
     config_file, hyper_config, training_config = initialize_training_config(config_file)
-    # clean grad_dir
+
+    # Set gradient directory based on output_dir
+    # os.environ["HYPERSLOTH_RUN_DIR"] = _get_hp_grad_dir(training_config.output_dir)
+
     # CASE 1: Child process => single GPU
-    model_name_dataset, run_id = get_run_id(hyper_config, training_config)
-    os.environ["HYPERSLOTH_RUN_DIR"] = _get_hp_grad_dir(model_name_dataset, run_id)
-    # _clean_grad_dir(rank, world_size, use_tmux)
-    # clearn dir
     if rank is not None and world_size is not None:
         logger.info(f"[CASE 1] Running on rank {rank} with world size {world_size}")
         _train(
@@ -302,8 +234,7 @@ def train(
             build_tmux_script(
                 session_name,
                 script_path,
-                model_name_dataset,
-                run_id,
+                training_config.output_dir,
                 config_file,
                 gpus,
                 auto_kill=y,

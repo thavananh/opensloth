@@ -100,7 +100,8 @@ def patch_inner_training_loop(trainer):
 
     # Apply log patch
     trainer_class = type(trainer)
-    # _patch_log(trainer_class)
+    # This is for debugging purposes, it does not affect the training logics
+    _patch_log(trainer_class)
 
     # Get enhanced logger
     enhanced_logger = get_hypersloth_logger()

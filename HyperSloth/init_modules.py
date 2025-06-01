@@ -104,15 +104,11 @@ def create_trainer(
     from HyperSloth.patching.inner_training_loop import (
         patch_inner_training_loop,
     )
-    from HyperSloth._patch_sampler import patch_sampler
 
-    num_gpus = len(hyper_config.training.gpus)
-    # if num_gpus != 1:
     enhanced_logger.start_timing("training_loop_patch")
     patch_inner_training_loop(trainer)
     enhanced_logger.finish_timing("training_loop_patch")
 
-    patch_sampler(trainer)
     return trainer
 
 
