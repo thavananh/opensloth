@@ -51,7 +51,6 @@ hypersloth-train ./hs_training_config.py
 # per_device_train_batch_size  4
 # learning_rate                0.0002
 # gradient_accumulation_steps  16
-# per_device_eval_batch_size   2
 # eval_steps                   100
 # logging_steps                1
 # report_to                    tensorboard

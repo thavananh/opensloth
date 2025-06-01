@@ -11,6 +11,7 @@ For new implementations, consider using:
 
 This file is kept for backward compatibility and reference.
 """
+
 import contextlib
 import functools
 import os
@@ -76,7 +77,7 @@ def patch_inner_training_loop(trainer):
 
     # from transformers import Trainer
     HP_LOCAL_RANK = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
-    HP_WZ = int(os.getenv("HYPERSLOTH_NUM_GPUS"))
+    HP_WZ = int(os.getenv("HYPERSLOTH_NUM_GPUS", "1"))
     Trainer = type(trainer)
     _patch_log(Trainer)
 
@@ -430,7 +431,9 @@ def patch_inner_training_loop(trainer):
                     # end = start + args.per_device_train_batch_size
                     return {
                         "input_ids": inputs["input_ids"][HP_LOCAL_RANK::HP_WZ],
-                        "attention_mask": inputs["attention_mask"][HP_LOCAL_RANK::HP_WZ],
+                        "attention_mask": inputs["attention_mask"][
+                            HP_LOCAL_RANK::HP_WZ
+                        ],
                         "labels": inputs["labels"][HP_LOCAL_RANK::HP_WZ],
                     }
 
@@ -439,14 +442,14 @@ def patch_inner_training_loop(trainer):
                 for accumulate_step, inputs in enumerate(batch_samples):
                     inputs = select(inputs)
 
-                    
-                    #=== Just for logging
+                    # === Just for logging
                     num_of_attention_token = inputs["attention_mask"].sum().item()
                     total_tokens = inputs["attention_mask"].numel()
-                    attention_table_log[f'GPU{HP_LOCAL_RANK}_AccumulateStep{accumulate_step}'] = (num_of_attention_token, total_tokens)
-                    #<<< Just for logging
+                    attention_table_log[
+                        f"GPU{HP_LOCAL_RANK}_AccumulateStep{accumulate_step}"
+                    ] = (num_of_attention_token, total_tokens)
+                    # <<< Just for logging
                     step += 1
-                    
 
                     # Start timing for forward pass
                     enhanced_logger.start_timing("forward_pass")
@@ -460,7 +463,7 @@ def patch_inner_training_loop(trainer):
                     self.accelerator.gradient_state._set_sync_gradients(do_sync_step)
 
                     if (
-                        self.args.include_num_input_tokens_seen 
+                        self.args.include_num_input_tokens_seen
                     ):  # HYPER SLOTH: Always include num_input_tokens_seen for debugging
                         # === Track the number of tokens seen and how many of them have been trained ===
                         main_input_name = getattr(
@@ -657,13 +660,16 @@ def patch_inner_training_loop(trainer):
                         break
                 # We also need to break out of the nested loop
 
-                
                 # peritoicly log the attention table
-                if update_step% 100 == 0 or update_step < 5:
+                if update_step % 100 == 0 or update_step < 5:
                     import tabulate
+
                     table_data = []
                     headers = ["Attention Tokens", "Total Tokens"]
-                    for gpu_id, (num_not_masked, total_tokens) in attention_table_log.items():
+                    for gpu_id, (
+                        num_not_masked,
+                        total_tokens,
+                    ) in attention_table_log.items():
                         table_data.append(
                             [
                                 # gpu_id,
@@ -679,7 +685,7 @@ def patch_inner_training_loop(trainer):
                         )
                         + "\n"
                     )
-                
+
                 # NUM_ITEMS_IN_BATCH[:] = 0
                 if self.control.should_epoch_stop or self.control.should_training_stop:
                     if is_torch_xla_available():

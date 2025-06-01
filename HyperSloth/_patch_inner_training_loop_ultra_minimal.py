@@ -32,20 +32,7 @@ def patch_inner_training_loop(trainer):
     
     TrainerState.__init__ = enhanced_trainer_state_init
     
-    # Patch 2: TrainerState loading with field preservation
-    original_load_from_json = TrainerState.load_from_json
-    
-    @staticmethod
-    def enhanced_load_from_json(json_path):
-        state = original_load_from_json(json_path)
-        # Ensure HyperSloth fields exist after loading
-        if not hasattr(state, 'is_world_process_zero'):
-            state.is_world_process_zero = (hp_local_rank == 0)
-        return state
-    
-    TrainerState.load_from_json = enhanced_load_from_json
-    
-    # Patch 3: GPU-specific batch slicing (if multi-GPU)
+    # Patch 2: GPU-specific batch slicing (if multi-GPU)
     if hp_num_gpus > 1 and hasattr(trainer_class, 'get_batch_samples'):
         original_get_batch_samples = trainer_class.get_batch_samples
         

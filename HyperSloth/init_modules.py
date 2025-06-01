@@ -104,7 +104,9 @@ def create_trainer(
     )
     enhanced_logger.finish_timing("trainer_setup")
 
-    from HyperSloth._patch_inner_training_loop import patch_inner_training_loop
+    from HyperSloth._patch_inner_training_loop import (
+        patch_inner_training_loop,
+    )
     from HyperSloth._patch_sampler import patch_sampler
 
     if hyper_config.use_mmap_grad_sync:

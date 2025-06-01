@@ -187,9 +187,6 @@ class HyperSlothNCCLGradSyncCallback(NCCLGradSyncCallback):
         gpus: list,
     ):
         """Create callback with automatic NCCL setup for HyperSloth."""
-        # Setup NCCL environment if not already done
-        # if not dist.is_initialized():
-        #     # This will retry until success or max retries exceeded
-        #     setup_nccl_for_hypersloth(gpu, gpus)
+
 
         return cls(model=model, gpu=gpu, gpus=gpus)

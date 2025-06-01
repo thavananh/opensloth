@@ -18,7 +18,7 @@ def _compute_reordered_and_shuffled_ids(
     dataset: Dataset,
     epoch,
     seed=42,
-    mode=None, # not use
+    mode=None,  # not use
 ) -> list[int]:
     from fastcore.all import chunked
 
@@ -26,6 +26,7 @@ def _compute_reordered_and_shuffled_ids(
     nproc = len(dataset) // 5_000
     if nproc > num_cpus() - 2:
         nproc = num_cpus() - 2
+    nproc = max(nproc, 1)  # ensure at least one process
     lens = dataset.map(
         lambda x: {"len": len(x["input_ids"])},
         remove_columns=dataset.column_names,
@@ -43,8 +44,6 @@ def _compute_reordered_and_shuffled_ids(
     R.shuffle(chunked_ids)
 
     return [idx for chunk in chunked_ids for idx in chunk]
-
-
 
 
 # def reorder_and_shuffle_data(
@@ -129,19 +128,19 @@ def patch_sampler(trainer: Trainer):
     clock = Clock(start_now=True)
 
     @patch
-    def _get_train_sampler(self: Trainer) -> CustomSampler:
+    def _get_train_sampler(self: Trainer, train_dataset=None) -> CustomSampler:
         """Get a custom sampler for the training dataset."""
-        logger.info(f"Total samples in dataset: {len(self.train_dataset)}")
-        assert isinstance(
-            self.train_dataset, Dataset
-        ), "train_dataset must be a Dataset"
+        if train_dataset is None:
+            train_dataset = self.train_dataset
+        logger.info(f"Total samples in dataset: {len(train_dataset)}")
+        assert isinstance(train_dataset, Dataset), "train_dataset must be a Dataset"
 
         # Get shuffle mode from trainer's hypersloth config if available
         shuffle_mode = getattr(
             getattr(self, "hypersloth_config", None), "shuffle_mode", "on_dataset"
         )
         return CustomSampler(
-            self.train_dataset,
+            train_dataset,
             shuffle_mode=os.environ.get("HYPERSLOTH_SHUFFLE_MODE", shuffle_mode),
         )
 
