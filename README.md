@@ -76,15 +76,111 @@ pip install git+https://github.com/anhvth/HyperSloth.git
 
 ## ⚡ Quickstart
 
-### 1. Initialize Configuration
+Get up and running with HyperSloth in 3 simple steps:
+
+### Step 1: Build Your Dataset
+
+First, prepare your training data using any Hugging Face dataset:
+
 ```bash
-hypersloth-init  # Creates a config template
+hypersloth-build-dataset --hf_dataset mlabonne/FineTome-100k -n 1000 --split train --name finetom-1k --tokenizer Qwen/Qwen3-8B --print_samples
 ```
 
-### 2. Train Across Multiple GPUs
-```bash
-hypersloth-train configs/your_config.py 
+**What this does:**
+- Downloads 1000 samples from `mlabonne/FineTome-100k`
+- Tokenizes using `Qwen/Qwen3-8B` tokenizer 
+- Saves as `finetom-1k` dataset
+- Shows sample conversations with `--print_samples`
+
+**Expected output:**
 ```
+Loading 1000 samples from mlabonne/FineTome-100k...
+
+================================================================================
+SAMPLE TEXTS FROM PROCESSED DATASET:
+================================================================================
+
+--- Sample 1 ---
+<|im_start|>user
+[Sample conversation]
+<|im_end|>
+<|im_start|>assistant
+[Sample response]
+<|im_end|>
+
+Dataset saved to: data/built_dataset/finetom-1k
+Registry updated: data/data_config.json
+Dataset "finetom-1k" has been successfully built and saved!
+```
+
+### Step 2: Initialize Training Configuration
+
+Generate a configuration template:
+
+```bash
+hypersloth-init
+```
+
+This creates `example_training_config.py` with default settings. Edit it to use your dataset:
+
+```python
+# Update the data section to use your built dataset
+hyper_config_model = HyperConfig(
+    data=DataConfig.from_dataset_name("finetom-1k"),  # Your dataset name
+    training=TrainingConfig(
+        gpus=[0, 1],  # Adjust to your available GPUs
+        loss_type="response_only",  # Calculate loss only on assistant responses
+    ),
+    fast_model_args=FastModelArgs(
+        model_name="unsloth/Qwen3-0.6b-bnb-4bit",  # Smaller model for quick testing
+        max_seq_length=2048,
+    ),
+    lora_args=LoraArgs(
+        r=16,
+        lora_alpha=16,
+    ),
+)
+```
+
+### Step 3: Start Multi-GPU Training
+
+Launch training across your GPUs:
+
+```bash
+hypersloth-train ./example_training_config.py
+```
+
+**Expected output:**
+```
+21:32:54 | INFO | 🔧 GPU 0 (Rank 0/1) | Model: unsloth/Qwen3-0.6b-bnb-4bit
+21:32:54 | INFO | 🔧 GPU 1 (Rank 1/1) | Model: unsloth/Qwen3-0.6b-bnb-4bit
+21:32:54 | INFO | 🚀 Starting total training timer
+[Training progress with adaptive batching and NCCL synchronization]
+```
+
+**Optional: Monitor with tmux**
+```bash
+hypersloth-train ./example_training_config.py --tmux train
+# Then attach to sessions: tmux a -t train_gpu_0
+```
+
+### Quick Tips
+
+**For faster iteration:**
+- Start with smaller models: `unsloth/Qwen3-0.6b-bnb-4bit`
+- Use fewer samples: `-n 1000` for quick testing
+- Test single GPU first: `gpus=[0]` in config
+
+**For production:**
+- Scale up dataset size: `-n 50000` or more
+- Use larger models: `unsloth/Qwen3-8B-bnb-4bit`
+- Add more GPUs: `gpus=[0, 1, 2, 3]`
+
+**Memory management:**
+- Reduce `per_device_train_batch_size` if you hit OOM
+- Increase `gradient_accumulation_steps` to maintain effective batch size
+
+That's it! You now have HyperSloth running multi-GPU training with optimized batching. Check the logs for padding savings and performance metrics.
 
 ## 🛠 Command-Line Tools
 
