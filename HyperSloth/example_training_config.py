@@ -2,7 +2,6 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    grad_dir="/dev/shm/hypersloth",
     data=DataConfig(
         dataset_name_or_path="mlabonne/FineTome-100k",
         split="train",

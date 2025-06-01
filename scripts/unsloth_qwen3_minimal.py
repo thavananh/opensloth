@@ -24,7 +24,7 @@ def train_qwen3_model():
 
     # Load model
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="model_store/unsloth/Qwen3-4B-bnb-4bit",
+        model_name="model_store/unsloth/Qwen3-8B-bnb-4bit",
         max_seq_length=2048,
         load_in_4bit=True,
         load_in_8bit=False,
@@ -63,8 +63,8 @@ def train_qwen3_model():
         args=SFTConfig(
             output_dir="outputs/qwen3-minimal",
             dataset_text_field="text",
-            per_device_train_batch_size=2,
-            gradient_accumulation_steps=16,
+            per_device_train_batch_size=1,
+            gradient_accumulation_steps=32,
             warmup_steps=5,
             # max_steps=30,
             learning_rate=2e-4,
@@ -74,6 +74,7 @@ def train_qwen3_model():
             weight_decay=0.01,
             lr_scheduler_type="linear",
             seed=3407,
+            max_steps=100,
             report_to="wandb",
         ),
     )

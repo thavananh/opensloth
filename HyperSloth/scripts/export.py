@@ -1,5 +1,10 @@
 from fastcore.all import call_parse
 from speedy_utils.all import load_by_ext, logger
+import requests
+import torch
+from PIL import Image
+from transformers import Gemma3ForConditionalGeneration
+import peft
 
 
 @call_parse
@@ -46,17 +51,12 @@ def merge_and_save_lora(
     # Load the LoRA model
     if "gemma-3" in base_model_name_or_path.lower() or force_use_unsloth:
         logger.info("Using FastModel for LoRA")
-        import requests
-        import torch
-        from PIL import Image
-        from transformers import Gemma3ForConditionalGeneration
-        import peft
+
         tokenizer = AutoTokenizer.from_pretrained(
             base_model_name_or_path,
             trust_remote_code=True,
         )
         tokenizer.save_pretrained(output_path)
-
 
         model = Gemma3ForConditionalGeneration.from_pretrained(
             base_model_name_or_path, device_map="cpu", torch_dtype=torch.bfloat16
@@ -68,9 +68,11 @@ def merge_and_save_lora(
             output_path, max_shard_size="5048MB", safe_serialization=True
         )
 
-        file = 'https://huggingface.co/unsloth/gemma-3-12b-it/raw/main/preprocessor_config.json'
+        file = "https://huggingface.co/unsloth/gemma-3-12b-it/raw/main/preprocessor_config.json"
         # download the file and put to the lora dir
-        cmd = 'wget --no-check-certificate -O {}/preprocessor_config.json {}'.format(lora_path, file)
+        cmd = "wget --no-check-certificate -O {}/preprocessor_config.json {}".format(
+            lora_path, file
+        )
         os.system(cmd)
         # response = requests.get(file)
         # with open(os.path.join(lora_path, "preprocessor_config.json"), "wb") as f:

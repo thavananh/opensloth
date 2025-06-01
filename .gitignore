@@ -61,4 +61,3 @@ model_store/
 lm-evaluation-harness
 output
 wandb
-wandb/latest-run

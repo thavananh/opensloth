@@ -7,7 +7,7 @@ from HyperSloth._patch_log import _patch_log
 import torch
 
 
-def smart_partition_batches(all_batches: list, num_devices: int) -> dict:
+def improve_partition_batches(all_batches: list, num_devices: int) -> dict:
     """
     Partition batches across devices by sorting sequences by length.
 
@@ -157,7 +157,7 @@ def patch_inner_training_loop(trainer):
                 tokens_before_partition += batch["input_ids"].numel()
                 actual_tokens_before += batch["attention_mask"].sum().item()
 
-            splited_by_gpus = smart_partition_batches(batch_samples, hp_wolrd_size)
+            splited_by_gpus = improve_partition_batches(batch_samples, hp_wolrd_size)
             processed_samples = splited_by_gpus[hp_local_rank]
 
             # Calculate tokens after partitioning for this GPU
