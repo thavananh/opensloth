@@ -2,7 +2,7 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    data=DataConfig.from_dataset_name("fubetome"),
+    data=DataConfig.from_dataset_name("finetom"),
     training=TrainingConfig(
         gpus=[0, 1],  # Using GPU 3 as in your original script
         loss_type="response_only",
