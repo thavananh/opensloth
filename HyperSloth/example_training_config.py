@@ -2,13 +2,13 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    data=DataConfig.from_dataset_name("finetom"),
+    data=DataConfig.from_dataset_name("finetom-1k"),
     training=TrainingConfig(
-        gpus=[0, 1],  # Using GPU 3 as in your original script
+        gpus=[0, 1],
         loss_type="response_only",
     ),
     fast_model_args=FastModelArgs(
-        model_name="model_store/unsloth/Qwen3-8B-bnb-4bit",
+        model_name="unsloth/Qwen3-0.6b-bnb-4bit",
         max_seq_length=2048,
     ),
     lora_args=LoraArgs(
