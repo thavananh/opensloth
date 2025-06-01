@@ -1,3 +1,4 @@
+from transformers.configuration_utils import TransformerConfig
 from speedy_utils import *
 import torch
 import torch.nn as nn

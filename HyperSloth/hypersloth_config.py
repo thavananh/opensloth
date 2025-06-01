@@ -190,8 +190,6 @@ class TrainingArgsConfig(BaseModel):
     lr_scheduler_type: str = "linear"
     warmup_steps: int = 5
     save_total_limit: int = 2
-    # bf16: bool = True
-    # fp16: bool = False
     optim: str = "adamw_8bit"
     weight_decay: float = 0.01
     save_only_model: bool = True
@@ -199,7 +197,7 @@ class TrainingArgsConfig(BaseModel):
     seed: int = 42
     report_to: str = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
-    max_steps: Optional[int] = int(1e6)  # Set to a large number to avoid early stopping
+    # max_steps: Optional[int] = None
 
     class Config:
         """Pydantic configuration for DataConfig."""

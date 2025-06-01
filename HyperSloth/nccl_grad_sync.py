@@ -81,7 +81,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called before optimizer step - synchronize gradients."""
         step = state.global_step
 
-        logger.info(
+        logger.debug(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"starting gradient synchronization"
         )
@@ -89,7 +89,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         # Synchronize gradients across all ranks
         self._sync_gradients(self.model, step)
 
-        logger.info(
+        logger.debug(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"gradient synchronization complete"
         )
@@ -100,41 +100,13 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called after optimizer step - cleanup if needed."""
         step = state.global_step
 
-        logger.info(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
+        logger.debug(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
 
         # No cleanup needed for NCCL-based sync
         # This method is kept for interface compatibility
 
 
 # Add this integration code for HyperSloth at the end of the file
-
-
-def _check_port_available(host: str, port: int) -> bool:
-    """Check if a port is available for binding."""
-    import socket
-
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind((host, port))
-            return True
-    except OSError:
-        return False
-
-
-def _find_available_port(
-    host: str = "127.0.0.1", start_port: int = 29500, max_attempts: int = 100
-) -> int:
-    """Find an available port starting from start_port."""
-    import socket
-
-    for port in range(start_port, start_port + max_attempts):
-        if _check_port_available(host, port):
-            return port
-
-    raise RuntimeError(
-        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
-    )
 
 
 def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
@@ -151,30 +123,26 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     os.environ["RANK"] = str(rank)
     os.environ["WORLD_SIZE"] = str(world_size)
     os.environ["MASTER_ADDR"] = "127.0.0.1"  # Localhost for single machine
-
-    # Find an available port starting from 29500
-    try:
-        master_port = _find_available_port(host="127.0.0.1", start_port=29500)
-        os.environ["MASTER_PORT"] = str(master_port)
-    except RuntimeError as e:
-        logger.error(f"[GPU={gpu}] Error finding available port for NCCL: {e}")
-        raise RuntimeError(f"[GPU={gpu}] Could not find available port for NCCL: {e}")
+    if "MASTER_PORT" not in os.environ:
+        os.environ["MASTER_PORT"] = "29500"  # Use fixed port
 
     # Log all set environment variables
     logger.info(
         f'[GPU={gpu}] NCCL env: RANK={os.environ["RANK"]}, WORLD_SIZE={os.environ["WORLD_SIZE"]}, MASTER_ADDR={os.environ["MASTER_ADDR"]}, MASTER_PORT={os.environ["MASTER_PORT"]}'
     )
-    is_master_port_available = _check_port_available(
-        os.environ["MASTER_ADDR"], int(os.environ["MASTER_PORT"])
-    )
-    if not is_master_port_available:
-        logger.error(
-            f"[GPU={gpu}] Master port {os.environ['MASTER_PORT']} is not available. "
-            "Please ensure it is not in use by another process."
-        )
-        raise RuntimeError(
-            f"[GPU={gpu}] Master port {os.environ['MASTER_PORT']} is not available."
-        )
+
+    # Assert the port is free
+    import socket
+
+    if rank == 0:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind((os.environ["MASTER_ADDR"], int(os.environ["MASTER_PORT"])))
+        except OSError as e:
+            raise RuntimeError(
+                f"[GPU={gpu}] Port {os.environ['MASTER_PORT']} is not available: {e}"
+            )
 
     # Set the current CUDA device to the specific GPU
 
