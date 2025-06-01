@@ -40,8 +40,11 @@ class StepTimer:
 class HyperSlothLogger:
     """Enhanced logger for HyperSloth with better formatting and GPU-aware logging."""
 
-    def __init__(self, gpu_id: Optional[str] = None, log_level: str = "INFO"):
-        self.gpu_id = gpu_id or os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
+    def __init__(self, log_level: str = "INFO", allow_unknown_gpu: bool = False):
+        """Initialize the HyperSlothLogger with specified log level and GPU awareness."""
+        self.allow_unknown_gpu = (
+            allow_unknown_gpu  # allow to run without setting HYPERSLOTH_LOCAL_RANK
+        )
         self.log_level = log_level.upper()
         self.console = Console()
 
@@ -52,24 +55,35 @@ class HyperSlothLogger:
 
         self._setup_logger()
 
+    @property
+    def gpu_id(self) -> str:
+        id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "UNSET")
+        if id == "UNSET" and not self.allow_unknown_gpu:
+            raise
+            # If unknown_gpu is True, we don't set the gpu_id
+
+        # import traceback
+
+        # stack = traceback.extract_stack()
+        # for frame in stack[::-1]:
+        #     if "HyperSlothLogger" in frame.name:
+        #         print(
+        #             f"Warning: HYPERSLOTH_LOCAL_RANK not set. Called from {frame.name} at {frame.filename}:{frame.lineno}"
+        #         )
+        #         break
+        # else:
+        #     print(
+        #         "Warning: HYPERSLOTH_LOCAL_RANK not set. Called from unknown location."
+        #     )
+
+        return id
+
     def _setup_logger(self) -> None:
         """Setup loguru logger with enhanced formatting."""
-        # Create a separate logger instance to avoid conflicts
         from loguru import logger as base_logger
 
-        # Create a new logger instance by copying the base logger
         self.logger = base_logger.bind(gpu_id=self.gpu_id)
-
         base_logger.remove()
-        # Only remove handlers if this is the first GPU (to avoid conflicts)
-        # if self.gpu_id == "0":
-        #     # Remove default handler only once
-        #     try:
-        #     except ValueError:
-        #         # Handler already removed
-        #         pass
-
-        # Custom format with GPU info, caller info and better spacing
         log_format = (
             "<green>{time:HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
@@ -79,19 +93,20 @@ class HyperSlothLogger:
         )
 
         # Only add handlers if this is the first setup or in single GPU mode
-        if (
-            self.gpu_id == "0"
-            or len(os.environ.get("HYPERSLOTH_GPUS", "0").split(",")) == 1
-        ):
-            # Console handler with colors
-            base_logger.add(
-                sys.stderr,
-                format=log_format,
-                level=self.log_level,
-                colorize=True,
-                enqueue=True,
-                filter=lambda record: record["extra"].get("gpu_id") is not None,
-            )
+        # if (
+        #     self.gpu_id == "0"
+        #     or len(os.environ.get("HYPERSLOTH_GPUS", "0").split(",")) == 1
+        # ):
+
+        # Console handler with colors
+        base_logger.add(
+            sys.stderr,
+            format=log_format,
+            level=self.log_level,
+            colorize=True,
+            enqueue=True,
+            filter=lambda record: record["extra"].get("gpu_id") is not None,
+        )
 
         # File handler for individual GPU logs (always add these)
         log_dir = ".log"
@@ -545,43 +560,16 @@ VALID_LOGGER = None
 
 
 def get_hypersloth_logger(
-    gpu_id: Optional[str] = None, log_level: str = "INFO"
+    log_level="INFO", allow_unknown_gpu=False
 ) -> HyperSlothLogger:
     """Setup and return enhanced logger instance."""
     global VALID_LOGGER
     if VALID_LOGGER is not None:
         return VALID_LOGGER
 
-    # Use provided gpu_id or fallback to environment variable
-    if gpu_id is None:
-        gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
-
-    logger = HyperSlothLogger(gpu_id=gpu_id, log_level=log_level)
-    if gpu_id is not None:
-        VALID_LOGGER = logger
+    logger = HyperSlothLogger(log_level=log_level, allow_unknown_gpu=allow_unknown_gpu)
+    VALID_LOGGER = logger
     return logger
-
-
-# def setup_logger_format(gpu_id: Optional[str] = None, log_level: str = "INFO") -> None:
-#     """Setup a global logger that's safe to use everywhere with proper gpu_id binding."""
-#     # Only setup if no handlers exist or if explicitly requested
-#     if len(logger._core.handlers) == 0:  # type: ignore
-#         # Simple format without gpu_id for global usage
-#         simple_format = (
-#             "<green>{time:HH:mm:ss}</green> | "
-#             "<level>{level: <8}</level> | "
-#             "<cyan>{file}:{line}</cyan> |"
-#             "<level>{message}</level>"
-#         )
-
-#         # Console handler
-#         logger.add(
-#             sys.stderr,
-#             format=simple_format,
-#             level=log_level.upper(),
-#             colorize=True,
-#             enqueue=True,
-#         )
 
 
 def format_config_display(hyper_config: Any, training_config: Any) -> Dict[str, Any]:

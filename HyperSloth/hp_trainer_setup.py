@@ -37,12 +37,12 @@ def setup_model_and_training(
     """
 
     gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-    num_gpus = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+    num_gpus = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
 
     # Get enhanced logger for timing
     from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
+    enhanced_logger = get_hypersloth_logger(log_level="INFO")
 
     # Start total setup timing
     enhanced_logger.start_timing("total_setup")

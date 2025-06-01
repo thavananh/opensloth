@@ -1,8 +1,8 @@
 import os
 import random
-from typing import Iterator, Literal
+from typing import Iterator, Literal, Union
 
-from datasets import Dataset
+from datasets import Dataset, IterableDataset
 from fastcore.all import patch
 from torch.utils.data import SequentialSampler
 from transformers import Trainer, TrainerCallback
@@ -10,7 +10,7 @@ from transformers import Trainer, TrainerCallback
 from HyperSloth.logging_config import get_hypersloth_logger
 
 
-logger = get_hypersloth_logger()
+logger = get_hypersloth_logger(log_level="INFO")
 from fastcore.all import num_cpus
 
 
@@ -22,12 +22,21 @@ def _compute_reordered_and_shuffled_ids(
 ) -> list[int]:
     from fastcore.all import chunked
 
-    # gen lens by map the input_ids
-    nproc = len(dataset) // 5_000
+    local_rank = int(os.environ.get("HYPERSLOTH_LOCAL_RANK", "0"))
+
+    # Calculate optimal number of processes
+    dataset_size = len(dataset)
+    nproc = dataset_size // 5_000
     cpu_count = num_cpus()
     if cpu_count is not None and nproc > cpu_count - 2:
         nproc = cpu_count - 2
     nproc = max(nproc, 1)  # ensure at least one process
+
+    if local_rank == 0:
+        logger.info(
+            f"🔢 Computing sequence lengths for {dataset_size:,} samples using {nproc} processes"
+        )
+
     lens = dataset.map(
         lambda x: {"len": len(x["input_ids"])},
         remove_columns=dataset.column_names,
@@ -44,28 +53,14 @@ def _compute_reordered_and_shuffled_ids(
     R = random.Random(seed + epoch)
     R.shuffle(chunked_ids)
 
+    if local_rank == 0:
+        min_len, max_len = min(lens), max(lens)
+        avg_len = sum(lens) / len(lens)
+        logger.info(
+            f"📏 Sequence lengths: min={min_len}, max={max_len}, avg={avg_len:.1f}"
+        )
+
     return [idx for chunk in chunked_ids for idx in chunk]
-
-
-# def reorder_and_shuffle_data(
-#     dataset: Dataset,
-#     epoch,
-#     seed=42,
-# ) -> Dataset:
-#     ids = _compute_reordered_and_shuffled_ids(dataset, epoch, seed)
-#     clock = Clock(start_now=True)
-#     dataset = dataset.select(ids)
-#     clock.log_elapsed_time("Dataset selection")
-#     return dataset
-
-
-# def print_sequence_lengths(dataset: Dataset):
-#     lens = [len(x["input_ids"]) for x in dataset]
-#     logger.info(f"First 10 sequence lengths: {lens[:10]}")
-#     logger.info(f"Last 10 sequence lengths: {lens[-10:]}")
-#     logger.info(f"Max sequence length: {max(lens)}")
-#     logger.info(f"Min sequence length: {min(lens)}")
-#     logger.info(f"Mean sequence length: {sum(lens) / len(lens)}")
 
 
 def get_callback_shuffle_data(trainer) -> TrainerCallback:
@@ -77,19 +72,11 @@ def get_callback_shuffle_data(trainer) -> TrainerCallback:
 
         def on_epoch_begin(self, args, state, control, train_dataloader, **kwargs):
             local_rank = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-            logger.info("[on_epoch_begin] Shuffling data, this may take a while...")
 
-            # self.trainer.train_dataset = reorder_and_shuffle_data(
-            #     self.trainer.train_dataset,
-            #     epoch=state.epoch,
-            #     seed=args.seed,
-            # )
-            logger.info("[on_epoch_begin] Data shuffled")
-
-            # print_sequence_lengths(self.trainer.train_dataset)
-
+            # Only log from rank 0 to reduce verbosity
             if local_rank == 0:
-                logger.info("[on_epoch_begin] Debugging dataloader")
+                logger.info(f"🔄 Starting epoch {state.epoch + 1}")
+
                 try:
                     from ._debug_dataloader import _debug_dataloader
 
@@ -97,10 +84,12 @@ def get_callback_shuffle_data(trainer) -> TrainerCallback:
                     _debug_dataloader(
                         self.trainer.get_train_dataloader(), tokenizer=tok
                     )
-                except:
-                    logger.exception("Failed to debug dataloader this is not a problem")
+                    logger.info(
+                        "📋 Dataloader examples logged to .log/dataloader_examples.html"
+                    )
+                except Exception as e:
+                    logger.debug(f"Dataloader debugging failed (non-critical): {e}")
                     pass
-            logger.info("[on_epoch_begin] Finished debugging dataloader")
 
     return ShuffleData(trainer)
 
@@ -123,28 +112,55 @@ class CustomSampler(SequentialSampler):
 
 
 from speedy_utils import Clock
+from warnings import warn
 
 
 def patch_sampler(trainer: Trainer):
-    clock = Clock(start_now=True)
-
-    @patch
-    def _get_train_sampler(self: Trainer, train_dataset=None) -> CustomSampler:
-        """Get a custom sampler for the training dataset."""
-        if train_dataset is None:
-            train_dataset = self.train_dataset
-        logger.info(f"Total samples in dataset: {len(train_dataset)}")
-        assert isinstance(train_dataset, Dataset), "train_dataset must be a Dataset"
-
-        # Get shuffle mode from trainer's hypersloth config if available
-        shuffle_mode = getattr(
-            getattr(self, "hypersloth_config", None), "shuffle_mode", "on_dataset"
-        )
-        return CustomSampler(
-            train_dataset,
-            shuffle_mode=os.environ.get("HYPERSLOTH_SHUFFLE_MODE", shuffle_mode),
-        )
-
-    trainer.add_callback(get_callback_shuffle_data(trainer))
-    clock.log_elapsed_time()
+    warn(
+        "This function is deprecated and will be removed in future versions. "
+        "Use `trainer.add_callback(get_callback_shuffle_data(trainer))` instead."
+    )
     return trainer
+    # clock = Clock(start_now=True)
+    # local_rank = int(os.environ.get("HYPERSLOTH_LOCAL_RANK", "0"))
+
+    # @patch
+    # def _get_train_sampler(self: Trainer, train_dataset=None) -> CustomSampler:
+    #     """Get a custom sampler for the training dataset."""
+    #     if train_dataset is None:
+    #         train_dataset = self.train_dataset
+
+    #     # Log dataset info with better formatting
+    #     if hasattr(train_dataset, "__len__"):
+    #         try:
+    #             dataset_size = len(train_dataset)  # type: ignore
+    #             if local_rank == 0:  # Only log from rank 0
+    #                 logger.info(
+    #                     f"📊 Dataset: {dataset_size:,} samples | Creating custom sampler"
+    #                 )
+    #         except Exception:
+    #             if local_rank == 0:
+    #                 logger.info("📊 Dataset: Creating custom sampler")
+    #     else:
+    #         if local_rank == 0:
+    #             logger.info("📊 Dataset: Iterable (no fixed length)")
+
+    #     assert isinstance(
+    #         train_dataset, (Dataset, IterableDataset)
+    #     ), "train_dataset must be a Dataset or IterableDataset"
+
+    #     # Get shuffle mode from trainer's hypersloth config if available
+    #     shuffle_mode = getattr(
+    #         getattr(self, "hypersloth_config", None), "shuffle_mode", "on_dataset"
+    #     )
+    #     return CustomSampler(
+    #         train_dataset,
+    #         shuffle_mode=os.environ.get("HYPERSLOTH_SHUFFLE_MODE", shuffle_mode),
+    #     )
+
+    # trainer.add_callback(get_callback_shuffle_data(trainer))
+
+    # if local_rank == 0:
+    #     clock.log_elapsed_time("Sampler patching completed")
+
+    # return trainer

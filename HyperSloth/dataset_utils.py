@@ -1,7 +1,7 @@
 import random
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
-from datasets import Dataset
+from datasets import Dataset, IterableDataset
 
 import warnings
 import os
@@ -72,7 +72,14 @@ def get_chat_dataset(
 
             dataset = load_dataset(dataset_name_or_path, split=split)
             # Check if dataset is empty
-            dataset[0]
+            assert dataset is not None, (
+                f"Failed to load dataset '{dataset_name_or_path}'. "
+                "Check dataset name and split."
+            )
+            assert len(dataset) > 0, (
+                f"Dataset '{dataset_name_or_path}' is empty. "
+                "Check dataset name and split."
+            )
             dataset = standardize_data_formats(dataset)
 
         except IndexError:

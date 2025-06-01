@@ -28,7 +28,7 @@ if False:
     )
     from HyperSloth.logging_config import get_hypersloth_logger
 
-    logger = get_hypersloth_logger()
+    logger = get_hypersloth_logger(log_level="INFO")
 
     # Use safe logger that handles gpu_id properly
 

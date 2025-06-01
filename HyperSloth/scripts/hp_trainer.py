@@ -100,12 +100,14 @@ def _get_hp_grad_dir(model_name_dataset, run_id):
     return grad_dir
 
 
-def _setup_logger(gpu_id):
+def _setup_logger(gpu_id, allow_unknown_gpu=False):
     """Setup enhanced logging for HyperSloth."""
     from HyperSloth.logging_config import get_hypersloth_logger
 
     log_level = os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO")
-    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_id), log_level=log_level)
+    enhanced_logger = get_hypersloth_logger(
+        log_level=log_level, allow_unknown_gpu=allow_unknown_gpu
+    )
 
     # Store logger instance for use in training
     os.environ[f"HYPERSLOTH_ENHANCED_LOGGER_{gpu_id}"] = "1"
@@ -382,15 +384,14 @@ def initialize_training_config(config_file):
     # Display combined config with enhanced formatting
     from HyperSloth.logging_config import format_config_display, get_hypersloth_logger
 
-    # Setup temporary logger for config display
-    temp_logger = get_hypersloth_logger(gpu_id="0", log_level="INFO")
+    temp_logger = get_hypersloth_logger(log_level="INFO", allow_unknown_gpu=True)
     combined_config = format_config_display(hyper_config, training_config)
     temp_logger.log_config_table(
         combined_config, "🔧 HyperSloth Training Configuration"
     )
 
     # # of GPUs
-    os.environ["HYPERSLOTH_NUM_GPUS"] = str(len(hyper_config.training.gpus))
+    os.environ["HYPERSLOTH_WORLD_SIZE"] = str(len(hyper_config.training.gpus))
     os.environ["HYPERSLOTH_FORWARD_BZ"] = str(
         training_config.per_device_train_batch_size
         # * training_config.gradient_accumulation_steps

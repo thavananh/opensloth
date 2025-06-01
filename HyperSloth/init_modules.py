@@ -12,7 +12,7 @@ from .logging_config import get_hypersloth_logger
 
 # Setup logger with proper GPU ID
 gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
-enhanced_logger = get_hypersloth_logger(gpu_id=gpu_id)
+enhanced_logger = get_hypersloth_logger(log_level="INFO")
 logger = enhanced_logger  # Use the same enhanced logger instance
 
 
@@ -83,7 +83,7 @@ def create_trainer(
     # Get enhanced logger for timing
     from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
+    enhanced_logger = get_hypersloth_logger(log_level="INFO")
 
     dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
     dataset_cache_exists = os.path.exists(dataset_cache_path)
@@ -106,10 +106,11 @@ def create_trainer(
     )
     from HyperSloth._patch_sampler import patch_sampler
 
-    if hyper_config.use_mmap_grad_sync:
-        enhanced_logger.start_timing("training_loop_patch")
-        patch_inner_training_loop(trainer)
-        enhanced_logger.finish_timing("training_loop_patch")
+    num_gpus = len(hyper_config.training.gpus)
+    # if num_gpus != 1:
+    enhanced_logger.start_timing("training_loop_patch")
+    patch_inner_training_loop(trainer)
+    enhanced_logger.finish_timing("training_loop_patch")
 
     patch_sampler(trainer)
     return trainer
@@ -156,7 +157,7 @@ def _get_trainer(
     # Get enhanced logger for timing
     from .logging_config import get_hypersloth_logger
 
-    enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
+    enhanced_logger = get_hypersloth_logger(log_level="INFO")
 
     # Start timing for the overall dataset loading process
     enhanced_logger.start_timing("dataset_loading_total")
@@ -174,12 +175,12 @@ def _get_trainer(
         hf_train_args.dataset_batch_size = hf_train_args.per_device_train_batch_size
         return SFTTrainer(
             model=model,
-            tokenizer=tokenizer,
+            processing_class=tokenizer,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            dataset_text_field="text",
-            max_seq_length=hyper_config.fast_model_args.max_seq_length,
-            dataset_num_proc=hyper_config.data.dataset_num_proc,
+            dataset_text_field="text",  # type: ignore #
+            # max_seq_length=hyper_config.fast_model_args.max_seq_length,
+            # dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
         )
 

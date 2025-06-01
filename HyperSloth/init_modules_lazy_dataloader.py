@@ -11,8 +11,8 @@
 # from .logging_config import get_hypersloth_logger
 
 # gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
-# enhanced_logger = get_hypersloth_logger(gpu_id=gpu_id)
-# logger = get_hypersloth_logger()
+# enhanced_logger = get_hypersloth_logger(log_level="INFO")
+# logger = get_hypersloth_logger(log_level="INFO")
 
 
 # def init_model_and_tokenizer(hyper_config: HyperConfig):
@@ -84,7 +84,7 @@
 #     """Create the SFTTrainer with lazy dataset loading."""
 #     from .logging_config import get_hypersloth_logger
 
-#     enhanced_logger = get_hypersloth_logger(gpu_id=str(gpu_ith))
+#     enhanced_logger = get_hypersloth_logger(log_level="INFO")
 
 #     enhanced_logger.start_timing("trainer_setup")
 #     trainer = _create_lazy_trainer(

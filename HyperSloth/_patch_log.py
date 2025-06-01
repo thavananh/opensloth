@@ -175,7 +175,7 @@ def _patch_log(T: type):
     # --- Initialization (runs once when the patch is applied) ---
     try:
         HYPERSLOTH_LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-        n = int(os.environ["HYPERSLOTH_NUM_GPUS"])
+        n = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
         HYPERSLOTH_RUN_DIR = os.environ["HYPERSLOTH_RUN_DIR"]
         is_main = HYPERSLOTH_LOCAL_RANK == 0
 
