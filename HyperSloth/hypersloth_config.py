@@ -47,7 +47,13 @@ class DataConfig(BaseModel):
         if not registry_path.exists():
             raise FileNotFoundError(
                 f"Dataset registry not found at {registry_path}. "
-                "Please run build_dataset.py to create datasets first."
+                "No datasets have been created yet. To create datasets:\n"
+                "1. Place your dataset files in the 'data/' directory\n"
+                "2. Run the dataset preparation script to build the registry\n"
+                "3. Example: python scripts/build_dataset.py or use the "
+                "prepare_dataset_example.ipynb notebook\n"
+                "The registry file (data_config.json) will be automatically "
+                "created after processing your first dataset."
             )
 
         with open(registry_path, "r") as f:
@@ -101,7 +107,6 @@ class TrainingConfig(BaseModel):
         default=None,
         description="Chat template for formatting input data",
     )
-
 
     class Config:
         """Pydantic configuration for DataConfig."""
