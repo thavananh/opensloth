@@ -18,6 +18,10 @@ class DataConfig(BaseModel):
     )
     instruction_part: str = "<|im_start|>user\n"
     response_part: str = "<|im_start|>assistant\n"
+    dataset_num_proc: int = Field(
+        default=max(1, CPU_COUNT),
+        description="Number of processes to use for dataset processing",
+    )
 
     @classmethod
     def from_dataset_name(cls, dataset_name: str) -> "DataConfig":
@@ -163,7 +167,6 @@ class HyperConfig(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
-    dataset_num_proc: int = 32
     pretrained_lora: Optional[str] = Field(
         default=None,
         description="Path to pretrained LoRA model for continous lora training",
