@@ -1,45 +1,33 @@
-from datasets import Dataset
-from HyperSloth import HYPERSLOTH_DATA_DIR
 from pathlib import Path
 from typing import Optional
 
+from datasets import Dataset
 
-def get_chat_dataset(path: str | Path) -> Dataset:
+from HyperSloth import HYPERSLOTH_DATA_DIR
+from HyperSloth.hypersloth_config import DataConfig, DataConfigHF, DataConfigShareGPT
+
+
+def get_chat_dataset(input: DataConfigShareGPT | DataConfigHF | DataConfig) -> Dataset:
     """Load a chat dataset from disk."""
-    if isinstance(path, str):
-        path = Path(path)
 
-    if not path.exists():
-        # try to load from the HyperSloth data directory
-        path = Path(HYPERSLOTH_DATA_DIR) / path
-    if not path.exists():
-        raise FileNotFoundError(f"Dataset path {path} does not exist")
-    data = Dataset.load_from_disk(path)
+    if isinstance(input, DataConfig):
+        path_to_text_dataset = Path(input.path_to_text_dataset)
+    else:
+        raise TypeError(
+            "Input must be an instance of DataConfig, DataConfigHF, or DataConfigShareGPT"
+        )
+
+    if isinstance(path_to_text_dataset, str):
+        path_to_text_dataset = Path(path_to_text_dataset)
+    if not path_to_text_dataset.exists():
+        path_to_text_dataset = Path(HYPERSLOTH_DATA_DIR) / path_to_text_dataset
+        if not path_to_text_dataset.exists():
+            raise FileNotFoundError(
+                f"Dataset path {path_to_text_dataset} does not exist"
+            )
+    data = Dataset.load_from_disk(path_to_text_dataset)
 
     if "text" not in data.column_names:
         raise ValueError("Dataset must contain a 'text' column")
 
     return data
-
-
-def get_sharegpt_dataset(
-    dataset_path: str,
-    tokenizer_name: str,
-    num_samples: Optional[int] = None,
-    seed: int = 3407,
-    instruction_part: Optional[str] = None,
-    response_part: Optional[str] = None,
-    print_samples: bool = False,
-) -> Dataset:
-    from HyperSloth.scripts.build_dataset import build_sharegpt_dataset
-
-    share_gpt_path = build_sharegpt_dataset(
-        dataset_path=dataset_path,
-        tokenizer_name=tokenizer_name,
-        num_samples=num_samples,
-        seed=seed,
-        instruction_part=instruction_part,
-        response_part=response_part,
-        print_samples=print_samples,
-    )
-    return get_chat_dataset(share_gpt_path)

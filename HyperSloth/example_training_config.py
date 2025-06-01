@@ -3,9 +3,14 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    data=DataConfig.from_dataset_name(
-        "finetom-1k"
-    ),  # To get the dataset run hypersloth-build-dataset  --hf_dataset mlabonne/FineTome-100k -n 1000 --split train --name finetom-1k  --tokenizer Qwen/Qwen3-8B  --print_samples
+    data=DataConfigHF(
+        dataset_name="mlabonne/FineTome-100k",
+        tokenizer_name="Qwen/Qwen3-8B",
+        num_samples=1000,
+        split="train",
+        name="1k",
+        print_samples=True,
+    ),
     training=TrainingConfig(
         gpus=[0, 1],
         loss_type="response_only",
@@ -45,7 +50,7 @@ training_config_model = TrainingArgsConfig(
     save_total_limit=2,
     weight_decay=0.01,
     max_steps=100,
-    optim="adamw_8bit",  # Using 8bit optimizer from original
-    seed=3407,  # Adding seed for reproducibility
-    report_to="wandb",  # Disable reporting
+    optim="adamw_8bit",
+    seed=3407,
+    report_to="wandb",
 )

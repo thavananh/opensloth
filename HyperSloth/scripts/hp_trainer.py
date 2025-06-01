@@ -5,6 +5,7 @@ import time
 import warnings
 import importlib.util
 from fastcore.all import threaded, call_parse
+import tabulate
 
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 from loguru import logger

@@ -5,7 +5,17 @@ Handles weight synchronization, model setup, and distributed training coordinati
 
 import os
 
-from .hypersloth_config import HyperConfig, TrainingArgsConfig
+from trl.trainer.sft_trainer import SFTTrainer
+
+from HyperSloth.dataset_utils import get_chat_dataset
+
+from .hypersloth_config import (
+    DataConfig,
+    DataConfigHF,
+    DataConfigShareGPT,
+    HyperConfig,
+    TrainingArgsConfig,
+)
 
 # Get enhanced logger for timing
 from .logging_config import get_hypersloth_logger
@@ -141,6 +151,52 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
     return dataset_cache_path
 
 
+def parse_data(data):
+    if isinstance(data, DataConfigShareGPT):
+        from HyperSloth.scripts.build_dataset import (
+            build_sharegpt_dataset,
+        )
+
+        dataset_name = build_sharegpt_dataset(
+            dataset_path=data.dataset_path,
+            tokenizer_name=data.tokenizer_name,
+            num_samples=data.num_samples,
+            seed=data.seed,
+            instruction_part=data.instruction_part,
+            response_part=data.response_part,
+            print_samples=data.print_samples,
+            use_cache=data.use_cache,
+            name=data.name,
+        )
+        data = DataConfig.from_dataset_name(
+            dataset_name=dataset_name,
+        )
+    elif isinstance(data, DataConfigHF):
+        from HyperSloth.scripts.build_dataset import build_hf_dataset
+
+        dataset_name = build_hf_dataset(
+            dataset_name=data.dataset_name,
+            tokenizer_name=data.tokenizer_name,
+            num_samples=data.num_samples,
+            seed=data.seed,
+            split=data.split,
+            instruction_part=data.instruction_part,
+            response_part=data.response_part,
+            name=data.name,
+        )
+        data = DataConfig.from_dataset_name(
+            dataset_name=dataset_name,
+        )
+
+    else:
+        raise TypeError(
+            f"Unsupported data type: {type(data)}. "
+            "Expected DataConfig, DataConfigHF, or DataConfigShareGPT."
+        )
+    assert isinstance(data, DataConfig), f"DataConfig expected, got {type(data)}"
+    return data
+
+
 def _get_trainer(
     tokenizer,
     hyper_config: HyperConfig,
@@ -149,8 +205,7 @@ def _get_trainer(
     model,
     dataset_cache_path,
     dataset_cache_exists,
-    counter=0,
-):
+) -> SFTTrainer:
     """
     Returns an SFTTrainer instance. If a cached dataset exists, load from disk.
     If not, GPU 0 will create and save it, and other GPUs will wait for GPU 0
@@ -192,6 +247,7 @@ def _get_trainer(
             args=hf_train_args,
         )
 
+    hyper_config.data = parse_data(hyper_config.data)
     # ---------------------------
     # CASE 1: Cached dataset exists
     # ---------------------------
@@ -235,7 +291,9 @@ def _get_trainer(
                 from HyperSloth.dataset_utils import get_chat_dataset
 
                 hp_logger.start_timing("dataset_processing")
-                ds_train = get_chat_dataset(path=hyper_config.data.path_to_text_dataset)
+
+                ds_train = get_chat_dataset(hyper_config.data)
+
                 hp_logger.finish_timing("dataset_processing")
 
                 hp_logger.start_timing("trainer_creation_from_raw")
@@ -319,6 +377,8 @@ def _maybe_train_on_responses_only(trainer, hyper_config: HyperConfig):
         first_text = trainer.train_dataset[0]["text"]
         instruction_part = hyper_config.data.instruction_part
         response_part = hyper_config.data.response_part
+        assert instruction_part is not None, f"instruction_part is None"
+        assert response_part is not None, f"response_part is None"
         assert instruction_part in first_text, f"{instruction_part} not in {first_text}"
         assert response_part in first_text, f"{response_part} not in {first_text}"
         trainer = train_on_responses_only(

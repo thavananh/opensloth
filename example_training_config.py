@@ -4,7 +4,7 @@ from HyperSloth.hypersloth_config import *
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
     data=DataConfig.from_dataset_name(
-        "finetom-1k"
+        "newdataset"
     ),  # To get the dataset run hypersloth-build-dataset  --hf_dataset mlabonne/FineTome-100k -n 1000 --split train --name finetom-1k  --tokenizer Qwen/Qwen3-8B  --print_samples
     training=TrainingConfig(
         gpus=[0, 1],

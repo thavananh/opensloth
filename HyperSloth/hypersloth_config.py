@@ -99,6 +99,29 @@ class DataConfig(BaseModel):
         )
 
 
+class DataConfigShareGPT(DataConfig):
+    dataset_path: str
+    tokenizer_name: str
+    num_samples: Optional[int] = None
+    seed: int = 3407
+    instruction_part: Optional[str] = None
+    response_part: Optional[str] = None
+    print_samples: bool = False
+    use_cache: bool = True
+    name: Optional[str] = None
+
+
+class DataConfigHF(DataConfig):
+    dataset_name: str
+    tokenizer_name: str
+    num_samples: int = 1000
+    split: Optional[str] = "train"
+    instruction_part: Optional[str] = None
+    response_part: Optional[str] = None
+    name: Optional[str] = None
+    seed: int = 3407
+
+
 class TrainingConfig(BaseModel):
     """Configuration for training setup and parameters."""
 
@@ -133,6 +156,19 @@ class FastModelArgs(BaseModel):
         extra = "allow"
 
 
+def _default_target_modules() -> List[str]:
+    """Default target modules for LoRA application."""
+    return [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+    ]
+
+
 class LoraArgs(BaseModel):
     """Configuration for LoRA parameters in PEFT."""
 
@@ -146,15 +182,7 @@ class LoraArgs(BaseModel):
     bias: str = "none"
     random_state: int = 3407
     target_modules: List[str] = Field(
-        default_factory=lambda: [
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
+        default_factory=_default_target_modules,
         description="List of target modules for LoRA application",
     )
     use_rslora: bool = False
@@ -168,7 +196,6 @@ class LoraArgs(BaseModel):
 class HyperConfig(BaseModel):
     """Main configuration class combining all sub-configurations."""
 
-    grad_dir: str = "/dev/shm/hypersloth"
     data: DataConfig = Field(default_factory=DataConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)

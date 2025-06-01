@@ -30,7 +30,7 @@ mapping_chattemplate = {
 }
 
 
-def _check_existing_dataset(
+def check_existing_dataset(
     source_dataset: str,
     tokenizer_name: str,
     num_samples: int,
@@ -38,20 +38,19 @@ def _check_existing_dataset(
     response_part: str,
     seed: int = 3407,
     name: Optional[str] = None,
+    **kwargs,
 ) -> Optional[str]:
-    """Check if a dataset with matching configuration already exists."""
+    """Return dataset name if already exists in registry or None if not found."""
     registry_path = Path(HYPERSLOTH_DATA_DIR) / "data_config.json"
 
     if not registry_path.exists():
         return None
 
-    # try:
-    #     with open(registry_path, "r") as f:
-    #         registry = json.load(f)
-    # except (json.JSONDecodeError, FileNotFoundError):
-    #     return None
     registry = load_by_ext(registry_path)
     # Generate ID for current configuration
+
+    # if kwargs:
+    # data.append(kwargs)
     config_id = identify_dataset(
         source_dataset,
         tokenizer_name,
@@ -59,6 +58,7 @@ def _check_existing_dataset(
         instruction_part,
         response_part,
         seed,
+        **kwargs,  # Include any additional parameters for uniqueness
     )
     # Check each existing dataset for matching ID
     assert isinstance(
@@ -84,7 +84,13 @@ def _check_existing_dataset(
 
 
 def identify_dataset(
-    source_dataset, tokenizer_name, num_samples, instruction_part, response_part, seed
+    source_dataset,
+    tokenizer_name,
+    num_samples,
+    instruction_part,
+    response_part,
+    seed,
+    **kwargs,
 ):
     from speedy_utils.all import identify
 
@@ -96,6 +102,7 @@ def identify_dataset(
             instruction_part,
             response_part,
             seed,
+            kwargs,  # Include any additional parameters for uniqueness
         ]
     )
 
@@ -157,9 +164,20 @@ def build_hf_dataset(
         if response_part is None:
             response_part = mapping_chattemplate[detected_type]["response_part"]
 
+    # Generate dataset ID and use as name if no name provided
+    if name is None:
+        name = identify_dataset(
+            source_dataset=dataset_name,
+            tokenizer_name=tokenizer_name,
+            num_samples=num_samples,
+            instruction_part=instruction_part,
+            response_part=response_part,
+            seed=seed,
+        )
+
     # Check for existing dataset with same configuration
     if use_cache:
-        existing_dataset = _check_existing_dataset(
+        existing_dataset = check_existing_dataset(
             source_dataset=dataset_name,
             tokenizer_name=tokenizer_name,
             num_samples=num_samples,
@@ -214,7 +232,7 @@ def build_hf_dataset(
         print("=" * 80 + "\n")
 
     # Save dataset
-    dataset_filename = name or f"hf_dataset_{num_samples}_samples"
+    dataset_filename = name
     dataset_path = output_path / dataset_filename
     processed_dataset.save_to_disk(str(dataset_path))
 
@@ -353,9 +371,20 @@ def build_sharegpt_dataset(
     else:
         actual_num_samples = num_samples
 
+    # Generate dataset ID and use as name if no name provided
+    if name is None:
+        name = identify_dataset(
+            source_dataset=abs_dataset_path,
+            tokenizer_name=tokenizer_name,
+            num_samples=actual_num_samples,
+            instruction_part=instruction_part,
+            response_part=response_part,
+            seed=seed,
+        )
+
     # Check for existing dataset with same configuration
     if use_cache:
-        existing_dataset = _check_existing_dataset(
+        existing_dataset = check_existing_dataset(
             source_dataset=abs_dataset_path,
             tokenizer_name=tokenizer_name,
             num_samples=actual_num_samples,
@@ -448,7 +477,7 @@ def build_sharegpt_dataset(
         print("=" * 80 + "\n")
 
     # Save dataset
-    dataset_filename = name or f"sharegpt_{num_samples}_samples"
+    dataset_filename = name
     dataset_save_path = output_path / dataset_filename
     processed_dataset.save_to_disk(str(dataset_save_path))
 
