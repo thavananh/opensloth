@@ -1,4 +1,7 @@
+import json
+import os
 from multiprocessing import cpu_count
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
@@ -9,18 +12,77 @@ CPU_COUNT = min(1, cpu_count() - 2)
 class DataConfig(BaseModel):
     """Configuration for dataset handling and processing."""
 
-    dataset_name_or_path: Union[str, list] = "data/cod_1k.json"
-    dataset_num_proc: int = CPU_COUNT
+    path_to_text_dataset: str = Field(
+        default="data/finetome_1000_samples",
+        description="Path to the dataset directory",
+    )
     instruction_part: str = "<|im_start|>user\n"
     response_part: str = "<|im_start|>assistant\n"
-    num_samples: Optional[int] = None
-    group_by_length: bool = True
-    split: str = "train"
 
-    class Config:
-        """Pydantic configuration for DataConfig."""
+    @classmethod
+    def from_dataset_name(cls, dataset_name: str) -> "DataConfig":
+        """Create DataConfig from dataset name using the registry.
 
-        extra = "allow"
+        Args:
+            dataset_name: Name of the dataset in the registry
+
+        Returns:
+            DataConfig instance with loaded configuration
+
+        Raises:
+            FileNotFoundError: If data_config.json is not found
+            ValueError: If dataset_name is not found in registry
+        """
+        # Try to find data_config.json relative to current working directory
+        registry_path = Path("data/data_config.json")
+        if not registry_path.exists():
+            # Try relative to this file's directory
+            config_dir = Path(__file__).parent.parent
+            registry_path = config_dir / "data" / "data_config.json"
+
+        if not registry_path.exists():
+            raise FileNotFoundError(
+                f"Dataset registry not found at {registry_path}. "
+                "Please run build_dataset.py to create datasets first."
+            )
+
+        with open(registry_path, "r") as f:
+            registry = json.load(f)
+
+        # Find dataset in registry
+        dataset_config = None
+        for config in registry:
+            if config.get("name") == dataset_name:
+                dataset_config = config
+                break
+
+        if dataset_config is None:
+            available_names = [cfg.get("name", "unnamed") for cfg in registry]
+            raise ValueError(
+                f'Dataset "{dataset_name}" not found in registry. '
+                f"Available datasets: {available_names}"
+            )
+
+        # Build full path
+        if "path" in dataset_config:
+            dataset_path = dataset_config["path"]
+            if not dataset_path.startswith("/"):
+                # Make relative paths absolute relative to data directory
+                data_dir = registry_path.parent
+                dataset_path = str(data_dir / dataset_path)
+        else:
+            raise ValueError(f'Dataset "{dataset_name}" missing path in registry')
+
+        # Create DataConfig with loaded settings
+        return cls(
+            path_to_text_dataset=dataset_path,
+            instruction_part=dataset_config.get(
+                "instruction_part", "<|im_start|>user\n"
+            ),
+            response_part=dataset_config.get(
+                "response_part", "<|im_start|>assistant\n"
+            ),
+        )
 
 
 class TrainingConfig(BaseModel):
@@ -101,7 +163,7 @@ class HyperConfig(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: LoraArgs = Field(default_factory=LoraArgs)
-    # use_mmap_grad_sync: bool = Field(default=True)
+    dataset_num_proc: int = 32
     pretrained_lora: Optional[str] = Field(
         default=None,
         description="Path to pretrained LoRA model for continous lora training",

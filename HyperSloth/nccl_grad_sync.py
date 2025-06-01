@@ -5,7 +5,7 @@ from typing import List, Optional
 from HyperSloth.logging_config import get_hypersloth_logger
 
 
-logger = get_hypersloth_logger(log_level="INFO")
+logger = get_hypersloth_logger(log_level="DEBUG")
 
 # Use safe logger that handles gpu_id properly
 
@@ -109,6 +109,34 @@ class NCCLGradSyncCallback(TrainerCallback):
 # Add this integration code for HyperSloth at the end of the file
 
 
+def _check_port_available(host: str, port: int) -> bool:
+    """Check if a port is available for binding."""
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
+def _find_available_port(
+    host: str = "127.0.0.1", start_port: int = 29500, max_attempts: int = 100
+) -> int:
+    """Find an available port starting from start_port."""
+    import socket
+
+    for port in range(start_port, start_port + max_attempts):
+        if _check_port_available(host, port):
+            return port
+
+    raise RuntimeError(
+        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
+    )
+
+
 def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     """Setup NCCL environment variables for HyperSloth integration."""
     import os
@@ -123,7 +151,13 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     os.environ["RANK"] = str(rank)
     os.environ["WORLD_SIZE"] = str(world_size)
     os.environ["MASTER_ADDR"] = "127.0.0.1"  # Localhost for single machine
-    os.environ["MASTER_PORT"] = "29500"  # Default port
+
+    # Find an available port starting from 29500
+    try:
+        master_port = _find_available_port(host="127.0.0.1", start_port=29500)
+        os.environ["MASTER_PORT"] = str(master_port)
+    except RuntimeError as e:
+        raise RuntimeError(f"[GPU={gpu}] Could not find available port for NCCL: {e}")
 
     # Log all set environment variables
     logger.debug(
@@ -153,13 +187,13 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
             return
 
         except Exception as e:
-            logger.debug(
+            logger.info(
                 f"[GPU={gpu}] NCCL init attempt {attempt + 1}/{max_retries} "
                 f"failed: {e}"
             )
 
             if attempt < max_retries - 1:
-                logger.debug(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
+                logger.info(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
                 time.sleep(retry_delay)
 
                 # Clean up any partial initialization
@@ -169,7 +203,7 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                     except:
                         pass
             else:
-                logger.debug(
+                logger.info(
                     f"[GPU={gpu}] Failed to initialize NCCL after "
                     f"{max_retries} attempts: {e}"
                 )

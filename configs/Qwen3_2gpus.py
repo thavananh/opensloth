@@ -2,13 +2,7 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    data=DataConfig(
-        dataset_name_or_path="mlabonne/FineTome-100k",
-        split="train",
-        num_samples=1000,  # for debugging
-        instruction_part="<|im_start|>user\n",  # Qwen chat template
-        response_part="<|im_start|>assistant\n",  # Qwen chat template
-    ),
+    data=DataConfig.from_dataset_name("fubetome-1k"),
     training=TrainingConfig(
         gpus=[0, 1],  # Using GPU 3 as in your original script
         loss_type="response_only",

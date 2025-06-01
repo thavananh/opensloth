@@ -187,9 +187,8 @@ def _get_trainer(
             processing_class=tokenizer,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            dataset_text_field="text",  # type: ignore #
-            # max_seq_length=hyper_config.fast_model_args.max_seq_length,
-            # dataset_num_proc=hyper_config.data.dataset_num_proc,
+            dataset_text_field="text",
+            dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
         )
 
@@ -236,13 +235,14 @@ def _get_trainer(
                 from HyperSloth.dataset_utils import get_chat_dataset
 
                 enhanced_logger.start_timing("dataset_processing")
-                ds_train = get_chat_dataset(
-                    tokenizer=tokenizer, **hyper_config.data.model_dump()
-                )
+                ds_train = get_chat_dataset(path=hyper_config.data.path_to_text_dataset)
                 enhanced_logger.finish_timing("dataset_processing")
 
                 enhanced_logger.start_timing("trainer_creation_from_raw")
                 trainer = _create_trainer(ds_train, skip_prepare=False)
+                import ipdb
+
+                ipdb.set_trace()
                 enhanced_logger.finish_timing("trainer_creation_from_raw")
 
                 logger.info(f"Maybe train on responses only")
