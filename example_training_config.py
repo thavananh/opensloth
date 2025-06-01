@@ -18,19 +18,19 @@ hyper_config_model = HyperConfig(
     data=DataConfigShareGPT(
         dataset_path='/mnt/data/sharegpt/selfeval_retranslate_2025_05_30.json',
         tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
-        num_samples=1000,
+        num_samples=None,
     ),
     training=TrainingConfig(
-        gpus=[0, 1],
+        gpus=[0, 1,2,3],
         loss_type="response_only",
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/Qwen3-0.6b-bnb-4bit",
+        model_name="unsloth/Qwen3-8b-bnb-4bit",
         max_seq_length=2048,
     ),
     lora_args=LoraArgs(
-        r=8,
-        lora_alpha=16,
+        r=512,
+        lora_alpha=1024,
         target_modules=[
             "q_proj",
             "k_proj",
@@ -49,9 +49,9 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="outputs/qwen3-0.6b-2card.1/",
-    per_device_train_batch_size=2,
+    per_device_train_batch_size=8,
     gradient_accumulation_steps=8,
-    learning_rate=2e-4,
+    learning_rate=1e-5,
     logging_steps=1,
     num_train_epochs=1,
     lr_scheduler_type="linear",
