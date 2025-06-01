@@ -334,7 +334,6 @@ def initialize_training_config(config_file):
         * training_config.gradient_accumulation_steps
         * len(hyper_config.training.gpus)
     )
-    os.environ["HYPERSLOTH_SHUFFLE_MODE"] = hyper_config.training.shuffle_mode
     os.environ["HYPERSLOTH_ACCUMULATION_STEPS"] = str(
         training_config.gradient_accumulation_steps
     )

@@ -62,7 +62,6 @@ This demonstrates how algorithmic optimizations can exceed theoretical hardware 
 - **Sequence length sorting**: Groups similar-length sequences to minimize padding waste (up to 40% token savings)
 - **GPU load balancing**: Distributes work evenly across all available GPUs using round-robin batch assignment
 - **NCCL optimization**: Uses PyTorch's native distributed training with efficient all-reduce gradient synchronization
-- **Sequence packing**: Optional packing utility combines multiple conversations into single sequences
 - **Memory efficiency**: Adaptive batching reduces VRAM usage compared to naive padding approaches
 
 ### Additional Benchmarks
@@ -87,58 +86,37 @@ hypersloth-init  # Creates a config template
 hypersloth-train configs/your_config.py 
 ```
 
-<!-- ### 3. Optional: Pack Data for Maximum Efficiency
-```bash
-python -m HyperSloth.scripts.packing \
-  -i data/conversations.json \
-  -o data/packed_conversations.json \
-  --seq_len 4096 --workers 32
-``` -->
-
-### 4. Export and Merge LoRA Weights
-```bash
-hypersloth-export merge_and_save_lora \
-  --lora_path outputs/my_model/ \
-  --base_model_name_or_path unsloth/qwen2.5-7b-bnb-4bit \
-  --output_path merged_model/
-```
-
-
-
-## 📊 When to Use HyperSloth
-
-**Multi-GPU Scenarios (Primary Use Case):**
-- You have 2+ GPUs and want to speed up training significantly
-- Distributed training with better efficiency than standard DDP approaches
-
-**Single GPU Benefits:**
-- **Yes, you still benefit!** If you use gradient accumulation with batch size > 1, the adaptive batching tricks help utilize your GPU more efficiently
-- Sequence sorting reduces padding waste even on single GPU setups
-
 ## 🛠 Command-Line Tools
 
 - **`hypersloth-train`**: Main training launcher with multi-GPU and tmux support
 - **`hypersloth-init`**: Generate configuration templates for new projects  
-- **`hypersloth-export`**: Export and merge LoRA weights, convert models
-- **`python -m HyperSloth.scripts.packing`**: Sequence packing utility for data preprocessing
 
-## 📋 Data Formats
+## 📊 How to Prepare Data
 
-**HuggingFace Datasets:**
-```python
-data=DataConfig.from_dataset_name("mlabonne/FineTome-100k")
+To prepare your dataset for training, use the build_dataset.py script:
+
+```bash
+python scripts/build_dataset.py mlabonne/FineTome-100k -n 50000 --seed 3407 --split train --name finetom --tokenizer Qwen/Qwen3-8B
 ```
 
-**Local JSON (Conversation Format):**
-```json
-[
-  {
-    "messages": [
-      {"role": "user", "content": "Hello, how are you?"},
-      {"role": "assistant", "content": "I'm doing well, thank you!"}
-    ]
-  }
-]
+After running the script, use the built dataset in your configuration:
+
+```python
+hyper_config_model = HyperConfig(
+    data=DataConfig.from_dataset_name("finetom") # Use the dataset name you created
+    training=TrainingConfig(
+        gpus=[0, 1],  # Change this to the number of GPUs you have
+        loss_type="response_only",  # all or response_only, the loss will only be calculated on the response part of the input
+    ),
+    fast_model_args=FastModelArgs(
+        model_name="unsloth/gemma-3-1b-it",
+        max_seq_length=2048,
+    ),
+    lora_args=LoraArgs(
+        r=16,
+        lora_alpha=16,
+    ),
+)
 ```
 
 ## 🏗 How It Works
@@ -174,10 +152,8 @@ For multi-GPU setups, HyperSloth uses:
 2. **Memory Issues:**
    - Reduce `per_device_train_batch_size` in your config
    - Increase `gradient_accumulation_steps` to maintain effective batch size
-   - Use sequence packing to reduce padding and memory usage
 
 3. **Performance Optimization:**
-   - **Use sequence packing** for datasets with varied conversation lengths
    - **Monitor tmux sessions** to check individual GPU utilization
    - **Experiment with batch sizes** to find optimal memory/speed trade-off
 

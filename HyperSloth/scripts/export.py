@@ -1,13 +1,12 @@
-from fastcore.all import call_parse
+import argparse
 from speedy_utils.all import load_by_ext, logger
-import requests
 import torch
-from PIL import Image
-from transformers import Gemma3ForConditionalGeneration
 import peft
+from peft import AutoPeftModelForCausalLM
+from transformers import AutoTokenizer
+from unsloth import FastModel
 
 
-@call_parse
 def merge_and_save_lora(
     lora_path: str,
     base_model_name_or_path: str = None,
@@ -25,9 +24,6 @@ def merge_and_save_lora(
     import os
 
     assert os.path.exists(lora_path), f"LoRA model not found at {lora_path}"
-    from peft import AutoPeftModelForCausalLM
-    from transformers import AutoTokenizer
-    from unsloth import FastModel
 
     # /adapter_config.json
     config = load_by_ext(lora_path + "/adapter_config.json")
@@ -57,6 +53,7 @@ def merge_and_save_lora(
             trust_remote_code=True,
         )
         tokenizer.save_pretrained(output_path)
+        from transformers import Gemma3ForConditionalGeneration
 
         model = Gemma3ForConditionalGeneration.from_pretrained(
             base_model_name_or_path, device_map="cpu", torch_dtype=torch.bfloat16
@@ -112,4 +109,38 @@ def merge_and_save_lora(
 
 
 def main():
-    merge_and_save_lora()
+    parser = argparse.ArgumentParser(
+        description="Merge LoRA model with base model and save result"
+    )
+    parser.add_argument(
+        "lora_path", type=str, help="Local path to the LoRA adapter weights"
+    )
+    parser.add_argument(
+        "--base_model_name_or_path",
+        type=str,
+        default=None,
+        help="Name of the base model on HuggingFace Hub",
+    )
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        default=None,
+        help='Where to save the merged model (defaults to lora_path + "/merged")',
+    )
+    parser.add_argument(
+        "--force_use_unsloth",
+        action="store_true",
+        help="Force use of unsloth FastModel",
+    )
+
+    args = parser.parse_args()
+    merge_and_save_lora(
+        lora_path=args.lora_path,
+        base_model_name_or_path=args.base_model_name_or_path,
+        output_path=args.output_path,
+        force_use_unsloth=args.force_use_unsloth,
+    )
+
+
+if __name__ == "__main__":
+    main()

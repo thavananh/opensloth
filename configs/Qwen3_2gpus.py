@@ -6,7 +6,6 @@ hyper_config_model = HyperConfig(
     training=TrainingConfig(
         gpus=[0, 1],  # Using GPU 3 as in your original script
         loss_type="response_only",
-        shuffle_mode="on_dataset",
     ),
     fast_model_args=FastModelArgs(
         model_name="model_store/unsloth/Qwen3-8B-bnb-4bit",

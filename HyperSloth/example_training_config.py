@@ -12,7 +12,6 @@ hyper_config_model = HyperConfig(
     training=TrainingConfig(
         gpus=[0, 1],  # Change this to the number of GPUs you have
         loss_type="response_only",  # all or response_only, the loss will only be calculated on the response part of the input
-        shuffle_mode="on_dataset",  # on_dataset or on_global_bz
     ),
     fast_model_args=FastModelArgs(
         model_name="unsloth/gemma-3-1b-it",

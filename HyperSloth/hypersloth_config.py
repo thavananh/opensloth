@@ -101,10 +101,7 @@ class TrainingConfig(BaseModel):
         default=None,
         description="Chat template for formatting input data",
     )
-    shuffle_mode: Literal["on_dataset", "on_global_bz"] = Field(
-        default="on_dataset",
-        description="Shuffle mode for data sampling: 'on_dataset' or 'on_global_bz'",
-    )
+
 
     class Config:
         """Pydantic configuration for DataConfig."""
