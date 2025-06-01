@@ -1,6 +1,7 @@
-from typing import List, Literal, Optional, Dict, Any, Union
-from pydantic import BaseModel, Field
 from multiprocessing import cpu_count
+from typing import Any, Dict, List, Literal, Optional, Union
+
+from pydantic import BaseModel, Field
 
 CPU_COUNT = min(1, cpu_count() - 2)
 
@@ -72,6 +73,19 @@ class LoraArgs(BaseModel):
     lora_dropout: float = 0.0
     bias: str = "none"
     random_state: int = 3407
+    target_modules: List[str] = Field(
+        default_factory=lambda: [
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+        description="List of target modules for LoRA application",
+    )
+    use_rslora: bool = False
 
     class Config:
         """Pydantic configuration for DataConfig."""
@@ -120,6 +134,7 @@ class TrainingArgsConfig(BaseModel):
     seed: int = 42
     report_to: str = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
+    max_steps: Optional[int] = None
 
     class Config:
         """Pydantic configuration for DataConfig."""
