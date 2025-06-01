@@ -15,7 +15,7 @@ def train_qwen3_model():
 
     from datasets import Dataset
 
-    dataset_path = "data/built_dataset/fubetome-1k/"
+    dataset_path = "data/built_dataset/finetom"
     processed_dataset = Dataset.load_from_disk(dataset_path)
 
     from unsloth import FastLanguageModel
@@ -24,7 +24,7 @@ def train_qwen3_model():
 
     # Load model
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="model_store/unsloth/Qwen3-0.6B-bnb-4bit",
+        model_name="model_store/unsloth/Qwen3-4B-bnb-4bit",
         max_seq_length=2048,
         load_in_4bit=True,
         load_in_8bit=False,
@@ -34,7 +34,7 @@ def train_qwen3_model():
     # Add LoRA adapters
     model = FastLanguageModel.get_peft_model(
         model,
-        r=32,
+        r=8,
         target_modules=[
             "q_proj",
             "k_proj",
@@ -44,7 +44,7 @@ def train_qwen3_model():
             "up_proj",
             "down_proj",
         ],
-        lora_alpha=32,
+        lora_alpha=16,
         lora_dropout=0,
         bias="none",
         use_gradient_checkpointing="unsloth",
@@ -63,7 +63,7 @@ def train_qwen3_model():
         args=SFTConfig(
             output_dir="outputs/qwen3-minimal",
             dataset_text_field="text",
-            per_device_train_batch_size=16,
+            per_device_train_batch_size=8,
             gradient_accumulation_steps=8,
             warmup_steps=5,
             # max_steps=30,

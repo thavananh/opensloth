@@ -2,7 +2,7 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    data=DataConfig.from_dataset_name("fubetome-1k"),
+    data=DataConfig.from_dataset_name("fubetome"),
     training=TrainingConfig(
         gpus=[0, 1],  # Using GPU 3 as in your original script
         loss_type="response_only",
@@ -13,8 +13,8 @@ hyper_config_model = HyperConfig(
         max_seq_length=2048,
     ),
     lora_args=LoraArgs(
-        r=32,
-        lora_alpha=32,
+        r=8,
+        lora_alpha=16,
         target_modules=[
             "q_proj",
             "k_proj",
@@ -33,12 +33,11 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="outputs/qwen3-0.6b-2card.1/",
-    per_device_train_batch_size=2,
+    per_device_train_batch_size=8,
     gradient_accumulation_steps=4,
     learning_rate=2e-4,
     logging_steps=1,
     num_train_epochs=1,
-    
     lr_scheduler_type="linear",
     warmup_steps=5,
     save_total_limit=2,
@@ -46,5 +45,5 @@ training_config_model = TrainingArgsConfig(
     # max_steps=30,  # Adding max_steps from original script
     optim="adamw_8bit",  # Using 8bit optimizer from original
     seed=3407,  # Adding seed for reproducibility
-    report_to="tensorboard",  # Disable reporting
+    report_to="wandb",  # Disable reporting
 )
