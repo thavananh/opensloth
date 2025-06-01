@@ -10,13 +10,10 @@ from .hypersloth_config import HyperConfig, TrainingArgsConfig
 # Get enhanced logger for timing
 from .logging_config import get_hypersloth_logger
 
-
+# Setup logger with proper GPU ID
 gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
 enhanced_logger = get_hypersloth_logger(gpu_id=gpu_id)
-from HyperSloth.logging_config import get_hypersloth_logger
-
-
-logger = get_hypersloth_logger()
+logger = enhanced_logger  # Use the same enhanced logger instance
 
 
 def init_model_and_tokenizer(hyper_config: HyperConfig):

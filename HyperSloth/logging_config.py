@@ -41,7 +41,7 @@ class HyperSlothLogger:
     """Enhanced logger for HyperSloth with better formatting and GPU-aware logging."""
 
     def __init__(self, gpu_id: Optional[str] = None, log_level: str = "INFO"):
-        self.gpu_id = gpu_id or os.environ.get("HYPERSLOTH_LOCAL_RANK", "UNKNOWN")
+        self.gpu_id = gpu_id or os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
         self.log_level = log_level.upper()
         self.console = Console()
 
@@ -551,9 +551,11 @@ def get_hypersloth_logger(
     global VALID_LOGGER
     if VALID_LOGGER is not None:
         return VALID_LOGGER
+
+    # Use provided gpu_id or fallback to environment variable
     if gpu_id is None:
-        return HyperSlothLogger(gpu_id=gpu_id, log_level=log_level)
-    gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", None)
+        gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
+
     logger = HyperSlothLogger(gpu_id=gpu_id, log_level=log_level)
     if gpu_id is not None:
         VALID_LOGGER = logger
