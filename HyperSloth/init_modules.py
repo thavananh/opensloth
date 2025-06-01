@@ -110,9 +110,9 @@ def create_trainer(
     enhanced_logger.finish_timing("training_loop_patch")
 
     # DEBUG: change the sampler to sequential sampler for debugging
-    from ._patch_sampler import patch_sampler
+    from .patching.patch_sampler import apply_patch_sampler
 
-    trainer = patch_sampler(trainer)
+    trainer = apply_patch_sampler(trainer)
 
     # from torch.utils.data import DataLoader, SequentialSampler  # type: ignore
     # from torch.utils.data.distributed import DistributedSampler  # type: ignore

@@ -21,7 +21,7 @@ class ShuffleData(TrainerCallback):
         logger.info(f"🔄 Starting epoch {state.epoch + 1}")
 
         try:
-            from ._debug_dataloader import _debug_dataloader
+            from .._debug_dataloader import _debug_dataloader
 
             tok = kwargs["processing_class"]
             _debug_dataloader(train_dataloader, tokenizer=tok)
@@ -36,6 +36,7 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
     def __init__(self, data_source) -> None:
         self.data_source = data_source
         self.epoch = 0
+        self.logger = get_hypersloth_logger(log_level="DEBUG")
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = epoch
@@ -48,11 +49,17 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
         R = random.Random(42 + self.epoch)
         R.shuffle(ids)
 
-        return iter(ids)
+        self.logger.debug(
+            f"🎲 Sampler epoch {self.epoch}: emitting {dataset_size} indices"
+        )
+
+        for idx in ids:
+            self.logger.info(f"📤 Emitting index: {idx}")
+            yield idx
 
 
-def patch_sampler(trainer: Trainer):
-    logger = get_hypersloth_logger(log_level="INFO")
+def apply_patch_sampler(trainer: Trainer):
+    logger = get_hypersloth_logger(log_level="INFO", allow_unknown_gpu=True)
     logger.info("🔧 Patching Trainer to use RandomSamplerSeededByEpoch")
 
     @patch

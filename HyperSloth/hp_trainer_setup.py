@@ -16,7 +16,7 @@ from loguru import logger
 
 
 def _change_compiler_location() -> None:
-    import unsloth
+    import unsloth # type: ignore
     from unsloth_zoo import compiler
 
     # ====== Patching the compiler location to avoid race conditions as it is shared between GPUs

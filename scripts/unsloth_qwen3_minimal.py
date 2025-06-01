@@ -3,18 +3,24 @@
 
 import os
 
+# from hypersloth.patching.patch_sampler import patch_sampler
+from HyperSloth.patching.patch_sampler import apply_patch_sampler
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def train_qwen3_model():
     """Train Qwen3 model with minimal setup."""
     # Import CUDA-related libraries inside function for proper GPU initialization
+
+    from datasets import Dataset
+
+    dataset_path = "data/built_dataset/finetome_1000_samples"
+    processed_dataset = Dataset.load_from_disk(dataset_path)
+
     from unsloth import FastLanguageModel
     import torch
-    from datasets import load_dataset, Dataset
-    from unsloth.chat_templates import standardize_sharegpt
     from trl import SFTTrainer, SFTConfig
-    import pandas as pd
 
     # Load model
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -47,66 +53,38 @@ def train_qwen3_model():
         loftq_config=None,
     )
 
-    # Load datasets
-    reasoning_dataset = load_dataset(
-        "unsloth/OpenMathReasoning-mini", split="cot"
-    ).select(range(1000))
-    non_reasoning_dataset = load_dataset(
-        "mlabonne/FineTome-100k", split="train"
-    ).select(range(1000))
+    # Load pre-built dataset
+    # from scripts.build_dataset import load_built_dataset
 
-    # Convert reasoning dataset to conversational format
-    def generate_conversation(examples):
-        problems = examples["problem"]
-        solutions = examples["generated_solution"]
-        conversations = []
-        for problem, solution in zip(problems, solutions):
-            conversations.append(
-                [
-                    {"role": "user", "content": problem},
-                    {"role": "assistant", "content": solution},
-                ]
-            )
-        return {"conversations": conversations}
+    # try:
+    #     processed_dataset = load_built_dataset("finetome_1000_samples")
+    #     print("Loaded pre-built dataset successfully!")
+    # except (FileNotFoundError, ValueError) as e:
+    #     print(f"Pre-built dataset not found: {e}")
+    #     print("Building dataset on-the-fly...")
 
-    reasoning_conversations = tokenizer.apply_chat_template(
-        reasoning_dataset.map(generate_conversation, batched=True)["conversations"],
-        tokenize=False,
-    )
+    #     # Fallback: build dataset inline
+    #     from scripts.build_dataset import build_finetome_dataset
 
-    # Convert non-reasoning dataset
-    dataset = standardize_sharegpt(non_reasoning_dataset)
-    non_reasoning_conversations = tokenizer.apply_chat_template(
-        dataset["conversations"],
-        tokenize=False,
-    )
+    #     dataset_path = build_finetome_dataset(
+    #         dataset_name="mlabonne/FineTome-100k", num_samples=1000, tokenizer=tokenizer
+    #     )
+    #     processed_dataset = load_built_dataset("finetome_1000_samples")
 
-    # Mix datasets (25% reasoning, 75% chat)
-    chat_percentage = 0.75
-    non_reasoning_subset = pd.Series(non_reasoning_conversations)
-    non_reasoning_subset = non_reasoning_subset.sample(
-        int(len(reasoning_conversations) * (1.0 - chat_percentage)),
-        random_state=2407,
-    )
+    import pdb
 
-    # Combine datasets
-    data = pd.concat(
-        [pd.Series(reasoning_conversations), pd.Series(non_reasoning_subset)]
-    )
-    data.name = "text"
-    combined_dataset = Dataset.from_pandas(pd.DataFrame(data))
-    combined_dataset = combined_dataset.shuffle(seed=3407)
-
+    pdb.set_trace()
     # Setup trainer
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
-        train_dataset=combined_dataset,
+        train_dataset=processed_dataset,
         eval_dataset=None,
         args=SFTConfig(
+            output_dir="outputs/qwen3-minimal",
             dataset_text_field="text",
             per_device_train_batch_size=2,
-            gradient_accumulation_steps=4,
+            gradient_accumulation_steps=8,
             warmup_steps=5,
             max_steps=30,
             learning_rate=2e-4,
@@ -115,7 +93,7 @@ def train_qwen3_model():
             weight_decay=0.01,
             lr_scheduler_type="linear",
             seed=3407,
-            report_to="none",
+            report_to="tensorboard",
         ),
     )
 
@@ -127,6 +105,10 @@ def train_qwen3_model():
     print(f"{start_gpu_memory} GB of memory reserved.")
 
     # Train the model
+
+    # from ._patch_sampler import patch_sampler
+
+    trainer = apply_patch_sampler(trainer)
     trainer_stats = trainer.train()
 
     # Show final memory and time stats
