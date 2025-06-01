@@ -49,8 +49,8 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
         R = random.Random(42 + self.epoch)
         R.shuffle(ids)
 
-        self.logger.debug(
-            f"🎲 Sampler epoch {self.epoch}: emitting {dataset_size} indices"
+        self.logger.info(
+            f"🎲 Sampler epoch {self.epoch}: emitting {dataset_size} indices\nFirst ids: {ids[:10]}\nLast ids: {ids[-10:]}"
         )
         yeild_ids = []
         for idx in ids:
@@ -58,7 +58,7 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
             yeild_ids.append(idx)
             yield idx
         # write to log for debugging
-        self.logger.debug(
+        self.logger.info(
             f"🎲 Sampler epoch {self.epoch}: dataset_size={dataset_size}\n"
             f"   📋 First 10 indices: {yeild_ids[:10]}\n"
             f"   📋 Last 10 indices: {yeild_ids[-10:]}"

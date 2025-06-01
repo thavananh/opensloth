@@ -35,9 +35,10 @@ training_config_model = TrainingArgsConfig(
     output_dir="outputs/qwen3-0.6b-2card.1/",
     per_device_train_batch_size=2,
     gradient_accumulation_steps=4,
-    learning_rate=0.0002,
+    learning_rate=2e-4,
     logging_steps=1,
     num_train_epochs=1,
+    
     lr_scheduler_type="linear",
     warmup_steps=5,
     save_total_limit=2,

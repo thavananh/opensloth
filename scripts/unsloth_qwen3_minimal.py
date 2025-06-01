@@ -15,7 +15,7 @@ def train_qwen3_model():
 
     from datasets import Dataset
 
-    dataset_path = "data/built_dataset/finetome_1000_samples"
+    dataset_path = "data/built_dataset/fubetome-1k/"
     processed_dataset = Dataset.load_from_disk(dataset_path)
 
     from unsloth import FastLanguageModel
@@ -54,27 +54,7 @@ def train_qwen3_model():
     )
 
     # Load pre-built dataset
-    # from scripts.build_dataset import load_built_dataset
 
-    # try:
-    #     processed_dataset = load_built_dataset("finetome_1000_samples")
-    #     print("Loaded pre-built dataset successfully!")
-    # except (FileNotFoundError, ValueError) as e:
-    #     print(f"Pre-built dataset not found: {e}")
-    #     print("Building dataset on-the-fly...")
-
-    #     # Fallback: build dataset inline
-    #     from scripts.build_dataset import build_finetome_dataset
-
-    #     dataset_path = build_finetome_dataset(
-    #         dataset_name="mlabonne/FineTome-100k", num_samples=1000, tokenizer=tokenizer
-    #     )
-    #     processed_dataset = load_built_dataset("finetome_1000_samples")
-
-    import pdb
-
-    pdb.set_trace()
-    # Setup trainer
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
@@ -86,15 +66,23 @@ def train_qwen3_model():
             per_device_train_batch_size=2,
             gradient_accumulation_steps=8,
             warmup_steps=5,
-            max_steps=30,
+            # max_steps=30,
             learning_rate=2e-4,
+            num_train_epochs=1,
             logging_steps=1,
             optim="adamw_8bit",
             weight_decay=0.01,
             lr_scheduler_type="linear",
             seed=3407,
-            report_to="tensorboard",
+            report_to="wandb",
         ),
+    )
+    from unsloth.chat_templates import train_on_responses_only
+
+    trainer = train_on_responses_only(
+        trainer,
+        instruction_part="<|im_start|>user",
+        response_part="<|im_start|>assistant",
     )
 
     # Show memory stats
