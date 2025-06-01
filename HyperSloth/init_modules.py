@@ -149,7 +149,7 @@ def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
     return dataset_cache_path
 
 
-def parse_data(data):
+def build_data(data):
     if isinstance(data, DataConfigShareGPT):
         from HyperSloth.scripts.build_dataset import build_sharegpt_dataset
 
@@ -243,7 +243,7 @@ def _get_trainer(
             args=hf_train_args,
         )
 
-    hyper_config.data = parse_data(hyper_config.data)
+    
 
     # Ensure path_tokenized is set and valid
     if not hyper_config.data.path_tokenized:

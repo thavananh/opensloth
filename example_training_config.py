@@ -3,9 +3,23 @@ from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
 hyper_config_model = HyperConfig(
-    data=DataConfig.from_dataset_name(
-        "newdataset"
-    ),  # To get the dataset run hypersloth-build-dataset  --hf_dataset mlabonne/FineTome-100k -n 1000 --split train --name finetom-1k  --tokenizer Qwen/Qwen3-8B  --print_samples
+    # data=DataConfigHF(
+    #     dataset_name="mlabonne/FineTome-100k",
+    #     tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
+    #     num_samples=10000,
+    #     split="train",
+    #     name="finetom-10k",  # local name for later reference
+    # ),
+    # data=DataConfigHF(
+    #     dataset_name="llamafactory/OpenThoughts-114k",
+    #     split="train",
+    #     tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
+    # ),
+    data=DataConfigShareGPT(
+        dataset_path='/mnt/data/sharegpt/selfeval_retranslate_2025_05_30.json',
+        tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
+        num_samples=1000,
+    ),
     training=TrainingConfig(
         gpus=[0, 1],
         loss_type="response_only",
@@ -45,7 +59,7 @@ training_config_model = TrainingArgsConfig(
     save_total_limit=2,
     weight_decay=0.01,
     max_steps=100,
-    optim="adamw_8bit",  # Using 8bit optimizer from original
-    seed=3407,  # Adding seed for reproducibility
-    report_to="wandb",  # Disable reporting
+    optim="adamw_8bit",
+    seed=3407,
+    report_to="none",
 )

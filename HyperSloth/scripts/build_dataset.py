@@ -588,15 +588,24 @@ def build_sharegpt_dataset(
         dataset_dict = {"conversations": normalized_conversations}
         dataset = Dataset.from_dict(dataset_dict)
 
-        conversations = tokenizer.apply_chat_template(
-            dataset["conversations"],
-            tokenize=False,
-        )
+        # conversations = tokenizer.apply_chat_template(
+        #     dataset["conversations"],
+        #     tokenize=False,
+        # )
 
         # Create final dataset
-        data_series = pd.Series(conversations)
-        data_series.name = "text"
-        processed_dataset = Dataset.from_pandas(pd.DataFrame(data_series))
+        # data_series = pd.Series(conversations)
+        # data_series.name = "text"
+        # processed_dataset = Dataset.from_pandas(pd.DataFrame(data_series))
+        processed_dataset = dataset.map(
+            lambda x: {
+                "text": tokenizer.apply_chat_template(
+                    x["conversations"], tokenize=False
+                )
+            },
+            batched=True,
+            num_proc=32,
+        )
         processed_dataset = processed_dataset.shuffle(seed=seed)
 
         # Print samples if requested
@@ -726,6 +735,7 @@ def compute_tokenized_dataset(
             "dataset_text_field": "text",
             "add_special_tokens": True,
         },
+        num_proc=32,
     )
 
     # Create tokenized dataset path

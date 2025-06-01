@@ -51,6 +51,11 @@ def setup_model_and_training(
 
     # Time batch size configuration
     configure_batch_size(hf_train_args, gpu_ith, num_gpus)
+    from .init_modules import build_data
+    hp_logger.start_timing("build_data")
+    hyper_config.data = build_data(hyper_config.data)
+    hp_logger.finish_timing("build_data")
+
 
     # Time model initialization
     hp_logger.start_timing("model_init")
