@@ -1,4 +1,5 @@
 from fastcore.all import *
+from loguru import logger
 
 
 def main():
@@ -8,3 +9,4 @@ def main():
 
     os.system(f"cp {path} {out_path}")
     print(f"Example training config: {out_path}")
+    logger.info(f"Edit/Run it with: hypersloth-train {out_path}")
