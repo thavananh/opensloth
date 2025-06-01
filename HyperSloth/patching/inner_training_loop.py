@@ -100,20 +100,26 @@ def patch_inner_training_loop(trainer):
 
     # Apply log patch
     trainer_class = type(trainer)
-    _patch_log(trainer_class)
+    # _patch_log(trainer_class)
 
     # Get enhanced logger
     enhanced_logger = get_hypersloth_logger()
 
+    # Initialize counters for padding token savings
+    batch_counter = 0
+    total_tokens_saved = 0
+    total_possible_tokens = 0
+    log_interval = 100  # Log every 100 batches
+
     # Patch 1: TrainerState creation with HyperSloth fields
     original_trainer_state_init = TrainerState.__init__
 
-    def enhanced_trainer_state_init(self, **kwargs):
+    def setup_hyper_sloth_trainer_state(self, **kwargs):
         original_trainer_state_init(self, **kwargs)
         # Add HyperSloth custom fields
         self.is_world_process_zero = hp_local_rank == 0
 
-    TrainerState.__init__ = enhanced_trainer_state_init
+    TrainerState.__init__ = setup_hyper_sloth_trainer_state
 
     # Patch 2: GPU-specific batch slicing (if multi-GPU)
     if hp_wolrd_size > 1 and hasattr(trainer_class, "get_batch_samples"):
@@ -137,12 +143,45 @@ def patch_inner_training_loop(trainer):
         @patch
         def get_batch_samples(self: Trainer, epoch_iterator, num_batches, device=None):
             """Enhanced batch sampling with GPU slicing for HyperSloth."""
+            nonlocal batch_counter, total_tokens_saved, total_possible_tokens
+
             batch_samples, num_items_in_batch = original_get_batch_samples(
                 self, epoch_iterator, num_batches, device
             )
 
+            # Calculate padding savings before partitioning
+            tokens_before_partition = 0
+            actual_tokens_before = 0
+            for batch in batch_samples:
+                tokens_before_partition += batch["input_ids"].numel()
+                actual_tokens_before += batch["attention_mask"].sum().item()
+
             splited_by_gpus = smart_partition_batches(batch_samples, hp_wolrd_size)
             processed_samples = splited_by_gpus[hp_local_rank]
+
+            # Calculate tokens after partitioning for this GPU
+            tokens_after_partition = 0
+            actual_tokens_after = 0
+            for batch in processed_samples:
+                tokens_after_partition += batch["input_ids"].numel()
+                actual_tokens_after += batch["attention_mask"].sum().item()
+
+            # Update counters
+            batch_counter += 1
+            current_tokens_saved = tokens_after_partition - actual_tokens_after
+            total_tokens_saved += current_tokens_saved
+            total_possible_tokens += tokens_after_partition
+
+            # Log periodically
+            if batch_counter % log_interval == 0 and hp_local_rank == 0:
+                padding_percentage = (total_tokens_saved / total_possible_tokens) * 100
+                enhanced_logger.info(
+                    f"Padding savings (batch {batch_counter}): "
+                    f"{total_tokens_saved:,} tokens saved out of "
+                    f"{total_possible_tokens:,} total "
+                    f"({padding_percentage:.2f}% padding skipped)"
+                )
+
             return processed_samples, num_items_in_batch
 
     enhanced_logger.info(
