@@ -6,7 +6,7 @@ import os
 # from hypersloth.patching.patch_sampler import patch_sampler
 from HyperSloth.patching.patch_sampler import apply_patch_sampler
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def train_qwen3_model():
