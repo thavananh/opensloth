@@ -7,7 +7,7 @@ from HyperSloth import HYPERSLOTH_DATA_DIR
 from HyperSloth.hypersloth_config import DataConfig, DataConfigHF, DataConfigShareGPT
 
 
-def get_chat_dataset(input: DataConfigShareGPT | DataConfigHF | DataConfig) -> Dataset:
+def get_chat_dataset(input: str |DataConfigShareGPT | DataConfigHF | DataConfig) -> Dataset:
     """Load a chat dataset from disk."""
 
     if isinstance(input, DataConfig):

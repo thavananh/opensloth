@@ -15,7 +15,7 @@ def train_qwen3_model():
 
     from datasets import Dataset
 
-    dataset_path = "data/built_dataset/finetom"
+    dataset_path = "~/.cache/hypersloth/openthoughts-1k_tokenized/"
     processed_dataset = Dataset.load_from_disk(dataset_path)
 
     from unsloth import FastLanguageModel
@@ -66,7 +66,6 @@ def train_qwen3_model():
             per_device_train_batch_size=1,
             gradient_accumulation_steps=32,
             warmup_steps=5,
-            # max_steps=30,
             learning_rate=2e-4,
             num_train_epochs=1,
             logging_steps=1,
@@ -75,7 +74,7 @@ def train_qwen3_model():
             lr_scheduler_type="linear",
             seed=3407,
             max_steps=100,
-            report_to="wandb",
+            report_to="none",
         ),
     )
     from unsloth.chat_templates import train_on_responses_only

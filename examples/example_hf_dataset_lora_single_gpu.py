@@ -22,8 +22,8 @@ hyper_config_model = HyperConfig(
         load_in_4bit=True,  # Enable 4-bit quantization for memory efficiency
     ),
     lora_args=LoraArgs(
-        r=16,  # LoRA rank - lower for efficiency
-        lora_alpha=32,  # LoRA alpha (typically 2x rank)
+        r=8,  # LoRA rank - lower for efficiency
+        lora_alpha=16,  # LoRA alpha (typically 2x rank)
         target_modules=[  # Standard transformer attention/MLP modules
             "q_proj", "k_proj", "v_proj", "o_proj",
             "gate_proj", "up_proj", "down_proj",

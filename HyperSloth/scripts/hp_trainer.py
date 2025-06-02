@@ -326,6 +326,8 @@ def initialize_training_config(config_file):
         * training_config.gradient_accumulation_steps
         * len(hyper_config.training.gpus)
     )
+
+    logger.info(f"Global batch size: {os.environ['HYPERSLOTH_GLOBAL_BZ']}")
     os.environ["HYPERSLOTH_ACCUMULATION_STEPS"] = str(
         training_config.gradient_accumulation_steps
     )

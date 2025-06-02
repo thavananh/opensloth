@@ -17,20 +17,16 @@ from .hypersloth_config import (
     TrainingArgsConfig,
 )
 
-# Get enhanced logger for timing
 from .logging_config import get_hypersloth_logger
 
-# Setup logger with proper GPU ID
-gpu_id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "0")
-hp_logger = get_hypersloth_logger(log_level="INFO")
-logger = hp_logger  # Use the same enhanced logger instance
+logger = get_hypersloth_logger(log_level="INFO")
 
 
 def init_model_and_tokenizer(hyper_config: HyperConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
 
-    hp_logger.start_timing("model_loading")
+    logger.start_timing("model_loading")
 
     if hyper_config.pretrained_lora:
         logger.info(
@@ -42,15 +38,15 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
     model, tokenizer = FastModel.from_pretrained(
         **hyper_config.fast_model_args.model_dump()
     )
-    hp_logger.finish_timing("model_loading")
+    logger.finish_timing("model_loading")
 
     logger.info(f"Model created at {os.environ['CUDA_VISIBLE_DEVICES']}")
 
-    hp_logger.start_timing("nccl_setup")
+    logger.start_timing("nccl_setup")
     setup_nccl_for_hypersloth(
         gpu=int(os.environ["HYPERSLOTH_LOCAL_RANK"]), gpus=hyper_config.training.gpus
     )
-    hp_logger.finish_timing("nccl_setup")
+    logger.finish_timing("nccl_setup")
 
     model_device = model.device
     logger.info(
@@ -61,9 +57,9 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
         not hyper_config.fast_model_args.full_finetuning
         and not hyper_config.pretrained_lora
     ):
-        hp_logger.start_timing("lora_setup")
+        logger.start_timing("lora_setup")
         model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
-        hp_logger.finish_timing("lora_setup")
+        logger.finish_timing("lora_setup")
 
     # Allow custom chat templates
     if (
@@ -290,12 +286,7 @@ def _maybe_train_on_responses_only(trainer, hyper_config: HyperConfig):
 def configure_batch_size(hf_train_args, gpu_ith, num_gpus):
     if num_gpus != 1:
         hf_train_args.per_device_train_batch_size *= num_gpus  # This is the total batch size loaded by dataloader, the trainer later will chose the correct batch size for each GPU
-        global_batch_size = (
-            hf_train_args.per_device_train_batch_size
-            * hf_train_args.gradient_accumulation_steps
-            * num_gpus
-        )
-        logger.info(f"Global batch size: {global_batch_size} ")
+
     if not gpu_ith == 0:
         # disable reporting for all GPUs except the first one
         hf_train_args.report_to = "none"

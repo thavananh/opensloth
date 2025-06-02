@@ -17,7 +17,7 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",
     ),
     fast_model_args=FastModelArgs(
-        model_name="Qwen/Qwen3-0.6B-FP8",
+        model_name="Qwen/Qwen3-0.6B",  # You need non-quantized model for full FT
         max_seq_length=2048,
         load_in_4bit=False,
         load_in_8bit=False,
@@ -29,7 +29,7 @@ hyper_config_model = HyperConfig(
 
 # Training arguments for full fine-tuning
 training_config_model = TrainingArgsConfig(
-    output_dir="outputs/qwen3-8b-openthoughts-fullft/",
+    output_dir="outputs/qwen3-0.6b-openthoughts-full-ft/",
     per_device_train_batch_size=1,  # Very small batch for full FT memory usage
     gradient_accumulation_steps=32,  # Large accumulation for effective batch size
     learning_rate=5e-6,  # Much lower LR for full fine-tuning
