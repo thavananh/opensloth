@@ -5,9 +5,10 @@ Handles weight synchronization, model setup, and distributed training coordinati
 
 import os
 
+from speedy_utils import identify
 
 
-from HyperSloth.dataset_utils import get_text_dataset
+from HyperSloth.dataset_utils import get_tokenized_dataset
 
 
 from .hypersloth_config import (
@@ -18,11 +19,10 @@ from .hypersloth_config import (
 from .logging_config import get_hypersloth_logger
 
 
-
-
 def init_model_and_tokenizer(hyper_config: HyperConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
+
     logger = get_hypersloth_logger(log_level="INFO")
 
     logger.start_timing("model_loading")
@@ -86,19 +86,17 @@ def create_trainer(
 
     # Get enhanced logger for timing
 
-
     logger = get_hypersloth_logger(log_level="INFO")
 
-
     logger.start_timing("trainer_setup")
-    
+
     trainer = _get_trainer(
         model,
         tokenizer,
         hyper_config,
         hf_train_args,
     )
-    
+
     logger.finish_timing("trainer_setup")
 
     logger.start_timing("training_loop_patch")
@@ -106,63 +104,56 @@ def create_trainer(
 
     patch_inner_training_loop(trainer)
     from .patching.patch_sampler import apply_patch_sampler
+
     trainer = apply_patch_sampler(trainer)
     logger.finish_timing("training_loop_patch")
     return trainer
 
 
 def _get_trainer(
-    model,
-    tokenizer,
-    hyper_config: HyperConfig,
-    hf_train_args: TrainingArgsConfig):
+    model, tokenizer, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig
+):
     """
-    Returns an SFTTrainer instance. If a cached dataset exists, load from disk.
-    If not, GPU 0 will create and save it, and other GPUs will wait for GPU 0
-    to finish.
+    Returns an SFTTrainer instance with a tokenized dataset.
     """
-    import os
-    import time
-
-    import filelock
-    from datasets import load_from_disk
-    import unsloth 
-    from unsloth.chat_templates import train_on_responses_only
     from trl import SFTTrainer
-
-    # Get enhanced logger for timing
+    from transformers import DataCollatorForSeq2Seq
     from .logging_config import get_hypersloth_logger
 
     logger = get_hypersloth_logger(log_level="INFO")
 
-    # Start timing for the overall dataset loading process
-    logger.start_timing("dataset_loading_total")
+    # Get the tokenized dataset using the dataset_utils function
+    train_dataset = get_tokenized_dataset(
+        data_config=hyper_config.data,
+        model=model,
+        tokenizer=tokenizer,
+        hf_train_args=hf_train_args,
+    )
 
+    logger.info("Creating final SFTTrainer with prepared dataset...")
+    logger.start_timing("final_trainer_creation")
+    hf_train_args.skip_prepare_dataset = True
+    trainer = SFTTrainer(
+        model=model,
+        tokenizer=tokenizer,
+        train_dataset=train_dataset,
+        args=hf_train_args,
+    )
+    logger.finish_timing("final_trainer_creation")
 
-    def _create_trainer(train_dataset, skip_prepare=False):
-        return SFTTrainer(
-            model=model,
-            tokenizer=tokenizer,
-            train_dataset=train_dataset,
-            dataset_text_field="text",
-            dataset_num_proc=hyper_config.data.dataset_num_proc,
-            args=hf_train_args,
+    if hasattr(trainer, "data_collator") and not isinstance(
+        trainer.data_collator, DataCollatorForSeq2Seq
+    ):
+        logger.info(
+            f"Replacing {type(trainer.data_collator).__name__} with "
+            f"DataCollatorForSeq2Seq for better sequence handling"
         )
-    logger.info('Loading dataset... and tokenize')
-    text_dataset = get_text_dataset(hyper_config.data)
-    trainer = _create_trainer(text_dataset, skip_prepare=False)
-    logger.info("... now make dataset train on responses only")
-    
-    trainer = train_on_responses_only(
-            trainer,
-            instruction_part=hyper_config.data.instruction_part,
-            response_part=hyper_config.data.response_part,
-        )
+        trainer.data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer)
+    else:
+        logger.info(f"Data collator: {type(trainer.data_collator).__name__}")
 
-    logger.finish_timing("dataset_loading_total")
+    logger.info("Trainer setup completed successfully")
     return trainer
-
-
 
 
 def configure_batch_size(hf_train_args, gpu_ith, num_gpus):

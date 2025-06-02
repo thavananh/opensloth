@@ -164,8 +164,8 @@ def _patch_log(T: type):
     support_keys = [
         "loss",
         "grad_norm",
-        "num_input_tokens_seen",
-        "trained_token_ratio",
+        # "num_input_tokens_seen",
+        # "trained_token_ratio",
     ]
     LOG_MMAP: Dict[str, np.memmap] = {}
     LOG_LOCKS: Dict[str, BaseFileLock] = {}  # Dictionary for locks
@@ -431,10 +431,3 @@ def _patch_log(T: type):
 
     # Return the modified class type with the patched method
     return T
-
-
-# --- Example Usage (assuming Trainer class exists) ---
-# PatchedTrainer = _patch_log(Trainer)
-# Now, instantiate PatchedTrainer instead of Trainer
-# trainer = PatchedTrainer(...)
-# trainer.train()

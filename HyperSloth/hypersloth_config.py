@@ -3,7 +3,8 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-CPU_COUNT = min(1, cpu_count() - 2)
+CPU_COUNT = min(1, cpu_count() // 2)
+
 
 class DatasetConfigBase(BaseModel):
     tokenizer_name: str
@@ -11,18 +12,20 @@ class DatasetConfigBase(BaseModel):
     instruction_part: str
     response_part: str
     num_samples: Optional[int] = None
-    dataset_num_proc: int = 2
+    # dataset_num_proc: int = CPU_COUNT
 
 
 class HFDatasetConfig(DatasetConfigBase):
-    source_type: Literal['hf'] = 'hf'
+    source_type: Literal["hf"] = "hf"
     dataset_name: str
     split: str
 
 
 class PathDatasetConfig(DatasetConfigBase):
-    source_type: Literal['path'] = 'path'
+    source_type: Literal["path"] = "path"
     path: str
+
+
 DatasetConfig = Union[HFDatasetConfig, PathDatasetConfig]
 
 
@@ -137,7 +140,7 @@ class TrainingArgsConfig(BaseModel):
     seed: int = 42
     report_to: Literal["tensorboard", "wandb", "none"] = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
-    # max_steps: Optional[int] = None
+    dataset_num_proc: int = 32
 
     class Config:
         """Pydantic configuration for DataConfig."""

@@ -2,6 +2,7 @@ import os
 from typing import Dict, Any
 from fastcore.all import patch
 from transformers.trainer import Trainer, TrainerState
+
 from HyperSloth.logging_config import get_hypersloth_logger
 from HyperSloth._patch_log import _patch_log
 import torch
@@ -110,7 +111,7 @@ def patch_inner_training_loop(trainer):
     batch_counter = 0
     total_tokens_saved = 0
     total_possible_tokens = 0
-    log_interval = 100  # Log every 100 batches
+    log_interval = 10  # Log every 100 batches
 
     # Patch 1: TrainerState creation with HyperSloth fields
     original_trainer_state_init = TrainerState.__init__
