@@ -25,9 +25,13 @@ class DataConfig(BaseModel):
         default=max(1, CPU_COUNT),
         description="Number of processes to use for dataset processing",
     )
+    name: Optional[str] = Field(
+        default=None,
+        description="hypersloth internal name for the dataset",
+    )
 
     @classmethod
-    def from_dataset_name(cls, dataset_name: str) -> "DataConfig":
+    def from_dataset_name(cls, hypersloth_dataset_name: str) -> "DataConfig":
         """Create DataConfig from dataset name using the registry.
 
         Args:
@@ -70,14 +74,14 @@ class DataConfig(BaseModel):
         # Find dataset in registry
         dataset_config = None
         for config in registry:
-            if config.get("name") == dataset_name:
+            if config.get("name") == hypersloth_dataset_name:
                 dataset_config = config
                 break
 
         if dataset_config is None:
             available_names = [cfg.get("name", "unnamed") for cfg in registry]
             raise ValueError(
-                f'Dataset "{dataset_name}" not found in registry. '
+                f'Dataset "{hypersloth_dataset_name}" not found in registry. '
                 f"Available datasets: {available_names}"
             )
 
@@ -89,7 +93,7 @@ class DataConfig(BaseModel):
                 data_dir = registry_path.parent
                 path_tokenized = str(data_dir / path_tokenized)
         else:
-            raise ValueError(f'Dataset "{dataset_name}" missing path in registry')
+            raise ValueError(f'Dataset "{hypersloth_dataset_name}" missing path in registry')
 
         # Create DataConfig with loaded settings
         return cls(
@@ -100,6 +104,7 @@ class DataConfig(BaseModel):
             response_part=dataset_config.get(
                 "response_part", "<|im_start|>assistant\n"
             ),
+            name=dataset_config.get("name", hypersloth_dataset_name),
         )
 
 
@@ -207,7 +212,7 @@ class HyperConfig(BaseModel):
     data: DataConfig = Field(default_factory=DataConfig)
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
-    lora_args: LoraArgs = Field(default_factory=LoraArgs)
+    lora_args: Optional[LoraArgs] = Field(default_factory=LoraArgs)
     pretrained_lora: Optional[str] = Field(
         default=None,
         description="Path to pretrained LoRA model for continous lora training",

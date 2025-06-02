@@ -17,13 +17,14 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",
     ),
     fast_model_args=FastModelArgs(
-        model_name="model_store/unsloth/Qwen3-8B",
+        model_name="Qwen/Qwen3-0.6B-FP8",
         max_seq_length=2048,
-        load_in_4bit=True,
+        load_in_4bit=False,
+        load_in_8bit=False,
         full_finetuning=True,  # Enable full fine-tuning instead of LoRA
     ),
     # Note: LoRA args are ignored when full_finetuning=True
-    lora_args=LoraArgs(),  # Default/empty LoRA config (will be ignored)
+    # lora_args=LoraArgs(),  # Default/empty LoRA config (will be ignored)
 )
 
 # Training arguments for full fine-tuning

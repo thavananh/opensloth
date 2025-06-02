@@ -165,7 +165,7 @@ def build_data(data):
             name=data.name,
         )
         data = DataConfig.from_dataset_name(
-            dataset_name=dataset_name,
+            hypersloth_dataset_name=dataset_name,
         )
     elif isinstance(data, DataConfigHF):
         from HyperSloth.scripts.build_dataset import build_hf_dataset
@@ -182,7 +182,7 @@ def build_data(data):
             columns=data.columns,
         )
         data = DataConfig.from_dataset_name(
-            dataset_name=dataset_name,
+            hypersloth_dataset_name=dataset_name,
         )
     elif isinstance(data, DataConfig):
         # Already a DataConfig, return as-is

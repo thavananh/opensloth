@@ -11,16 +11,18 @@ hyper_config_model = HyperConfig(
     #     split="train",
     #     name="finetom-10k",  # local name for later reference
     # ),
-    # data=DataConfigHF(
-    #     dataset_name="llamafactory/OpenThoughts-114k",
-    #     split="train",
-    #     tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
-    # ),
-    data=DataConfigShareGPT(
-        dataset_path='/mnt/data/sharegpt/selfeval_retranslate_2025_05_30.json',
+    data=DataConfigHF(
+        dataset_name="llamafactory/OpenThoughts-114k",
+        split="train",
         tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
-        num_samples=None,
+        num_samples=1000,
+        name="openthoughts-1k",  # local name for later reference
     ),
+    # data=DataConfigShareGPT(
+    #     dataset_path='/mnt/data/sharegpt/selfeval_retranslate_2025_05_30.json',
+    #     tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
+    #     num_samples=None,
+    # ),
     training=TrainingConfig(
         gpus=[0, 1,2,3],
         loss_type="response_only",
