@@ -56,23 +56,10 @@ class HyperSlothLogger:
     def gpu_id(self) -> str:
         id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "UNSET")
         if id == "UNSET" and not self.allow_unknown_gpu:
-            raise
-            # If unknown_gpu is True, we don't set the gpu_id
-
-        # import traceback
-
-        # stack = traceback.extract_stack()
-        # for frame in stack[::-1]:
-        #     if "HyperSlothLogger" in frame.name:
-        #         print(
-        #             f"Warning: HYPERSLOTH_LOCAL_RANK not set. Called from {frame.name} at {frame.filename}:{frame.lineno}"
-        #         )
-        #         break
-        # else:
-        #     print(
-        #         "Warning: HYPERSLOTH_LOCAL_RANK not set. Called from unknown location."
-        #     )
-
+            raise ValueError(
+                'Both "HYPERSLOTH_LOCAL_RANK" is not set and "allow_unknown_gpu" is False. '
+                "Please set the environment variable or allow unknown GPU."
+            )
         return id
 
     def _setup_logger(self) -> None:
@@ -289,7 +276,7 @@ class HyperSlothLogger:
         if model_name:
             rank_info += f" | Model: {model_name}"
 
-        self._log_with_depth("info", f"🔧 {rank_info}", depth=3)
+        self._log_with_depth("info", f"🔧 {rank_info}", depth=2)
 
     def log_progress_step(
         self,
@@ -435,12 +422,12 @@ class HyperSlothLogger:
         else:
             duration_str = f"{duration/3600:.1f}h"
 
-        self._log_with_depth("info", f"⏱️  {step_name}: {duration_str}", depth=3)
+        self._log_with_depth("info", f"⏱️  {step_name}: {duration_str}", depth=2)
 
     def start_total_training_timer(self) -> None:
         """Start the total training timer."""
         self.total_training_start = time.time()
-        self._log_with_depth("info", "🚀 Starting total training timer", depth=3)
+        self._log_with_depth("info", "🚀 Starting total training timer", depth=2)
 
     def log_training_summary(self) -> None:
         """Log a summary of all timing information."""
@@ -565,7 +552,8 @@ def get_hypersloth_logger(
         return VALID_LOGGER
 
     logger = HyperSlothLogger(log_level=log_level, allow_unknown_gpu=allow_unknown_gpu)
-    VALID_LOGGER = logger
+    if not allow_unknown_gpu:
+        VALID_LOGGER = logger
     return logger
 
 

@@ -5,10 +5,6 @@ from typing import List
 from HyperSloth.logging_config import get_hypersloth_logger
 
 
-logger = get_hypersloth_logger(log_level="DEBUG")
-
-# Use safe logger that handles gpu_id properly
-
 
 class NCCLGradSyncCallback(TrainerCallback):
     """NCCL-based gradient synchronization callback for Transformers trainer.
@@ -19,7 +15,7 @@ class NCCLGradSyncCallback(TrainerCallback):
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        model,
         gpu: int,
         gpus: List[int],
     ):
@@ -28,6 +24,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         self.gpus = gpus
         self.local_rank = gpus.index(gpu)
         self.world_size = len(gpus)
+        self.logger  = get_hypersloth_logger(log_level="DEBUG")
 
         # Ensure distributed is initialized
         if not dist.is_initialized():
@@ -49,7 +46,7 @@ class NCCLGradSyncCallback(TrainerCallback):
                 f"Expected rank {self.local_rank} but got {dist.get_rank()}"
             )
 
-        logger.info(
+        self.logger.info(
             f"[GPU={self.gpu}] NCCLGradSyncCallback initialized for "
             f"rank {self.local_rank}/{self.world_size}"
         )
@@ -70,7 +67,7 @@ class NCCLGradSyncCallback(TrainerCallback):
             # Average by dividing by world size
             param.grad.div_(self.world_size)
 
-        logger.debug(
+        self.logger.debug(
             f"[GPU={self.gpu}] Gradient sync step {step}: "
             f"{params / 1e6:.2f}M params"
         )
@@ -81,7 +78,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called before optimizer step - synchronize gradients."""
         step = state.global_step
 
-        logger.debug(
+        self.logger.debug(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"starting gradient synchronization"
         )
@@ -89,7 +86,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         # Synchronize gradients across all ranks
         self._sync_gradients(self.model, step)
 
-        logger.debug(
+        self.logger.debug(
             f"[GPU={self.gpu}] Pre-optimizer step {step} - "
             f"gradient synchronization complete"
         )
@@ -100,7 +97,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called after optimizer step - cleanup if needed."""
         step = state.global_step
 
-        logger.debug(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
+        self.logger.debug(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
 
         # No cleanup needed for NCCL-based sync
         # This method is kept for interface compatibility
@@ -125,7 +122,7 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     os.environ["MASTER_ADDR"] = "127.0.0.1"  # Localhost for single machine
     if "MASTER_PORT" not in os.environ:
         os.environ["MASTER_PORT"] = "29500"  # Use fixed port
-
+    logger = get_hypersloth_logger(log_level="DEBUG")
     # Log all set environment variables
     logger.info(
         f'[GPU={gpu}] NCCL env: RANK={os.environ["RANK"]}, WORLD_SIZE={os.environ["WORLD_SIZE"]}, MASTER_ADDR={os.environ["MASTER_ADDR"]}, MASTER_PORT={os.environ["MASTER_PORT"]}'
@@ -188,19 +185,3 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
                     f"{max_retries} attempts: {e}"
                 )
                 raise
-
-
-# class HyperSlothNCCLGradSyncCallback(NCCLGradSyncCallback):
-#     """HyperSloth-compatible NCCL gradient sync callback."""
-
-#     @classmethod
-#     def create_for_hypersloth(
-#         cls,
-#         model: torch.nn.Module,
-#         gpu: int,
-#         gpus: list,
-#     ):
-#         """Create callback with automatic NCCL setup for HyperSloth."""
-
-
-#         return cls(model=model, gpu=gpu, gpus=gpus)

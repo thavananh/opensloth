@@ -19,12 +19,13 @@ from .hypersloth_config import (
 
 from .logging_config import get_hypersloth_logger
 
-logger = get_hypersloth_logger(log_level="INFO")
+
 
 
 def init_model_and_tokenizer(hyper_config: HyperConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
+    logger = get_hypersloth_logger(log_level="INFO")
 
     logger.start_timing("model_loading")
 
@@ -87,15 +88,15 @@ def create_trainer(
     """Load or prepare the dataset and create the SFTTrainer."""
 
     # Get enhanced logger for timing
-    from .logging_config import get_hypersloth_logger
 
-    hp_logger = get_hypersloth_logger(log_level="INFO")
+
+    logger = get_hypersloth_logger(log_level="INFO")
 
     dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
     dataset_cache_exists = os.path.exists(dataset_cache_path)
 
     # CASE 1: Dataset cache already exists, just load it
-    hp_logger.start_timing("trainer_setup")
+    logger.start_timing("trainer_setup")
     trainer = _get_trainer(
         tokenizer,
         hyper_config,
@@ -105,27 +106,19 @@ def create_trainer(
         dataset_cache_path,
         dataset_cache_exists,
     )
-    hp_logger.finish_timing("trainer_setup")
+    logger.finish_timing("trainer_setup")
 
     from HyperSloth.patching.inner_training_loop import patch_inner_training_loop
 
-    hp_logger.start_timing("training_loop_patch")
+    logger.start_timing("training_loop_patch")
     patch_inner_training_loop(trainer)
-    hp_logger.finish_timing("training_loop_patch")
+    logger.finish_timing("training_loop_patch")
 
     # DEBUG: change the sampler to sequential sampler for debugging
+    import ipdb; ipdb.set_trace()
     from .patching.patch_sampler import apply_patch_sampler
 
     trainer = apply_patch_sampler(trainer)
-
-    # from torch.utils.data import DataLoader, SequentialSampler  # type: ignore
-    # from torch.utils.data.distributed import DistributedSampler  # type: ignore
-
-    # def _get_sampler(self, dataset):
-    #     """Override to use SequentialSampler for debugging."""
-    #     return SequentialSampler(dataset)
-
-    # trainer._get_train_sampler = _get_sampler
     return trainer
 
 
@@ -216,10 +209,10 @@ def _get_trainer(
     # Get enhanced logger for timing
     from .logging_config import get_hypersloth_logger
 
-    hp_logger = get_hypersloth_logger(log_level="INFO")
+    logger = get_hypersloth_logger(log_level="INFO")
 
     # Start timing for the overall dataset loading process
-    hp_logger.start_timing("dataset_loading_total")
+    logger.start_timing("dataset_loading_total")
 
     LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
     lock = dataset_cache_path + ".lock"
@@ -258,7 +251,7 @@ def _get_trainer(
     trainer = _create_trainer(dataset, skip_prepare=True)
 
     _maybe_train_on_responses_only(trainer, hyper_config)
-    hp_logger.finish_timing("dataset_loading_total")
+    logger.finish_timing("dataset_loading_total")
     return trainer
 
 

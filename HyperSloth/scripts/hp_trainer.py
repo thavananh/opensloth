@@ -8,7 +8,9 @@ from fastcore.all import threaded, call_parse
 import tabulate
 
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
-from loguru import logger
+from HyperSloth.logging_config import HyperSlothLogger
+
+
 
 
 warnings.filterwarnings("ignore")
@@ -26,7 +28,7 @@ def get_current_python_path():
         )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        logger.error(f"Error getting Python path: {e}")
+        print(f"Error getting Python path: {e}")
         return None
 
 
@@ -39,8 +41,6 @@ def _setup_logger(gpu_id, allow_unknown_gpu=False):
         log_level=log_level, allow_unknown_gpu=allow_unknown_gpu
     )
 
-    # Store logger instance for use in training
-    os.environ[f"HYPERSLOTH_hp_logger_{gpu_id}"] = "1"
 
     return hp_logger
 
@@ -54,10 +54,10 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     os.environ["HYPERSLOTH_LOCAL_GPU_IDX"] = str(gpu)
 
     # Setup enhanced logger
-    hp_logger = _setup_logger(f"{gpu}")
+    logger = HyperSlothLogger()
 
     # Use enhanced logging
-    hp_logger.log_gpu_info(
+    logger.log_gpu_info(
         gpu=gpu,
         world_size=len(hyper_config.training.gpus),
         model_name=hyper_config.fast_model_args.model_name,
@@ -66,19 +66,19 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
     # Start total training timer
-    hp_logger.start_total_training_timer()
+    logger.start_total_training_timer()
 
     # setup_nccl_for_hypersloth(gpu, hyper_config.training.gpus)
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
-    hp_logger.start_timing("model_and_training_setup")
+    logger.start_timing("model_and_training_setup")
     trainer, model, tokenizer = setup_model_and_training(
         hyper_config=hyper_config,
         hf_train_args=hf_train_args,
     )
-    hp_logger.finish_timing("model_and_training_setup")
+    logger.finish_timing("model_and_training_setup")
 
-    hp_logger.start_timing("callback_setup")
+    logger.start_timing("callback_setup")
     assert trainer.model is not None, "Trainer model is None"
     grad_sync_cb = NCCLGradSyncCallback(
         model=trainer.model,
@@ -87,22 +87,22 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     )
     logger.info(f"Using gradient sync callback for GPU {gpu}")
     trainer.add_callback(grad_sync_cb)
-    hp_logger.finish_timing("callback_setup")
+    logger.finish_timing("callback_setup")
 
-    hp_logger.start_timing("actual_training")
+    logger.start_timing("actual_training")
     trainer.train()
-    hp_logger.finish_timing("actual_training")
+    logger.finish_timing("actual_training")
 
     # Save once from rank=0
     if gpu == hyper_config.training.gpus[0]:
-        hp_logger.start_timing("model_saving")
+        logger.start_timing("model_saving")
         logger.info(f"Save model to {hf_train_args.output_dir}")
         model.save_pretrained(hf_train_args.output_dir)
         tokenizer.save_pretrained(hf_train_args.output_dir)
-        hp_logger.finish_timing("model_saving")
+        logger.finish_timing("model_saving")
 
         # Log training summary
-        hp_logger.log_training_summary()
+        logger.log_training_summary()
 
 
 def load_config_from_path(config_path: str):
@@ -172,10 +172,10 @@ tmux new-session -d -s {session_name} -n MAIN"""
     is_session_exists = os.system(f"tmux has-session -t {session_name}")
     if is_session_exists == 0:
         if auto_kill:
-            logger.info(f"Auto-killing existing session {session_name}")
+            print(f"Auto-killing existing session {session_name}")
             os.system(f"tmux kill-session -t {session_name}")
         else:
-            logger.warning(
+            (
                 f"Session {session_name} exists, please kill it before running the script"
             )
             # ask user if they want to kill the session
@@ -184,11 +184,11 @@ tmux new-session -d -s {session_name} -n MAIN"""
             )
             if user_input.lower() == "y":
                 os.system(f"tmux kill-session -t {session_name}")
-                logger.info(f"Session {session_name} killed")
+                print(f"Session {session_name} killed")
             else:
                 return
     os.system(f"bash {script_path}")
-    logger.info(f"Training sessions started and attached to session {session_name}")
+    print(f"Training sessions started and attached to session {session_name}")
 
 
 @call_parse
@@ -203,11 +203,10 @@ def train(
     config_file, hyper_config, training_config = initialize_training_config(config_file)
 
     # Set gradient directory based on output_dir
-    # os.environ["HYPERSLOTH_RUN_DIR"] = _get_hp_grad_dir(training_config.output_dir)
 
     # CASE 1: Child process => single GPU
     if rank is not None and world_size is not None:
-        logger.info(f"[CASE 1] Running on rank {rank} with world size {world_size}")
+        print(f"[CASE 1] Running on rank {rank} with world size {world_size}")
         _train(
             gpu=hyper_config.training.gpus[rank],
             hyper_config=hyper_config,
@@ -235,7 +234,7 @@ def train(
             return
         else:
             # Launch via multi-processing (no tmux).
-            logger.info(f"[CASE 2] Running on {len(gpus)} GPUs")
+            print(f"[CASE 2] Running on {len(gpus)} GPUs")
             processes = []
             assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
 
@@ -259,13 +258,13 @@ def train(
                         if proc.exitcode != 0:
                             for p in processes:
                                 p.terminate()
-                            logger.error("Error in training, terminating all processes")
+                            print("Error in training, terminating all processes")
                             raise Exception("Error in training")
                         else:
                             processes.remove(proc)
                             break
                 time.sleep(1)
-            logger.success("All processes finished")
+            print("All processes finished")
 
     else:
         # Single GPU
@@ -327,7 +326,7 @@ def initialize_training_config(config_file):
         * len(hyper_config.training.gpus)
     )
 
-    logger.info(f"Global batch size: {os.environ['HYPERSLOTH_GLOBAL_BZ']}")
+    print(f"Global batch size: {os.environ['HYPERSLOTH_GLOBAL_BZ']}")
     os.environ["HYPERSLOTH_ACCUMULATION_STEPS"] = str(
         training_config.gradient_accumulation_steps
     )
