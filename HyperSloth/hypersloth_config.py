@@ -1,138 +1,30 @@
-import json
 from multiprocessing import cpu_count
-from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
 CPU_COUNT = min(1, cpu_count() - 2)
 
-
-class DataConfig(BaseModel):
-    """Configuration for dataset handling and processing."""
-
-    # path_to_text_dataset: str = Field(
-    #     default="data/finetome_1000_samples",
-    #     description="Path to the dataset directory",
-    # )
-    path_tokenized: Optional[str] = Field(
-        default=None,
-        description="Path to the tokenized dataset directory",
-    )
-    instruction_part: str = "<|im_start|>user\n"
-    response_part: str = "<|im_start|>assistant\n"
-    dataset_num_proc: int = Field(
-        default=max(1, CPU_COUNT),
-        description="Number of processes to use for dataset processing",
-    )
-    name: Optional[str] = Field(
-        default=None,
-        description="hypersloth internal name for the dataset",
-    )
-
-    @classmethod
-    def from_dataset_name(cls, hypersloth_dataset_name: str) -> "DataConfig":
-        """Create DataConfig from dataset name using the registry.
-
-        Args:
-            dataset_name: Name of the dataset in the registry
-
-        Returns:
-            DataConfig instance with loaded configuration
-
-        Raises:
-            FileNotFoundError: If data_config.json is not found
-            ValueError: If dataset_name is not found in registry
-        """
-        # Try to find data_config.json relative to current working directory
-        from HyperSloth import HYPERSLOTH_DATA_DIR
-
-        registry_path = HYPERSLOTH_DATA_DIR / "data_config.json"
-        assert isinstance(
-            registry_path, Path
-        ), "HYPERSLOTH_DATA_DIR must be a Path object"
-        if not registry_path.exists():
-            # Try relative to this file's directory
-            config_dir = Path(__file__).parent.parent
-            registry_path = config_dir / "data" / "data_config.json"
-
-        if not registry_path.exists():
-            raise FileNotFoundError(
-                f"Dataset registry not found at {registry_path}. "
-                "No datasets have been created yet. To create datasets:\n"
-                "1. Place your dataset files in the 'data/' directory\n"
-                "2. Run the dataset preparation script to build the registry\n"
-                "3. Example: python scripts/build_dataset.py or use the "
-                "prepare_dataset_example.ipynb notebook\n"
-                "The registry file (data_config.json) will be automatically "
-                "created after processing your first dataset."
-            )
-
-        with open(registry_path, "r") as f:
-            registry = json.load(f)
-
-        # Find dataset in registry
-        dataset_config = None
-        for config in registry:
-            if config.get("name") == hypersloth_dataset_name:
-                dataset_config = config
-                break
-
-        if dataset_config is None:
-            available_names = [cfg.get("name", "unnamed") for cfg in registry]
-            raise ValueError(
-                f'Dataset "{hypersloth_dataset_name}" not found in registry. '
-                f"Available datasets: {available_names}"
-            )
-
-        # Build full path
-        if "path_tokenized" in dataset_config:
-            path_tokenized = dataset_config["path_tokenized"]
-            if not path_tokenized.startswith("/"):
-                # Make relative paths absolute relative to data directory
-                data_dir = registry_path.parent
-                path_tokenized = str(data_dir / path_tokenized)
-        else:
-            raise ValueError(f'Dataset "{hypersloth_dataset_name}" missing path in registry')
-
-        # Create DataConfig with loaded settings
-        return cls(
-            path_tokenized=path_tokenized,
-            instruction_part=dataset_config.get(
-                "instruction_part", "<|im_start|>user\n"
-            ),
-            response_part=dataset_config.get(
-                "response_part", "<|im_start|>assistant\n"
-            ),
-            name=dataset_config.get("name", hypersloth_dataset_name),
-        )
-
-
-class DataConfigShareGPT(DataConfig):
-    dataset_path: str
+class DatasetConfigBase(BaseModel):
     tokenizer_name: str
+    chat_template: str
+    instruction_part: str
+    response_part: str
     num_samples: Optional[int] = None
-    seed: int = 3407
-    instruction_part: Optional[str] = None
-    response_part: Optional[str] = None
-    print_samples: bool = False
-    use_cache: bool = True
-    name: Optional[str] = None
+    dataset_num_proc: int = 2
+    max_length: int = 32_000
 
 
-class DataConfigHF(DataConfig):
+class HFDatasetConfig(DatasetConfigBase):
+    source_type: Literal['hf'] = 'hf'
     dataset_name: str
-    tokenizer_name: str
-    num_samples: int = 1000
-    split: Optional[str] = "train"
-    instruction_part: Optional[str] = None
-    response_part: Optional[str] = None
-    name: Optional[str] = None
-    seed: int = 3407
-    columns: Optional[List[str]] = Field(
-        default=list(['conversations', 'messages']),
-        description="List of columns to use from the dataset only match one of them is required",
-    )
+    split: str
+
+
+class PathDatasetConfig(DatasetConfigBase):
+    source_type: Literal['path'] = 'path'
+    path: str
+DatasetConfig = Union[HFDatasetConfig, PathDatasetConfig]
 
 
 class TrainingConfig(BaseModel):
@@ -209,7 +101,10 @@ class LoraArgs(BaseModel):
 class HyperConfig(BaseModel):
     """Main configuration class combining all sub-configurations."""
 
-    data: DataConfig = Field(default_factory=DataConfig)
+    data: DatasetConfig = Field(
+        default_factory=HFDatasetConfig,
+        description="Dataset configuration for training",
+    )
     training: TrainingConfig = Field(default_factory=TrainingConfig)
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: Optional[LoraArgs] = Field(default_factory=LoraArgs)

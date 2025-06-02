@@ -5,14 +5,12 @@ Handles weight synchronization, model setup, and distributed training coordinati
 
 import os
 
-from trl.trainer.sft_trainer import SFTTrainer
 
-from HyperSloth.dataset_utils import get_chat_dataset
+
+from HyperSloth.dataset_utils import get_text_dataset
+
 
 from .hypersloth_config import (
-    DataConfig,
-    DataConfigHF,
-    DataConfigShareGPT,
     HyperConfig,
     TrainingArgsConfig,
 )
@@ -79,7 +77,7 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
 
 
 def create_trainer(
-        model,
+    model,
     tokenizer,
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
@@ -91,102 +89,33 @@ def create_trainer(
 
     logger = get_hypersloth_logger(log_level="INFO")
 
-    # dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
-    # dataset_cache_exists = os.path.exists(dataset_cache_path)
 
-    # CASE 1: Dataset cache already exists, just load it
     logger.start_timing("trainer_setup")
+    
     trainer = _get_trainer(
         model,
         tokenizer,
         hyper_config,
         hf_train_args,
-        # gpu_ith,
     )
+    
     logger.finish_timing("trainer_setup")
 
+    logger.start_timing("training_loop_patch")
     from HyperSloth.patching.inner_training_loop import patch_inner_training_loop
 
-    logger.start_timing("training_loop_patch")
     patch_inner_training_loop(trainer)
-    logger.finish_timing("training_loop_patch")
-
-    # DEBUG: change the sampler to sequential sampler for debugging
     from .patching.patch_sampler import apply_patch_sampler
-
     trainer = apply_patch_sampler(trainer)
+    logger.finish_timing("training_loop_patch")
     return trainer
-
-
-# def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
-#     from speedy_utils import identify
-
-#     tokenizer_name = identify(str(tokenizer))
-#     # hash the dataset name and max_seq_length to create a unique cache name
-#     dataset_name = identify(
-#         [
-#             hyper_config.data.model_dump(),
-#             hyper_config.fast_model_args.max_seq_length,
-#         ]
-#     )
-#     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name
-#     dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
-#     return dataset_cache_path
-
-
-def build_data(trainer, data):
-    if isinstance(data, DataConfigShareGPT):
-        from HyperSloth.scripts.build_dataset import build_sharegpt_dataset
-
-        dataset_name = build_sharegpt_dataset(
-            dataset_path=data.dataset_path,
-            tokenizer_name=data.tokenizer_name,
-            num_samples=data.num_samples,
-            seed=data.seed,
-            instruction_part=data.instruction_part,
-            response_part=data.response_part,
-            print_samples=data.print_samples,
-            use_cache=data.use_cache,
-            name=data.name,
-        )
-        data = DataConfig.from_dataset_name(
-            hypersloth_dataset_name=dataset_name,
-        )
-    elif isinstance(data, DataConfigHF):
-        from HyperSloth.scripts.build_dataset import build_hf_dataset
-
-        dataset_name = build_hf_dataset(
-            dataset_name=data.dataset_name,
-            tokenizer_name=data.tokenizer_name,
-            num_samples=data.num_samples,
-            seed=data.seed,
-            split=data.split,
-            instruction_part=data.instruction_part,
-            response_part=data.response_part,
-            name=data.name,
-            columns=data.columns,
-        )
-        data = DataConfig.from_dataset_name(
-            hypersloth_dataset_name=dataset_name,
-        )
-    elif isinstance(data, DataConfig):
-        # Already a DataConfig, return as-is
-        pass
-    else:
-        raise TypeError(
-            f"Unsupported data type: {type(data)}. "
-            "Expected DataConfig, DataConfigHF, or DataConfigShareGPT."
-        )
-    assert isinstance(data, DataConfig), f"DataConfig expected, got {type(data)}"
-    return data
 
 
 def _get_trainer(
     model,
     tokenizer,
     hyper_config: HyperConfig,
-    hf_train_args: TrainingArgsConfig,
-) -> SFTTrainer:
+    hf_train_args: TrainingArgsConfig):
     """
     Returns an SFTTrainer instance. If a cached dataset exists, load from disk.
     If not, GPU 0 will create and save it, and other GPUs will wait for GPU 0
@@ -197,6 +126,8 @@ def _get_trainer(
 
     import filelock
     from datasets import load_from_disk
+    import unsloth 
+    from unsloth.chat_templates import train_on_responses_only
     from trl import SFTTrainer
 
     # Get enhanced logger for timing
@@ -208,38 +139,26 @@ def _get_trainer(
     logger.start_timing("dataset_loading_total")
 
 
-    def _create_trainer(train_dataset, skip_prepare=True):
-        """Helper to build an SFTTrainer from given train/eval datasets."""
-        # We use a dataset_kwargs override so that, once the dataset is prepared,
-        # it won't attempt the same "prepare" logic again.
-        hf_train_args.dataset_kwargs = {"skip_prepare_dataset": skip_prepare}
-        hf_train_args.dataset_batch_size = hf_train_args.per_device_train_batch_size
+    def _create_trainer(train_dataset, skip_prepare=False):
         return SFTTrainer(
             model=model,
-            processing_class=tokenizer,
+            tokenizer=tokenizer,
             train_dataset=train_dataset,
-            # dataset_text_field="text",
+            dataset_text_field="text",
             dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
         )
-
+    logger.info('Loading dataset... and tokenize')
+    text_dataset = get_text_dataset(hyper_config.data)
+    trainer = _create_trainer(text_dataset, skip_prepare=False)
+    logger.info("... now make dataset train on responses only")
     
-
-    # Ensure path_tokenized is set and valid
-    if not hyper_config.data.path_tokenized:
-        raise ValueError(
-            f"Dataset path_tokenized is None. "
-            f"Please ensure the dataset was properly built and registered."
+    trainer = train_on_responses_only(
+            trainer,
+            instruction_part=hyper_config.data.instruction_part,
+            response_part=hyper_config.data.response_part,
         )
 
-    if not os.path.exists(hyper_config.data.path_tokenized):
-        raise FileNotFoundError(
-            f"Tokenized dataset not found at {hyper_config.data.path_tokenized}. "
-            f"Please rebuild the dataset or check the path."
-        )
-
-    dataset = load_from_disk(hyper_config.data.path_tokenized)
-    trainer = _create_trainer(dataset, skip_prepare=True)
     logger.finish_timing("dataset_loading_total")
     return trainer
 
