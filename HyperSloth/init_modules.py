@@ -115,7 +115,6 @@ def create_trainer(
     logger.finish_timing("training_loop_patch")
 
     # DEBUG: change the sampler to sequential sampler for debugging
-    import ipdb; ipdb.set_trace()
     from .patching.patch_sampler import apply_patch_sampler
 
     trainer = apply_patch_sampler(trainer)
