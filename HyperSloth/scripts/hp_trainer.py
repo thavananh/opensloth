@@ -234,7 +234,7 @@ def train(
             return
         else:
             # Launch via multi-processing (no tmux).
-            print(f"[CASE 2] Running on {len(gpus)} GPUs")
+            print(f"[MP] Running on {len(gpus)} GPUs")
             processes = []
             assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
 
