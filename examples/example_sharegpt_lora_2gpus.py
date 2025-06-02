@@ -7,10 +7,9 @@ hyper_config_model = HyperConfig(
         dataset_name="llamafactory/OpenThoughts-114k",
         split="train",
         tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
-        num_samples=1000,
+        num_samples=100000,
         instruction_part="<|im_start|>user\n",
         response_part="<|im_start|>assistant\n",
-
         chat_template="chatml",
     ),
 

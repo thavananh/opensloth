@@ -187,10 +187,5 @@ def get_text_dataset(config: DatasetConfig):
 
 
 __all__ = [
-    "get_text_dataset_hf",
-    "get_text_dataset_from_path", 
     "get_text_dataset",
-    "DatasetConfig",
-    "HFDatasetConfig",
-    "PathDatasetConfig",
 ]

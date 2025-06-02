@@ -12,7 +12,6 @@ class DatasetConfigBase(BaseModel):
     response_part: str
     num_samples: Optional[int] = None
     dataset_num_proc: int = 2
-    max_length: int = 32_000
 
 
 class HFDatasetConfig(DatasetConfigBase):
