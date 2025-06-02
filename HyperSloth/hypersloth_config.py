@@ -236,7 +236,7 @@ class TrainingArgsConfig(BaseModel):
     save_only_model: bool = True
 
     seed: int = 42
-    report_to: str = "tensorboard"
+    report_to: Literal["tensorboard", "wandb", "none"] = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
     # max_steps: Optional[int] = None
 

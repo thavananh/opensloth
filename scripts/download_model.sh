@@ -1,5 +1,4 @@
 #!/bin/bash
-# filepath: download_qwen32b.sh
 
 # Enable faster downloads with hf_transfer
 export HF_HUB_ENABLE_HF_TRANSFER=1

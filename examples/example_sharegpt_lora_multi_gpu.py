@@ -1,4 +1,5 @@
-# To run this code hypersloth-train example_training_config.py
+# ShareGPT format dataset with multi-GPU LoRA training
+# To run: hypersloth-train example_sharegpt_lora_multi_gpu.py
 from HyperSloth.hypersloth_config import *
 
 # Main configuration using Pydantic models
@@ -49,17 +50,17 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="outputs/qwen3-0.6b-2card.1/",
-    per_device_train_batch_size=8,
-    gradient_accumulation_steps=8,
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=16,
     learning_rate=1e-5,
-    logging_steps=1,
-    num_train_epochs=1,
+    logging_steps=3,
+    num_train_epochs=3,
     lr_scheduler_type="linear",
     warmup_steps=5,
     save_total_limit=2,
     weight_decay=0.01,
-    max_steps=100,
+    # max_steps=100,
     optim="adamw_8bit",
     seed=3407,
-    report_to="none",
+    report_to="wandb",
 )
