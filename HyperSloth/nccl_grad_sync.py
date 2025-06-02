@@ -129,17 +129,17 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     )
 
     # Assert the port is free
-    import socket
+    # import socket
 
-    if rank == 0:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sock.bind((os.environ["MASTER_ADDR"], int(os.environ["MASTER_PORT"])))
-        except OSError as e:
-            raise RuntimeError(
-                f"[GPU={gpu}] Port {os.environ['MASTER_PORT']} is not available: {e}"
-            )
+    # if rank == 0:
+    #     try:
+    #         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    #             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    #             sock.bind((os.environ["MASTER_ADDR"], int(os.environ["MASTER_PORT"])))
+    #     except OSError as e:
+    #         raise RuntimeError(
+    #             f"[GPU={gpu}] Port {os.environ['MASTER_PORT']} is not available: {e}"
+    #         )
 
     # Set the current CUDA device to the specific GPU
 

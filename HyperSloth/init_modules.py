@@ -79,11 +79,10 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
 
 
 def create_trainer(
+        model,
     tokenizer,
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
-    gpu_ith: int,
-    model,
 ):
     """Load or prepare the dataset and create the SFTTrainer."""
 
@@ -92,19 +91,17 @@ def create_trainer(
 
     logger = get_hypersloth_logger(log_level="INFO")
 
-    dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
-    dataset_cache_exists = os.path.exists(dataset_cache_path)
+    # dataset_cache_path = _identify_dataset_name(tokenizer, hyper_config, hf_train_args)
+    # dataset_cache_exists = os.path.exists(dataset_cache_path)
 
     # CASE 1: Dataset cache already exists, just load it
     logger.start_timing("trainer_setup")
     trainer = _get_trainer(
+        model,
         tokenizer,
         hyper_config,
         hf_train_args,
-        gpu_ith,
-        model,
-        dataset_cache_path,
-        dataset_cache_exists,
+        # gpu_ith,
     )
     logger.finish_timing("trainer_setup")
 
@@ -121,23 +118,23 @@ def create_trainer(
     return trainer
 
 
-def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
-    from speedy_utils import identify
+# def _identify_dataset_name(tokenizer, hyper_config, hf_train_args):
+#     from speedy_utils import identify
 
-    tokenizer_name = identify(str(tokenizer))
-    # hash the dataset name and max_seq_length to create a unique cache name
-    dataset_name = identify(
-        [
-            hyper_config.data.model_dump(),
-            hyper_config.fast_model_args.max_seq_length,
-        ]
-    )
-    dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name
-    dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
-    return dataset_cache_path
+#     tokenizer_name = identify(str(tokenizer))
+#     # hash the dataset name and max_seq_length to create a unique cache name
+#     dataset_name = identify(
+#         [
+#             hyper_config.data.model_dump(),
+#             hyper_config.fast_model_args.max_seq_length,
+#         ]
+#     )
+#     dataset_cache_name = "dataset_" + tokenizer_name + "_" + dataset_name
+#     dataset_cache_path = os.path.join(".cache/", dataset_cache_name)
+#     return dataset_cache_path
 
 
-def build_data(data):
+def build_data(trainer, data):
     if isinstance(data, DataConfigShareGPT):
         from HyperSloth.scripts.build_dataset import build_sharegpt_dataset
 
@@ -185,13 +182,10 @@ def build_data(data):
 
 
 def _get_trainer(
+    model,
     tokenizer,
     hyper_config: HyperConfig,
     hf_train_args: TrainingArgsConfig,
-    gpu_ith,
-    model,
-    dataset_cache_path,
-    dataset_cache_exists,
 ) -> SFTTrainer:
     """
     Returns an SFTTrainer instance. If a cached dataset exists, load from disk.
@@ -213,8 +207,6 @@ def _get_trainer(
     # Start timing for the overall dataset loading process
     logger.start_timing("dataset_loading_total")
 
-    LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-    lock = dataset_cache_path + ".lock"
 
     def _create_trainer(train_dataset, skip_prepare=True):
         """Helper to build an SFTTrainer from given train/eval datasets."""
@@ -226,7 +218,7 @@ def _get_trainer(
             model=model,
             processing_class=tokenizer,
             train_dataset=train_dataset,
-            dataset_text_field="text",
+            # dataset_text_field="text",
             dataset_num_proc=hyper_config.data.dataset_num_proc,
             args=hf_train_args,
         )
@@ -248,31 +240,10 @@ def _get_trainer(
 
     dataset = load_from_disk(hyper_config.data.path_tokenized)
     trainer = _create_trainer(dataset, skip_prepare=True)
-
-    _maybe_train_on_responses_only(trainer, hyper_config)
     logger.finish_timing("dataset_loading_total")
     return trainer
 
 
-def _maybe_train_on_responses_only(trainer, hyper_config: HyperConfig):
-    """Use a specialized approach if 'response_only' loss is desired."""
-    if hyper_config.training.loss_type == "response_only":
-        from unsloth.chat_templates import train_on_responses_only
-
-        first_text = trainer.train_dataset[0]["text"]
-        instruction_part = hyper_config.data.instruction_part
-        response_part = hyper_config.data.response_part
-        assert instruction_part is not None, f"instruction_part is None"
-        assert response_part is not None, f"response_part is None"
-        assert instruction_part in first_text, f"{instruction_part} not in {first_text}"
-        assert response_part in first_text, f"{response_part} not in {first_text}"
-        trainer = train_on_responses_only(
-            trainer,
-            instruction_part=instruction_part,
-            response_part=response_part,
-            num_proc=hyper_config.data.dataset_num_proc,
-        )
-    return trainer
 
 
 def configure_batch_size(hf_train_args, gpu_ith, num_gpus):
