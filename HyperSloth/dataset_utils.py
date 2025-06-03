@@ -242,8 +242,9 @@ def _get_tokenized_dataset(
     )
 
     logger.info(
-        f"Applying response-only training with instruction_part="
-        f'"{config.instruction_part}" and response_part="{config.response_part}"'
+        f"Applying response-only training with"
+        f'"\nInstructionPart:{config.instruction_part}" and '
+        f'"\nResponsePart:{config.response_part}"'
     )
     tmp_trainer = train_on_responses_only(
         tmp_trainer,
