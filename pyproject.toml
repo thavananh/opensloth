@@ -1,19 +1,48 @@
 [project]
-name = "HyperSloth"
-version = "0.1.0"
-description = ""
+name = "hypersloth"
+version = "0.1.1"
+description = "A high-performance framework for fine-tuning large language models with multi-GPU support"
 authors = [{ name = "anhvth", email = "anhvth.226@gmail.com" }]
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.9"
+keywords = ["machine learning", "deep learning", "transformers", "fine-tuning", "multi-gpu", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = ["pyyaml (>=6.0.2,<7.0.0)", "jupyterlab (>=4.3.5,<5.0.0)", "fastcore (>=1.7.29,<2.0.0)", "speedy-utils (>=0.1.20,<0.2.0)", "tensorboard (>=2.19.0,<3.0.0)", "fire (>=0.7.0,<0.8.0)", "tensorboardx (>=2.6.2.2,<3.0.0.0)"]
+
+[project.urls]
+Homepage = "https://github.com/anhvth/hypersloth"
+Repository = "https://github.com/anhvth/hypersloth"
+Documentation = "https://github.com/anhvth/hypersloth"
+"Bug Tracker" = "https://github.com/anhvth/hypersloth/issues"
+
+[project.scripts]
+hypersloth-train = "HyperSloth.scripts.hp_trainer:train"
+hypersloth-init = "HyperSloth.scripts.get_example_config:main"
+hypersloth-prepare-unsloth-model = "HyperSloth.scripts.prepare_model:main"
+hypersloth-export = "HyperSloth.scripts.export:main"
+hypersloth-build-dataset = "HyperSloth.scripts.build_dataset:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "HyperSloth"
-version = "0.1.0"
+name = "hypersloth"
+version = "0.1.1"
 packages = [
     { include = "HyperSloth" }
 ]
