@@ -41,7 +41,7 @@ hyper_config_model = HyperConfig(
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
     output_dir="outputs/qwen3-8b-openthought-2gpus/",
-    per_device_train_batch_size=4,
+    per_device_train_batch_size=1,
     gradient_accumulation_steps=8,
     learning_rate=1e-5,
     logging_steps=3,
