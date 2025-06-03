@@ -42,7 +42,10 @@ def _process_token_slice(
     is_truncated = len(decode_token) > max_tokens or pad_count > 0
 
     if is_truncated:
-        text += "... (truncated)"
+        if pad_count:
+            text += f"... padding {pad_count} tokens"
+        else:
+            text += "... (truncated)"
 
     return text, is_truncated
 
