@@ -5,7 +5,6 @@ from typing import List
 from HyperSloth.logging_config import get_hypersloth_logger
 
 
-
 class NCCLGradSyncCallback(TrainerCallback):
     """NCCL-based gradient synchronization callback for Transformers trainer.
 
@@ -24,7 +23,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         self.gpus = gpus
         self.local_rank = gpus.index(gpu)
         self.world_size = len(gpus)
-        self.logger  = get_hypersloth_logger(log_level="DEBUG")
+        self.logger = get_hypersloth_logger(log_level="DEBUG")
 
         # Ensure distributed is initialized
         if not dist.is_initialized():
@@ -97,7 +96,9 @@ class NCCLGradSyncCallback(TrainerCallback):
         """Called after optimizer step - cleanup if needed."""
         step = state.global_step
 
-        self.logger.debug(f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete")
+        self.logger.debug(
+            f"[GPU={self.gpu}] Post-optimizer step {step} - cleanup complete"
+        )
 
         # No cleanup needed for NCCL-based sync
         # This method is kept for interface compatibility
@@ -143,8 +144,8 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
 
     # Set the current CUDA device to the specific GPU
 
-    logger.info(f"[GPU={gpu}] Setting current CUDA device to:0")
-    torch.cuda.set_device(0)
+    # logger.info(f"[GPU={gpu}] Setting current CUDA device to:0")
+    # torch.cuda.set_device(0)
 
     # Retry logic for NCCL initialization
     max_retries = 100
