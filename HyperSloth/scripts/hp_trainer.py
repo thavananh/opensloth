@@ -254,7 +254,7 @@ def train(
     tmux: str = None,
     y: bool = False,
 ):
-    config_file, hyper_config, training_config = initialize_training_config(config_file)
+    hyper_config, training_config = initialize_training_config(config_file)
 
     # CASE 1: Child process => single GPU
     if rank is not None and world_size is not None:
@@ -281,7 +281,7 @@ def train(
             )
         else:
             run_multiprocess_training(
-                gpus=gpus,
+                gpus=hyper_config.training.gpus,
                 hyper_config=hyper_config,
                 training_config=training_config,
             )
@@ -315,7 +315,7 @@ def initialize_training_config(config_file):
         combined_config, "🔧 HyperSloth Training Configuration"
     )
     setup_envs(hyper_config, training_config)
-
+    return hyper_config, training_config
     # Display combined config with enhanced formatting
 
 
