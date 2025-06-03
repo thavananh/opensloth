@@ -185,7 +185,13 @@ That's it! You now have HyperSloth running multi-GPU training with optimized bat
 ## 🛠 Command-Line Tools
 
 - **`hypersloth-train`**: Main training launcher with multi-GPU and tmux support
-- **`hypersloth-init`**: Generate configuration templates for new projects  
+- **`hypersloth-init`**: Generate configuration templates for new projects
+
+## 📓 Demo Notebook
+
+For interactive training and experimentation, check out our demo training notebook:
+
+- **[`notebooks/train.ipynb`](notebooks/train.ipynb)**: Complete training example equivalent to `hypersloth-train examples/example_sharegpt_lora_2gpus.py`  
 
 ## 📊 How to Prepare Data
 
