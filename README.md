@@ -41,6 +41,17 @@ HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
    - More frequent communication = more wasted time
    - **Solution:** Larger gradient accumulation steps reduce communication frequency
 
+## 🔧 Supported Training Methods
+
+**Currently Supported:**
+- **SFT (Supervised Fine-Tuning)**:
+  - **LoRA**
+  - **Full Fine-Tuning**
+
+**Coming Soon:**
+- **Strong-to-Weak Distillation**
+- **GRPO**
+
 ## ⚡ Performance Benchmarks
 
 **[📊 View Full WandB Comparison](https://wandb.ai/anhvth/CompareUnsloth)**
