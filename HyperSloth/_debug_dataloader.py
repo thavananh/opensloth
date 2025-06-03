@@ -1,16 +1,6 @@
 import os
 
 
-def format_tail_pad_token(s, pad_token):
-    # detech the pad token and format it as
-    num_pad_tokens = s.count(pad_token)
-    if num_pad_tokens == 0:
-        return s
-    actual_length = len(s) - num_pad_tokens * len(pad_token)
-    s = s[:actual_length]
-    return f"{pad_token} ({num_pad_tokens}x {pad_token})..."
-
-
 def debug_chat_dataloader_for_training(dataloader, tokenizer, n_example=10):
     """
     Debug function to log samples from the training dataloader in an HTML format.
@@ -59,6 +49,7 @@ def debug_chat_dataloader_for_training(dataloader, tokenizer, n_example=10):
     """
         )
 
+        max_print_tokens = 200
         for i in range(n_example):
             batch = next(g)
             input_ids = batch["input_ids"][0]
@@ -83,7 +74,10 @@ def debug_chat_dataloader_for_training(dataloader, tokenizer, n_example=10):
             )
 
             for a, b in zip(split_points[:-1], split_points[1:]):
-                text = tokenizer.decode(input_ids[a:b])
+                decode_token = input_ids[a:b]
+                text = tokenizer.decode(decode_token)
+                if len(decode_token) > max_print_tokens:
+                    text += "... (truncated)"
                 is_trainable = parts_mask[a]
 
                 # Colored text for terminal
