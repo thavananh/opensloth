@@ -11,8 +11,6 @@ from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 from HyperSloth.logging_config import HyperSlothLogger
 
 
-
-
 warnings.filterwarnings("ignore")
 
 
@@ -41,12 +39,10 @@ def _setup_logger(gpu_id, allow_unknown_gpu=False):
         log_level=log_level, allow_unknown_gpu=allow_unknown_gpu
     )
 
-
     return hp_logger
 
 
 def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
-    # from HyperSloth.mmap_gradient_sync import MmapGradSyncCallback
     from HyperSloth.nccl_grad_sync import NCCLGradSyncCallback
     from HyperSloth.hp_trainer_setup import setup_model_and_training
 
@@ -175,9 +171,7 @@ tmux new-session -d -s {session_name} -n MAIN"""
             print(f"Auto-killing existing session {session_name}")
             os.system(f"tmux kill-session -t {session_name}")
         else:
-            (
-                f"Session {session_name} exists, please kill it before running the script"
-            )
+            (f"Session {session_name} exists, please kill it before running the script")
             # ask user if they want to kill the session
             user_input = input(
                 f"Session {session_name} exists, do you want to kill it? (y/n): "

@@ -39,8 +39,6 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
     )
     logger.finish_timing("model_loading")
 
-    logger.info(f"Model created at {os.environ['CUDA_VISIBLE_DEVICES']}")
-
     logger.start_timing("nccl_setup")
     setup_nccl_for_hypersloth(
         gpu=int(os.environ["HYPERSLOTH_LOCAL_RANK"]), gpus=hyper_config.training.gpus
