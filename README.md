@@ -70,8 +70,14 @@ For detailed training time comparisons across different hardware configurations 
 
 ## 💾 Installation
 
+**Option 1: Using Conda Environment (Recommended)**
 ```bash
-pip install git+https://github.com/anhvth/HyperSloth.git
+
+conda create --name hypersloth_env python=3.11
+pip install uv
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install unsloth xformers hypersloth
+# or from source pip install git+https://github.com/anhvth/HyperSloth.git
 ```
 
 ## ⚡ Quickstart
@@ -189,9 +195,10 @@ That's it! You now have HyperSloth running multi-GPU training with optimized bat
 
 ## 📓 Demo Notebook
 
-For interactive training and experimentation, check out our demo training notebook:
+For interactive training and experimentation, check out our demo training notebooks:
 
 - **[`notebooks/train.ipynb`](notebooks/train.ipynb)**: Complete training example equivalent to `hypersloth-train examples/example_sharegpt_lora_2gpus.py`  
+- **[Kaggle: Qwen3 Unsloth 2GPUs](https://www.kaggle.com/code/anhvth226/qwen3-unsloth-2gpus)**: Live training example with HyperSloth on Kaggle's GPU environment
 
 ## 📊 How to Prepare Data
 
