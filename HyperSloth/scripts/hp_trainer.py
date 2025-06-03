@@ -47,7 +47,6 @@ def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfi
     from HyperSloth.hp_trainer_setup import setup_model_and_training
 
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
-    os.environ["HYPERSLOTH_LOCAL_GPU_IDX"] = str(gpu)
 
     # Setup enhanced logger
     logger = HyperSlothLogger()
