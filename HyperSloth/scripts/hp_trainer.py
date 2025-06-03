@@ -5,7 +5,6 @@ import time
 import warnings
 import importlib.util
 from fastcore.all import threaded, call_parse
-import tabulate
 
 from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
 from HyperSloth.logging_config import HyperSlothLogger
@@ -30,19 +29,9 @@ def get_current_python_path():
         return None
 
 
-def _setup_logger(gpu_id, allow_unknown_gpu=False):
-    """Setup enhanced logging for HyperSloth."""
-    from HyperSloth.logging_config import get_hypersloth_logger
-
-    log_level = os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO")
-    hp_logger = get_hypersloth_logger(
-        log_level=log_level, allow_unknown_gpu=allow_unknown_gpu
-    )
-
-    return hp_logger
-
-
-def _train(gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig):
+def train_on_single_gpu(
+    gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig
+):
     from HyperSloth.nccl_grad_sync import NCCLGradSyncCallback
     from HyperSloth.hp_trainer_setup import setup_model_and_training
 
@@ -105,7 +94,22 @@ def load_config_from_path(config_path: str):
     spec = importlib.util.spec_from_file_location("config_module", config_path)
     config_module = importlib.util.module_from_spec(spec)  # type: ignore
     spec.loader.exec_module(config_module)  # type: ignore
-    return config_module
+    # return config_module
+    # Retrieve configs from the module
+    if hasattr(config_module, "hyper_config_model"):
+        hyper_config = config_module.hyper_config_model
+    elif hasattr(config_module, "hyper_config"):
+        hyper_config = HyperConfig(**config_module.hyper_config)
+    else:
+        hyper_config = HyperConfig()
+    # return hyper_config,
+    if hasattr(config_module, "training_config_model"):
+        training_config = config_module.training_config_model
+    elif hasattr(config_module, "training_config"):
+        training_config = TrainingArgsConfig(**config_module.training_config)
+    else:
+        raise ValueError("No training configuration found")
+    return hyper_config, training_config
 
 
 # We'll just detect if the user wants a tmux script:
@@ -184,6 +188,64 @@ tmux new-session -d -s {session_name} -n MAIN"""
     print(f"Training sessions started and attached to session {session_name}")
 
 
+def run_tmux_training(
+    session_name: str,
+    config_file: str,
+    training_config: TrainingArgsConfig,
+    gpus: list,
+    auto_kill: bool = False,
+):
+    """Handle multi-GPU training using tmux sessions."""
+    script_path = "/tmp/hp_train.sh"
+    build_tmux_script(
+        session_name,
+        script_path,
+        training_config.output_dir,
+        config_file,
+        gpus,
+        auto_kill=auto_kill,
+    )
+
+
+def run_multiprocess_training(
+    gpus: list,
+    hyper_config: HyperConfig,
+    training_config: TrainingArgsConfig,
+):
+    """Handle multi-GPU training using multi-processing."""
+    print(f"[MP] Running on {len(gpus)} GPUs")
+    processes = []
+    assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
+
+    @threaded(process=True)
+    def run_in_process(*args, **kwargs):
+        """Runs train_on_single_gpu() in a separate Python process."""
+        train_on_single_gpu(*args, **kwargs)
+
+    for gpu_index in gpus:
+        p = run_in_process(
+            gpu_index,
+            hyper_config=hyper_config,
+            hf_train_args=training_config,
+        )
+        processes.append(p)
+
+    # Wait for processes; if one errors, kill them all
+    while processes:
+        for proc in processes:
+            if not proc.is_alive():
+                if proc.exitcode != 0:
+                    for p in processes:
+                        p.terminate()
+                    print("Error in training, terminating all processes")
+                    raise Exception("Error in training")
+                else:
+                    processes.remove(proc)
+                    break
+        time.sleep(1)
+    print("All processes finished")
+
+
 @call_parse
 def train(
     config_file: str,
@@ -192,15 +254,12 @@ def train(
     tmux: str = None,
     y: bool = False,
 ):
-
     config_file, hyper_config, training_config = initialize_training_config(config_file)
-
-    # Set gradient directory based on output_dir
 
     # CASE 1: Child process => single GPU
     if rank is not None and world_size is not None:
         print(f"[CASE 1] Running on rank {rank} with world size {world_size}")
-        _train(
+        train_on_single_gpu(
             gpu=hyper_config.training.gpus[rank],
             hyper_config=hyper_config,
             hf_train_args=training_config,
@@ -208,62 +267,29 @@ def train(
         return
 
     # CASE 2: Top-level process => spawn multi-GPU or single GPU
-    gpus = hyper_config.training.gpus
 
     # If multiple GPUs:
-    if len(gpus) > 1:
+    if len(hyper_config.training.gpus) > 1:
         if os.environ.get("USE_TMUX", "0") == "1" or tmux is not None:
-            # Build a tmux script that the user can run manually
-            session_name = tmux if tmux is not None else f"train_hp"
-            script_path = "/tmp/hp_train.sh"
-            build_tmux_script(
-                session_name,
-                script_path,
-                training_config.output_dir,
-                config_file,
-                gpus,
+            session_name = tmux if tmux is not None else "train_hp"
+            run_tmux_training(
+                session_name=session_name,
+                config_file=config_file,
+                training_config=training_config,
+                gpus=gpus,
                 auto_kill=y,
             )
-            return
         else:
-            # Launch via multi-processing (no tmux).
-            print(f"[MP] Running on {len(gpus)} GPUs")
-            processes = []
-            assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
-
-            @threaded(process=True)
-            def run_in_process(*args, **kwargs):
-                """Runs _train() in a separate Python process."""
-                _train(*args, **kwargs)
-
-            for gpu_index in gpus:
-                p = run_in_process(
-                    gpu_index,
-                    hyper_config=hyper_config,
-                    hf_train_args=training_config,
-                )
-                processes.append(p)
-
-            # Wait for processes; if one errors, kill them all
-            while processes:
-                for proc in processes:
-                    if not proc.is_alive():
-                        if proc.exitcode != 0:
-                            for p in processes:
-                                p.terminate()
-                            print("Error in training, terminating all processes")
-                            raise Exception("Error in training")
-                        else:
-                            processes.remove(proc)
-                            break
-                time.sleep(1)
-            print("All processes finished")
-
+            run_multiprocess_training(
+                gpus=gpus,
+                hyper_config=hyper_config,
+                training_config=training_config,
+            )
     else:
         # Single GPU
         assert tmux is None, "Cannot use tmux with a single GPU"
-        _train(
-            gpu=gpus[0],
+        train_on_single_gpu(
+            gpu=hyper_config.training.gpus[0],
             hyper_config=hyper_config,
             hf_train_args=training_config,
         )
@@ -280,24 +306,7 @@ def initialize_training_config(config_file):
     config_file = os.path.abspath(config_file)
     assert os.path.exists(config_file), f"Config file {config_file} not found"
 
-    config_module = load_config_from_path(config_file)
-
-    # Retrieve configs from the module
-    if hasattr(config_module, "hyper_config_model"):
-        hyper_config = config_module.hyper_config_model
-    elif hasattr(config_module, "hyper_config"):
-        hyper_config = HyperConfig(**config_module.hyper_config)
-    else:
-        hyper_config = HyperConfig()
-
-    if hasattr(config_module, "training_config_model"):
-        training_config = config_module.training_config_model
-    elif hasattr(config_module, "training_config"):
-        training_config = TrainingArgsConfig(**config_module.training_config)
-    else:
-        raise ValueError("No training configuration found")
-
-    # Display combined config with enhanced formatting
+    hyper_config, training_config = load_config_from_path(config_file)
     from HyperSloth.logging_config import format_config_display, get_hypersloth_logger
 
     temp_logger = get_hypersloth_logger(log_level="INFO", allow_unknown_gpu=True)
@@ -305,8 +314,12 @@ def initialize_training_config(config_file):
     temp_logger.log_config_table(
         combined_config, "🔧 HyperSloth Training Configuration"
     )
+    setup_envs(hyper_config, training_config)
 
-    # # of GPUs
+    # Display combined config with enhanced formatting
+
+
+def setup_envs(hyper_config, training_config):
     os.environ["HYPERSLOTH_WORLD_SIZE"] = str(len(hyper_config.training.gpus))
     os.environ["HYPERSLOTH_FORWARD_BZ"] = str(
         training_config.per_device_train_batch_size
@@ -326,4 +339,3 @@ def initialize_training_config(config_file):
     os.environ["HYPERSLOTH_PER_DEVICE_TRAIN_BZ"] = str(
         training_config.per_device_train_batch_size
     )
-    return config_file, hyper_config, training_config
