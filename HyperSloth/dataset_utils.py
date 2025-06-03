@@ -115,11 +115,15 @@ def _get_cached_dataset(cache_id: str, prepare_func):
             return text_dataset
 
         except BlockingIOError:
+            printed = False
             while not output_path.exists() and lock_path.exists():
-                logger.info(
-                    f"Dataset {cache_id} is being prepared by another process, waiting..."
-                )
-                time.sleep(3)
+                if not printed:
+                    printed = True
+                    logger.info(
+                        f"Dataset {cache_id} is being prepared by another process, waiting..."
+                    )
+
+                time.sleep(1)
             from datasets import load_from_disk
 
             for i in range(30):
