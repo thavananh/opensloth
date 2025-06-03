@@ -21,6 +21,25 @@ A high-performance framework for fine-tuning large language models.
 
 **The multiplier effect**: Since we build on Unsloth's foundation, you get Unsloth's 2x speed + 75% memory savings, then multiply that performance across the number of GPUs you have - often achieving speedups well beyond the theoretical maximum through our batching optimizations.
 
+**Multi-GPU Optimization Strategy:**
+
+HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
+
+1. **GPU Underutilization Problem:**
+   - Unsloth typically trains with 1 sample per forward pass
+   - This underutilizes larger GPUs or when training smaller models
+   - **Solution:** Use larger batch sizes to fully utilize GPU compute
+
+2. **GPU Synchronization Bottleneck:**
+   - In multi-GPU training, all GPUs must wait for the slowest one to finish
+   - Different batch complexities can create uneven processing times
+   - **Solution:** Sequence sorting and load balancing ensure even workload distribution
+
+3. **Communication Overhead:**
+   - Gradient synchronization between GPUs adds significant overhead
+   - More frequent communication = more wasted time
+   - **Solution:** Larger gradient accumulation steps reduce communication frequency
+
 ## ⚡ Performance Benchmarks
 
 **[📊 View Full WandB Comparison](https://wandb.ai/anhvth/CompareUnsloth)**
@@ -56,6 +75,15 @@ Theoretical maximum speedup with 2 GPUs would be 2x, but communication overhead 
 ```
 
 This demonstrates how algorithmic optimizations can exceed theoretical hardware limits by reducing computational waste.
+
+**Scaling Expectations:**
+
+The 2.3x speedup shown above is **per GPU pair** - meaning you can expect similar multipliers as you scale up:
+- **2 GPUs**: ~2.3x faster than single GPU
+- **4 GPUs**: ~4.6x faster than single GPU (2.3x × 2)
+- **8 GPUs**: ~9.2x faster than single GPU (2.3x × 4)
+
+This scaling efficiency comes from HyperSloth's optimizations working consistently across different GPU counts, not just the 2-GPU case shown in the benchmark.
 
 ### Key Performance Features
 
@@ -102,25 +130,6 @@ hypersloth-train examples/example_sharegpt_lora_2gpus.py
 - Start with smaller models: `unsloth/Qwen3-0.6b-bnb-4bit`
 - Use fewer samples: `-n 1000` for quick testing
 - Test single GPU first: `gpus=[0]` in config
-
-**Multi-GPU Optimization Strategy:**
-
-HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
-
-1. **GPU Underutilization Problem:**
-   - Unsloth typically trains with 1 sample per forward pass
-   - This underutilizes larger GPUs or when training smaller models
-   - **Solution:** Use larger batch sizes to fully utilize GPU compute
-
-2. **GPU Synchronization Bottleneck:**
-   - In multi-GPU training, all GPUs must wait for the slowest one to finish
-   - Different batch complexities can create uneven processing times
-   - **Solution:** Sequence sorting and load balancing ensure even workload distribution
-
-3. **Communication Overhead:**
-   - Gradient synchronization between GPUs adds significant overhead
-   - More frequent communication = more wasted time
-   - **Solution:** Larger gradient accumulation steps reduce communication frequency
 
 **Recommended Configuration:**
 ```python
