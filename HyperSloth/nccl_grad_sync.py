@@ -144,8 +144,11 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
 
     # Set the current CUDA device to the specific GPU
 
-    # logger.info(f"[GPU={gpu}] Setting current CUDA device to:0")
-    # torch.cuda.set_device(0)
+    logger.info(
+        f"[GPU={gpu}] Setting current CUDA device to:0, {os.environ['CUDA_VISIBLE_DEVICES']=}"
+    )
+
+    torch.cuda.set_device(0)
 
     # Retry logic for NCCL initialization
     max_retries = 100

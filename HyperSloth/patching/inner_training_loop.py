@@ -204,7 +204,7 @@ def patch_inner_training_loop(trainer):
 
     # Initialize statistics tracker
     stats_tracker = TokenStatsTracker(
-        log_interval_seconds=int(os.getenv("HYPERSLOTH_LOG_INTERVAL", "60"))
+        log_interval_seconds=int(os.getenv("HYPERSLOTH_LOG_INTERVAL", "180"))
     )
 
     # Patch 1: TrainerState creation with HyperSloth fields
