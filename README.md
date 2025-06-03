@@ -41,6 +41,34 @@ HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
    - More frequent communication = more wasted time
    - **Solution:** Larger gradient accumulation steps reduce communication frequency
 
+
+## 💾 Installation
+
+```bash
+
+conda create --name hypersloth_env python=3.11
+pip install uv
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install unsloth xformers hypersloth
+# or from source pip install git+https://github.com/anhvth/HyperSloth.git
+```
+
+## ⚡ Quickstart
+
+```python
+# Basic multi-GPU training
+hypersloth-train examples/example_sharegpt_lora_2gpus.py
+```
+
+| Example | Description | Link/Command |
+|---------|-------------|--------------|
+| **Kaggle Notebook (T4x2)** | Live training example on Kaggle's dual T4 GPU environment | [🔗 Qwen3 Unsloth 2GPUs](https://www.kaggle.com/code/anhvth226/qwen3-unsloth-2gpus?scriptVersionId=243436741) |
+| **Local Jupyter Notebook** | Interactive training notebook for local development | [`notebooks/train.ipynb`](notebooks/train.ipynb) |
+| **Command Line Example** | Quick start with pre-configured 2-GPU ShareGPT training | `hypersloth-train examples/example_sharegpt_lora_2gpus.py` |
+| **Tmux Multi-windows** | Training with separate tmux sessions for each GPU monitoring | `hypersloth-train ./example_training_config.py --tmux train` |
+
+
+
 ## 🔧 Supported Training Methods
 
 **Currently Supported:**
@@ -107,32 +135,6 @@ This scaling efficiency comes from HyperSloth's optimizations working consistent
 ### Additional Benchmarks
 
 For detailed training time comparisons across different hardware configurations and loss curve analysis, see our [📊 Auxiliary Speed Benchmarks](docs/benchmarks.md).
-
-## 💾 Installation
-
-**Option 1: Using Conda Environment (Recommended)**
-```bash
-
-conda create --name hypersloth_env python=3.11
-pip install uv
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install unsloth xformers hypersloth
-# or from source pip install git+https://github.com/anhvth/HyperSloth.git
-```
-
-## ⚡ Quickstart
-
-```python
-# Basic multi-GPU training
-hypersloth-train examples/example_sharegpt_lora_2gpus.py
-```
-
-| Example | Description | Link/Command |
-|---------|-------------|--------------|
-| **Kaggle Notebook (T4x2)** | Live training example on Kaggle's dual T4 GPU environment | [🔗 Qwen3 Unsloth 2GPUs](https://www.kaggle.com/code/anhvth226/qwen3-unsloth-2gpus?scriptVersionId=243436741) |
-| **Local Jupyter Notebook** | Interactive training notebook for local development | [`notebooks/train.ipynb`](notebooks/train.ipynb) |
-| **Command Line Example** | Quick start with pre-configured 2-GPU ShareGPT training | `hypersloth-train examples/example_sharegpt_lora_2gpus.py` |
-| **Tmux Multi-windows** | Training with separate tmux sessions for each GPU monitoring | `hypersloth-train ./example_training_config.py --tmux train` |
 
 
 
