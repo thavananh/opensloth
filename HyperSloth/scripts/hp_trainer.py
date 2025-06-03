@@ -207,7 +207,7 @@ def run_tmux_training(
     )
 
 
-def run_multiprocess_training(
+def run_mp_training(
     gpus: list,
     hyper_config: HyperConfig,
     training_config: TrainingArgsConfig,
@@ -280,7 +280,7 @@ def train(
                 auto_kill=y,
             )
         else:
-            run_multiprocess_training(
+            run_mp_training(
                 gpus=hyper_config.training.gpus,
                 hyper_config=hyper_config,
                 training_config=training_config,
