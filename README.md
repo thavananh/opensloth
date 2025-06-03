@@ -27,6 +27,7 @@ HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
 
 1. **GPU Underutilization Problem:**
    - Unsloth typically trains with 1 sample per forward pass
+   - If you train with bz>1, gpu utilization higher but will be slower due to large padding waste when data have high variance in sequence lengths
    - This underutilizes larger GPUs or when training smaller models
    - **Solution:** Use larger batch sizes to fully utilize GPU compute
 
