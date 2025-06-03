@@ -82,93 +82,19 @@ pip install unsloth xformers hypersloth
 
 ## ⚡ Quickstart
 
-Get up and running with HyperSloth in 3 simple steps:
-
-### Step 1: Build Your Dataset
-
-First, prepare your training data using any Hugging Face dataset:
-
-```bash
-hypersloth-build-dataset --hf_dataset mlabonne/FineTome-100k -n 1000 --split train --name finetom-1k --tokenizer Qwen/Qwen3-8B --print_samples
-```
-
-**What this does:**
-- Downloads 1000 samples from `mlabonne/FineTome-100k`
-- Tokenizes using `Qwen/Qwen3-8B` tokenizer 
-- Saves as `finetom-1k` dataset
-- Shows sample conversations with `--print_samples`
-
-**Expected output:**
-```
-Loading 1000 samples from mlabonne/FineTome-100k...
-
-================================================================================
-SAMPLE TEXTS FROM PROCESSED DATASET:
-================================================================================
-
---- Sample 1 ---
-<|im_start|>user
-[Sample conversation]
-<|im_end|>
-<|im_start|>assistant
-[Sample response]
-<|im_end|>
-
-Dataset saved to: data/built_dataset/finetom-1k
-Registry updated: data/data_config.json
-Dataset "finetom-1k" has been successfully built and saved!
-```
-
-### Step 2: Initialize Training Configuration
-
-Generate a configuration template:
-
-```bash
-hypersloth-init
-```
-
-This creates `example_training_config.py` with default settings. Edit it to use your dataset:
-
 ```python
-# Update the data section to use your built dataset
-hyper_config_model = HyperConfig(
-    data=DataConfig.from_dataset_name("finetom-1k"),  # Your dataset name
-    training=TrainingConfig(
-        gpus=[0, 1],  # Adjust to your available GPUs
-        loss_type="response_only",  # Calculate loss only on assistant responses
-    ),
-    fast_model_args=FastModelArgs(
-        model_name="unsloth/Qwen3-0.6b-bnb-4bit",  # Smaller model for quick testing
-        max_seq_length=2048,
-    ),
-    lora_args=LoraArgs(
-        r=16,
-        lora_alpha=16,
-    ),
-)
+# Basic multi-GPU training
+hypersloth-train examples/example_sharegpt_lora_2gpus.py
 ```
 
-### Step 3: Start Multi-GPU Training
+| Example | Description | Link/Command |
+|---------|-------------|--------------|
+| **Kaggle Notebook (T4x2)** | Live training example on Kaggle's dual T4 GPU environment | [🔗 Qwen3 Unsloth 2GPUs](https://www.kaggle.com/code/anhvth226/qwen3-unsloth-2gpus?scriptVersionId=243436741) |
+| **Local Jupyter Notebook** | Interactive training notebook for local development | [`notebooks/train.ipynb`](notebooks/train.ipynb) |
+| **Command Line Example** | Quick start with pre-configured 2-GPU ShareGPT training | `hypersloth-train examples/example_sharegpt_lora_2gpus.py` |
+| **Tmux Multi-windows** | Training with separate tmux sessions for each GPU monitoring | `hypersloth-train ./example_training_config.py --tmux train` |
 
-Launch training across your GPUs:
 
-```bash
-hypersloth-train ./example_training_config.py
-```
-
-**Expected output:**
-```
-21:32:54 | INFO | 🔧 GPU 0 (Rank 0/1) | Model: unsloth/Qwen3-0.6b-bnb-4bit
-21:32:54 | INFO | 🔧 GPU 1 (Rank 1/1) | Model: unsloth/Qwen3-0.6b-bnb-4bit
-21:32:54 | INFO | 🚀 Starting total training timer
-[Training progress with adaptive batching and NCCL synchronization]
-```
-
-**Optional: Monitor with tmux**
-```bash
-hypersloth-train ./example_training_config.py --tmux train
-# Then attach to sessions: tmux a -t train_gpu_0
-```
 
 ### Quick Tips
 
@@ -177,56 +103,44 @@ hypersloth-train ./example_training_config.py --tmux train
 - Use fewer samples: `-n 1000` for quick testing
 - Test single GPU first: `gpus=[0]` in config
 
-**For production:**
-- Scale up dataset size: `-n 50000` or more
-- Use larger models: `unsloth/Qwen3-8B-bnb-4bit`
-- Add more GPUs: `gpus=[0, 1, 2, 3]`
+**Multi-GPU Optimization Strategy:**
 
-**Memory management:**
-- Reduce `per_device_train_batch_size` if you hit OOM
-- Increase `gradient_accumulation_steps` to maintain effective batch size
+HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
 
-That's it! You now have HyperSloth running multi-GPU training with optimized batching. Check the logs for padding savings and performance metrics.
+1. **GPU Underutilization Problem:**
+   - Unsloth typically trains with 1 sample per forward pass
+   - This underutilizes larger GPUs or when training smaller models
+   - **Solution:** Use larger batch sizes to fully utilize GPU compute
+
+2. **GPU Synchronization Bottleneck:**
+   - In multi-GPU training, all GPUs must wait for the slowest one to finish
+   - Different batch complexities can create uneven processing times
+   - **Solution:** Sequence sorting and load balancing ensure even workload distribution
+
+3. **Communication Overhead:**
+   - Gradient synchronization between GPUs adds significant overhead
+   - More frequent communication = more wasted time
+   - **Solution:** Larger gradient accumulation steps reduce communication frequency
+
+**Recommended Configuration:**
+```python
+# Instead of: batch_size=1, gradient_accumulation=1 (high communication overhead)
+# Use: batch_size=4, gradient_accumulation=8 (same effective batch size, 8x less communication)
+TrainingConfig(
+    per_device_train_batch_size=4,      # Larger batches per GPU
+    gradient_accumulation_steps=8,       # Fewer gradient sync operations
+    # Effective batch size = 4 * 8 * num_gpus, change your learning rate accordingly, i have not tested this yet
+)
+```
+
+This approach maximizes GPU utilization while minimizing the communication overhead that typically limits multi-GPU scaling efficiency.
 
 ## 🛠 Command-Line Tools
 
 - **`hypersloth-train`**: Main training launcher with multi-GPU and tmux support
 - **`hypersloth-init`**: Generate configuration templates for new projects
 
-## 📓 Demo Notebook
 
-For interactive training and experimentation, check out our demo training notebooks:
-
-- **[`notebooks/train.ipynb`](notebooks/train.ipynb)**: Complete training example equivalent to `hypersloth-train examples/example_sharegpt_lora_2gpus.py`  
-- **[Kaggle: Qwen3 Unsloth 2GPUs](https://www.kaggle.com/code/anhvth226/qwen3-unsloth-2gpus)**: Live training example with HyperSloth on Kaggle's GPU environment
-
-## 📊 How to Prepare Data
-
-To prepare your dataset for training, use the build_dataset.py script:
-
-```bash
-python scripts/build_dataset.py mlabonne/FineTome-100k -n 50000 --seed 3407 --split train --name finetom --tokenizer Qwen/Qwen3-8B
-```
-
-After running the script, use the built dataset in your configuration:
-
-```python
-hyper_config_model = HyperConfig(
-    data=DataConfig.from_dataset_name("finetom") # Use the dataset name you created
-    training=TrainingConfig(
-        gpus=[0, 1],  # Change this to the number of GPUs you have
-        loss_type="response_only",  # all or response_only, the loss will only be calculated on the response part of the input
-    ),
-    fast_model_args=FastModelArgs(
-        model_name="unsloth/gemma-3-1b-it",
-        max_seq_length=2048,
-    ),
-    lora_args=LoraArgs(
-        r=16,
-        lora_alpha=16,
-    ),
-)
-```
 
 ## 🏗 How It Works
 
@@ -268,10 +182,7 @@ For multi-GPU setups, HyperSloth uses:
 
 **Debugging Tips:**
 ```bash
-# Test single GPU first (modify your config to use gpus=[0])
-hypersloth-train configs/your_config.py
-
-# Monitor individual GPU processes  
 hypersloth-train configs/your_config.py --tmux train
+Or change gpus=[0] # use first gpu for training
 # Then attach to sessions: tmux a -t train_gpu_0
 ```
