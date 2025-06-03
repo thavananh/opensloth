@@ -1,11 +1,106 @@
 import os
+import time
 from typing import Dict, Any
 from fastcore.all import patch
 from transformers.trainer import Trainer, TrainerState
-
 from HyperSloth.logging_config import get_hypersloth_logger
 from HyperSloth._patch_log import _patch_log
 import torch
+
+try:
+    from tabulate import tabulate
+except ImportError:
+    print("Warning: tabulate not found. Installing...")
+    import subprocess
+
+    subprocess.check_call(["pip", "install", "tabulate"])
+    from tabulate import tabulate
+
+
+class TokenStatsTracker:
+    """Track token statistics for HyperSloth optimization."""
+
+    def __init__(self, log_interval_seconds: int = 10):
+        self.log_interval_seconds = log_interval_seconds
+        self.last_log_time = time.time()
+        self.batch_counter = 0
+        self.total_tokens_before = 0
+        self.total_tokens_after = 0
+        self.total_actual_tokens = 0
+        self.logger = get_hypersloth_logger()
+
+    def update_and_maybe_log(
+        self, batch_samples: list, splited_by_gpus: dict, hp_local_rank: int
+    ) -> None:
+        """Update statistics and log if interval has passed."""
+        stats = self._compute_batch_stats(batch_samples, splited_by_gpus)
+
+        self.batch_counter += 1
+        self.total_tokens_before += stats["tokens_before"]
+        self.total_tokens_after += stats["tokens_after"]
+        self.total_actual_tokens += stats["actual_tokens"]
+
+        current_time = time.time()
+        if current_time - self.last_log_time >= self.log_interval_seconds:
+            self._log_stats_table(hp_local_rank)
+            self.last_log_time = current_time
+
+    def _compute_batch_stats(self, batch_samples: list, splited_by_gpus: dict) -> dict:
+        """Compute statistics for a single batch."""
+        # Calculate tokens before partitioning
+        tokens_before = sum(batch["input_ids"].numel() for batch in batch_samples)
+        actual_tokens = sum(
+            batch["attention_mask"].sum().item() for batch in batch_samples
+        )
+
+        # Calculate tokens after partitioning
+        tokens_after = 0
+        for gpu_batches in splited_by_gpus.values():
+            tokens_after += sum(batch["input_ids"].numel() for batch in gpu_batches)
+
+        return {
+            "tokens_before": tokens_before,
+            "tokens_after": tokens_after,
+            "actual_tokens": actual_tokens,
+            "tokens_saved": tokens_before - tokens_after,
+        }
+
+    def _log_stats_table(self, hp_local_rank: int) -> None:
+        """Log statistics in a nice tabular format."""
+        if self.total_tokens_before == 0:
+            return
+
+        # Calculate token utilization metrics
+        before_optimization_utilization = (
+            self.total_actual_tokens / self.total_tokens_before
+        ) * 100
+        actual_efficiency = (self.total_actual_tokens / self.total_tokens_after) * 100
+
+        # Create table data
+        table_data = [
+            [
+                "Before Optimization",
+                f"{self.total_tokens_before:,}",
+                f"{before_optimization_utilization:.2f}%",
+            ],
+            [
+                "After Optimization",
+                f"{self.total_tokens_after:,}",
+                f"{actual_efficiency:.2f}%",
+            ],
+        ]
+
+        table_str = tabulate(
+            table_data,
+            headers=["Stage", "Total Tokens", "Token Utilization %"],
+            tablefmt="grid",
+            colalign=["left", "right", "right"],
+        )
+
+        self.logger.info(
+            f"\n🚀 HyperSloth Token Efficiency Report (Rank {hp_local_rank})\n"
+            f"{table_str}\n"
+        )
 
 
 def improve_partition_batches(all_batches: list, num_devices: int) -> dict:
@@ -107,11 +202,8 @@ def patch_inner_training_loop(trainer):
     # Get enhanced logger
     hp_logger = get_hypersloth_logger()
 
-    # Initialize counters for padding token savings
-    batch_counter = 0
-    total_tokens_saved = 0
-    total_possible_tokens = 0
-    log_interval = 10  # Log every 100 batches
+    # Initialize statistics tracker
+    stats_tracker = TokenStatsTracker(log_interval_seconds=10)
 
     # Patch 1: TrainerState creation with HyperSloth fields
     original_trainer_state_init = TrainerState.__init__
@@ -145,44 +237,18 @@ def patch_inner_training_loop(trainer):
         @patch
         def get_batch_samples(self: Trainer, epoch_iterator, num_batches, device=None):
             """Enhanced batch sampling with GPU slicing for HyperSloth."""
-            nonlocal batch_counter, total_tokens_saved, total_possible_tokens
-
             batch_samples, num_items_in_batch = original_get_batch_samples(
                 self, epoch_iterator, num_batches, device
             )
 
-            # Calculate padding savings before partitioning
-            tokens_before_partition = 0
-            actual_tokens_before = 0
-            for batch in batch_samples:
-                tokens_before_partition += batch["input_ids"].numel()
-                actual_tokens_before += batch["attention_mask"].sum().item()
-
             splited_by_gpus = improve_partition_batches(batch_samples, hp_wolrd_size)
             processed_samples = splited_by_gpus[hp_local_rank]
 
-            # Calculate tokens after partitioning for this GPU
-            tokens_after_partition = 0
-            actual_tokens_after = 0
-            for batch in processed_samples:
-                tokens_after_partition += batch["input_ids"].numel()
-                actual_tokens_after += batch["attention_mask"].sum().item()
+            # Update statistics and log periodically
+            stats_tracker.update_and_maybe_log(
+                batch_samples, splited_by_gpus, hp_local_rank
+            )
 
-            # Update counters
-            batch_counter += 1
-            current_tokens_saved = tokens_after_partition - actual_tokens_after
-            total_tokens_saved += current_tokens_saved
-            total_possible_tokens += tokens_after_partition
-
-            # Log periodically
-            if batch_counter % log_interval == 0 and hp_local_rank == 0:
-                padding_percentage = (total_tokens_saved / total_possible_tokens) * 100
-                hp_logger.info(
-                    f"Padding savings (batch {batch_counter}): "
-                    f"{total_tokens_saved:,} tokens saved out of "
-                    f"{total_possible_tokens:,} total "
-                    f"({padding_percentage:.2f}% padding skipped)"
-                )
             return processed_samples, num_items_in_batch
 
     hp_logger.info(

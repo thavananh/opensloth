@@ -233,6 +233,7 @@ def _get_tokenized_dataset(
         tokenizer=tokenizer,
         train_dataset=train_dataset,
         dataset_text_field="text",
+        max_seq_length=hf_train_args.max_seq_len,
         args=hf_train_args,
     )
 
@@ -254,7 +255,12 @@ def _get_tokenized_dataset(
     return tmp_trainer.train_dataset
 
 
-def get_tokenized_dataset(data_config: DatasetConfig, model, tokenizer, hf_train_args):
+from .hypersloth_config import TrainingArgsConfig
+
+
+def get_tokenized_dataset(
+    data_config: DatasetConfig, model, tokenizer, hf_train_args: TrainingArgsConfig
+):
     """
     Get a tokenized dataset ready for training, with caching support.
 
@@ -277,7 +283,7 @@ def get_tokenized_dataset(data_config: DatasetConfig, model, tokenizer, hf_train
     logger.info("Loading dataset... and tokenize")
 
     # Create cache ID for tokenized dataset
-    cache_id = identify(data_config.model_dump_json())
+    cache_id = identify([data_config.model_dump_json(), hf_train_args.max_seq_len])
 
     def prepare_tokenized_func():
         return _get_tokenized_dataset(

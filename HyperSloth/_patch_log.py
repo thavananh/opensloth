@@ -164,8 +164,8 @@ def _patch_log(T: type):
     support_keys = [
         "loss",
         "grad_norm",
-        # "num_input_tokens_seen",
-        # "trained_token_ratio",
+        # "non_padding_ratio_before",
+        # "non_padding_ratio_after",
     ]
     LOG_MMAP: Dict[str, np.memmap] = {}
     LOG_LOCKS: Dict[str, BaseFileLock] = {}  # Dictionary for locks
@@ -304,6 +304,10 @@ def _patch_log(T: type):
         # ===HYPER SLOTH specific field >>>>
         if hasattr(self.state, "trained_token_ratio"):
             logs["trained_token_ratio"] = self.state.trained_token_ratio
+        if hasattr(self.state, "non_padding_ratio_before"):
+            logs["non_padding_ratio_before"] = self.state.non_padding_ratio_before
+        if hasattr(self.state, "non_padding_ratio_after"):
+            logs["non_padding_ratio_after"] = self.state.non_padding_ratio_after
 
         output = {**logs, **{"step": self.state.global_step}}
         current_step = self.state.global_step  # For logging/debugging clarity

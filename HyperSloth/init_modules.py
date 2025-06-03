@@ -138,6 +138,7 @@ def _get_trainer(
         tokenizer=tokenizer,
         train_dataset=train_dataset,
         args=hf_train_args,
+        max_seq_length=hf_train_args.max_seq_len,
     )
     logger.finish_timing("final_trainer_creation")
 

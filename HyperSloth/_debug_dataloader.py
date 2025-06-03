@@ -1,6 +1,16 @@
 import os
 
 
+def format_tail_pad_token(s, pad_token):
+    # detech the pad token and format it as
+    num_pad_tokens = s.count(pad_token)
+    if num_pad_tokens == 0:
+        return s
+    actual_length = len(s) - num_pad_tokens * len(pad_token)
+    s = s[:actual_length]
+    return f"{pad_token} ({num_pad_tokens}x {pad_token})..."
+
+
 def debug_chat_dataloader_for_training(dataloader, tokenizer, n_example=10):
     """
     Debug function to log samples from the training dataloader in an HTML format.
@@ -104,6 +114,7 @@ def debug_chat_dataloader_for_training(dataloader, tokenizer, n_example=10):
             # Colored text for terminal
             colored_output = "".join(colored_parts)
             terminal_msg = f"\n=== EXAMPLE #{i+1} ===\n" + colored_output + "\n"
+
             if i == 0:
                 print(terminal_msg)
 

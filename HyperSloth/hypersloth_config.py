@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-CPU_COUNT = min(1, cpu_count() // 2)
+WORKERS = max(1, cpu_count() // 2)
 
 
 class DatasetConfigBase(BaseModel):
@@ -140,7 +140,8 @@ class TrainingArgsConfig(BaseModel):
     seed: int = 42
     report_to: Literal["tensorboard", "wandb", "none"] = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
-    dataset_num_proc: int = 32
+    dataset_num_proc: int = WORKERS
+    max_seq_len: int = 32_000
 
     class Config:
         """Pydantic configuration for DataConfig."""
