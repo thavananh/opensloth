@@ -1,7 +1,7 @@
 from HyperSloth.hypersloth_config import *
 from HyperSloth.scripts.hp_trainer import run_mp_training, setup_envs
 
-for n_gpu in [1, 2, 4]:
+for n_gpu in [2, 4]:
     # Main configuration using Pydantic models
     hyper_config_model = HyperConfig(
         data=HFDatasetConfig(
@@ -14,7 +14,7 @@ for n_gpu in [1, 2, 4]:
             chat_template="chatml",
         ),
         training=TrainingConfig(
-            gpus=list(range(n_gpu)),
+            gpus=[0, 1, 2, 3][:n_gpu],  # Adjust based on n_gpu
             loss_type="response_only",
         ),
         fast_model_args=FastModelArgs(
@@ -44,7 +44,7 @@ for n_gpu in [1, 2, 4]:
     training_config_model = TrainingArgsConfig(
         output_dir=f"outputs/experiment/Qwen3-8B-openthought5k-{n_gpu}gpu/",
         per_device_train_batch_size=4,
-        gradient_accumulation_steps=8 // len(hyper_config_model.training.gpus),
+        gradient_accumulation_steps=8 // n_gpu,  # Adjust based on n_gpu
         learning_rate=1e-5,
         logging_steps=3,
         num_train_epochs=1,
