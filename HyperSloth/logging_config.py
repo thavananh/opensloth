@@ -86,7 +86,6 @@ class HyperSlothLogger:
             enqueue=True,
             filter=lambda record: record["extra"].get("gpu_id") is not None,
         )
-        self.logger.level(self.log_level)
 
         # File handler for individual GPU logs (always add these)
         log_dir = ".log"
@@ -121,12 +120,9 @@ class HyperSlothLogger:
 
     def _log_with_depth(self, level: str, message: str, depth: int = 2) -> None:
         """Log message with loguru's built-in caller information."""
-        # getattr(self.logger, level.lower())(message)
         # Convert level to uppercase since loguru levels are case-sensitive
         level_upper = level.upper()
-        self.logger.opt(depth=depth).log(
-            level_upper, message, extra={"gpu_id": self.gpu_id}
-        )
+        self.logger.opt(depth=depth).log(level_upper, message)
 
     def log_config_table(
         self, config_dict: Dict[str, Any], title: str = "Configuration"
@@ -515,21 +511,21 @@ class HyperSlothLogger:
         else:
             return f"{duration/3600:.1f}h"
 
-    def info(self, *args, **kwargs) -> None:
+    def info(self, message: str) -> None:
         """Log info message with GPU context."""
-        self._log_with_depth("info", *args, **kwargs)
+        self._log_with_depth("info", message, depth=2)
 
-    def debug(self, *args, **kwargs) -> None:
+    def debug(self, message: str) -> None:
         """Log debug message with GPU context."""
-        self._log_with_depth("debug", *args, **kwargs)
+        self._log_with_depth("debug", message, depth=2)
 
-    def warning(self, *args, **kwargs) -> None:
+    def warning(self, message: str) -> None:
         """Log warning message with GPU context."""
-        self._log_with_depth("warning", *args, **kwargs)
+        self._log_with_depth("warning", message, depth=2)
 
-    def error(self, *args, **kwargs) -> None:
+    def error(self, message: str) -> None:
         """Log error message with GPU context."""
-        self._log_with_depth("error", *args, **kwargs)
+        self._log_with_depth("error", message, depth=2)
 
 
 VALID_LOGGER = None

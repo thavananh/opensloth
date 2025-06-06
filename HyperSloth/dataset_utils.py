@@ -89,7 +89,7 @@ def prepare_text_dataset(
         return {"text": texts}
 
     if nproc is not None:
-        nproc = min(nproc, len(std_chat_dataset) // 2000)
+        nproc = min(nproc, len(std_chat_dataset) // 10_000)
         nproc = max(nproc, 1)  # Ensure at least one process
     text_dataset = std_chat_dataset.map(
         formatting_prompts_func, batched=True, num_proc=nproc
