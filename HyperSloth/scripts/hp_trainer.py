@@ -276,7 +276,7 @@ def train(
                 session_name=session_name,
                 config_file=config_file,
                 training_config=training_config,
-                gpus=gpus,
+                gpus=hyper_config.training.gpus,
                 auto_kill=y,
             )
         else:
