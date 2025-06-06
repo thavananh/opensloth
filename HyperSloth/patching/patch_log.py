@@ -160,12 +160,10 @@ class Flag:
         # logger.debug(f"[Flag={self.file_path}] Master reset flags.")
 
 
-def _patch_log(T: type):
+def patch_log(T: type):
     support_keys = [
         "loss",
         "grad_norm",
-        # "non_padding_ratio_before",
-        # "non_padding_ratio_after",
     ]
     LOG_MMAP: Dict[str, np.memmap] = {}
     LOG_LOCKS: Dict[str, BaseFileLock] = {}  # Dictionary for locks
@@ -435,3 +433,6 @@ def _patch_log(T: type):
 
     # Return the modified class type with the patched method
     return T
+
+
+__all__ = ["patch_log"]

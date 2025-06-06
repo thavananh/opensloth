@@ -122,27 +122,12 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     os.environ["WORLD_SIZE"] = str(world_size)
     os.environ["MASTER_ADDR"] = "127.0.0.1"  # Localhost for single machine
     if "MASTER_PORT" not in os.environ:
-        os.environ["MASTER_PORT"] = "29500"  # Use fixed port
+        os.environ["MASTER_PORT"] = "29501"  # Use fixed port
     logger = get_hypersloth_logger(log_level="DEBUG")
     # Log all set environment variables
     logger.info(
         f'[GPU={gpu}] NCCL env: RANK={os.environ["RANK"]}, WORLD_SIZE={os.environ["WORLD_SIZE"]}, MASTER_ADDR={os.environ["MASTER_ADDR"]}, MASTER_PORT={os.environ["MASTER_PORT"]}'
     )
-
-    # Assert the port is free
-    # import socket
-
-    # if rank == 0:
-    #     try:
-    #         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-    #             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    #             sock.bind((os.environ["MASTER_ADDR"], int(os.environ["MASTER_PORT"])))
-    #     except OSError as e:
-    #         raise RuntimeError(
-    #             f"[GPU={gpu}] Port {os.environ['MASTER_PORT']} is not available: {e}"
-    #         )
-
-    # Set the current CUDA device to the specific GPU
 
     logger.info(
         f"[GPU={gpu}] Setting current CUDA device to:0, {os.environ['CUDA_VISIBLE_DEVICES']=}"
@@ -150,42 +135,6 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
 
     torch.cuda.set_device(0)
 
-    # Retry logic for NCCL initialization
-    # max_retries = 100
-    # retry_delay = 2.0
-
     dist.init_process_group(
         backend="nccl", init_method="env://", rank=rank, world_size=world_size
     )
-    # for attempt in range(max_retries):
-    #     try:
-    #         # Initialize NCCL process group
-
-    #         logger.info(
-    #             f"[GPU={gpu}] NCCL setup complete: "
-    #             f"rank={rank}, world_size={world_size}, attempt={attempt + 1}"
-    #         )
-    #         return
-
-    #     except Exception as e:
-    #         logger.info(
-    #             f"[GPU={gpu}] NCCL init attempt {attempt + 1}/{max_retries} "
-    #             f"failed: {e}"
-    #         )
-
-    #         if attempt < max_retries - 1:
-    #             logger.info(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
-    #             time.sleep(retry_delay)
-
-    #             # Clean up any partial initialization
-    #             if dist.is_initialized():
-    #                 try:
-    #                     dist.destroy_process_group()
-    #                 except:
-    #                     pass
-    #         else:
-    #             logger.info(
-    #                 f"[GPU={gpu}] Failed to initialize NCCL after "
-    #                 f"{max_retries} attempts: {e}"
-    #             )
-    #             raise

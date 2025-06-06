@@ -2,6 +2,9 @@ import fcntl
 import time
 from typing import Optional, Union
 
+
+from HyperSloth.logging_config import get_hypersloth_logger
+import random
 from speedy_utils import identify
 
 from HyperSloth import HYPERSLOTH_DATA_DIR
@@ -67,9 +70,11 @@ def prepare_text_dataset(
     ), f"Dataset must contain 'conversations' column, found: {std_chat_dataset.column_names}"
 
     if num_samples is not None:
-        std_chat_dataset = std_chat_dataset.select(
-            range(min(num_samples, len(std_chat_dataset)))
-        )
+        indices = list(range(len(std_chat_dataset)))
+        random.seed(42)
+        random.shuffle(indices)
+        selected_indices = indices[:num_samples]
+        std_chat_dataset = std_chat_dataset.select(selected_indices)
 
     tokenizer = _get_tokenizer(tokenizer_name, chat_template)
 
@@ -83,6 +88,9 @@ def prepare_text_dataset(
         ]
         return {"text": texts}
 
+    if nproc is not None:
+        nproc = min(nproc, len(std_chat_dataset) // 2000)
+        nproc = max(nproc, 1)  # Ensure at least one process
     text_dataset = std_chat_dataset.map(
         formatting_prompts_func, batched=True, num_proc=nproc
     )
@@ -290,7 +298,6 @@ def get_tokenized_dataset(
     Returns:
         The tokenized dataset ready for training
     """
-    from HyperSloth.logging_config import get_hypersloth_logger
 
     logger = get_hypersloth_logger(log_level="INFO")
 

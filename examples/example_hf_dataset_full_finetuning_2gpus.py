@@ -7,7 +7,7 @@ hyper_config_model = HyperConfig(
     data=HFDatasetConfig(
         dataset_name="mlabonne/FineTome-100k",  # Popular instruction dataset
         tokenizer_name="Qwen/Qwen3-8B",  # Tokenizer from same model family
-        num_samples=100,  # Small subset for quick testing
+        num_samples=1000,  # Small subset for quick testing
         split="train",  # Dataset split to use
         name="finetome-1k",  # Local name for dataset caching
         # columns=["conversations"],  # Column containing conversation data
@@ -16,7 +16,7 @@ hyper_config_model = HyperConfig(
         chat_template="qwen3",
     ),
     training=TrainingConfig(
-        gpus=[0],  # Multi-GPU for full fine-tuning
+        gpus=[0, 1],  # Multi-GPU for full fine-tuning
         loss_type="response_only",
     ),
     fast_model_args=FastModelArgs(
@@ -28,9 +28,9 @@ hyper_config_model = HyperConfig(
 
 # Training arguments for full fine-tuning
 training_config_model = TrainingArgsConfig(
-    output_dir="outputs/qwen3-0.6b-openthoughts-full-ft/",
+    output_dir="outputs/qwen3-0.6b-openthoughts-full-ft-2gpu/",
     per_device_train_batch_size=1,  # Very small batch for full FT memory usage
-    gradient_accumulation_steps=4,  # Large accumulation for effective batch size
+    gradient_accumulation_steps=2,  # Large accumulation for effective batch size
     learning_rate=1e-5,  # Much lower LR for full fine-tuning
     logging_steps=1,
     num_train_epochs=1,  # Fewer epochs for full FT

@@ -1,12 +1,14 @@
 from fastcore.all import patch
 from transformers.trainer import *
-from HyperSloth._patch_log import _patch_log
-from ..logging_config import get_hypersloth_logger
 
-DISABLE_PATCHING = False
+# from HyperSloth.patching.patch_log import patch_log
+# from ..logging_config import get_hypersloth_logger
+
+# DISABLE_PACKING = True
+from .get_batch_samples import DISABLE_PACKING
 
 
-def patch_inner_training_loop(trainer):
+def patch_inner_training_loop():
     """
     Ultra-minimal patch that only adds essential HyperSloth customizations.
     This approach patches specific methods instead of duplicating the entire training loop.
@@ -347,7 +349,7 @@ def patch_inner_training_loop(trainer):
                 for i, inputs in enumerate(batch_samples):
                     step += 1
 
-                    if DISABLE_PATCHING:
+                    if DISABLE_PACKING:
                         do_sync_step = (
                             step + 1
                         ) % args.gradient_accumulation_steps == 0 or (
@@ -399,11 +401,16 @@ def patch_inner_training_loop(trainer):
                     elif steps_trained_progress_bar is not None:
                         steps_trained_progress_bar.close()
                         steps_trained_progress_bar = None
-
-                    if step % args.gradient_accumulation_steps == 0:
-                        self.control = self.callback_handler.on_step_begin(
-                            args, self.state, self.control
-                        )
+                    if DISABLE_PACKING:
+                        if step % args.gradient_accumulation_steps == 0:
+                            self.control = self.callback_handler.on_step_begin(
+                                args, self.state, self.control
+                            )
+                    else:
+                        if i == 0:
+                            self.control = self.callback_handler.on_step_begin(
+                                args, self.state, self.control
+                            )
 
                     # We explicitly want to avoid relying on `accelerator.accumulate` for generation training
                     context = (
