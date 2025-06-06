@@ -93,10 +93,6 @@ class HyperSlothLogger:
         os.makedirs(log_dir, exist_ok=True)
         log_file = f"{log_dir}/gpu_{self.gpu_id}.log"
 
-        # Remove existing log file
-        # if os.path.exists(log_file):
-        #     os.remove(log_file)
-
         base_logger.add(
             log_file,
             format=log_format,

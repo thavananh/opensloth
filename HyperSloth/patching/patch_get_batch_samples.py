@@ -79,7 +79,7 @@ def patch_get_batch_samples(trainer):
     """
     # Get environment variables
     hp_local_rank = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
-    hp_wolrd_size = int(os.getenv("HYPERSLOTH_WORLD_SIZE", "1"))
+    hp_world_size = int(os.getenv("HYPERSLOTH_WORLD_SIZE", "1"))
 
     trainer_class = type(trainer)
     _patch_log(trainer_class)
@@ -98,7 +98,7 @@ def patch_get_batch_samples(trainer):
         )
 
         # Apply GPU-specific optimizations if multi-GPU
-        if hp_wolrd_size > 1:
+        if hp_world_size > 1:
             max_seql_len = trainer.args.max_seq_length
 
             all_items = []
@@ -128,7 +128,7 @@ def patch_get_batch_samples(trainer):
                     )
             # Sort items by length
             all_items.sort(key=lambda item: item["num_non_padding_tokens"])
-            item_this_gpus = all_items[hp_local_rank::hp_wolrd_size]
+            item_this_gpus = all_items[hp_local_rank::hp_world_size]
 
             cumulative_len = 0
             packed_items = []
@@ -175,3 +175,5 @@ def patch_get_batch_samples(trainer):
             batch_samples = packed_items
 
         return batch_samples, num_items_in_batch
+
+    return trainer
