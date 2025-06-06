@@ -99,6 +99,7 @@ def create_trainer(
 
     logger.start_timing("training_loop_patch")
     from HyperSloth.patching.inner_training_loop import patch_inner_training_loop
+
     patch_inner_training_loop(trainer)
     from .patching.patch_sampler import apply_patch_sampler
 

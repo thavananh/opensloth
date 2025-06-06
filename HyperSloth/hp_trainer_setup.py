@@ -52,18 +52,15 @@ def setup_model_and_training(
     # Time batch size configuration
     configure_batch_size(hf_train_args, gpu_ith, num_gpus)
 
-
     # Time model initialization
     hp_logger.start_timing("model_init")
     model, tokenizer = init_model_and_tokenizer(hyper_config)
     hp_logger.finish_timing("model_init")
 
-
     # Time trainer creation
     hp_logger.start_timing("trainer_creation")
     trainer = create_trainer(model, tokenizer, hyper_config, hf_train_args)
     hp_logger.finish_timing("trainer_creation")
-
 
     # Finish total setup timing
     hp_logger.finish_timing("total_setup")

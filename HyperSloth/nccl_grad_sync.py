@@ -151,41 +151,41 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     torch.cuda.set_device(0)
 
     # Retry logic for NCCL initialization
-    max_retries = 100
-    retry_delay = 2.0
+    # max_retries = 100
+    # retry_delay = 2.0
 
-    for attempt in range(max_retries):
-        try:
-            # Initialize NCCL process group
-            dist.init_process_group(
-                backend="nccl", init_method="env://", rank=rank, world_size=world_size
-            )
+    dist.init_process_group(
+        backend="nccl", init_method="env://", rank=rank, world_size=world_size
+    )
+    # for attempt in range(max_retries):
+    #     try:
+    #         # Initialize NCCL process group
 
-            logger.info(
-                f"[GPU={gpu}] NCCL setup complete: "
-                f"rank={rank}, world_size={world_size}, attempt={attempt + 1}"
-            )
-            return
+    #         logger.info(
+    #             f"[GPU={gpu}] NCCL setup complete: "
+    #             f"rank={rank}, world_size={world_size}, attempt={attempt + 1}"
+    #         )
+    #         return
 
-        except Exception as e:
-            logger.info(
-                f"[GPU={gpu}] NCCL init attempt {attempt + 1}/{max_retries} "
-                f"failed: {e}"
-            )
+    #     except Exception as e:
+    #         logger.info(
+    #             f"[GPU={gpu}] NCCL init attempt {attempt + 1}/{max_retries} "
+    #             f"failed: {e}"
+    #         )
 
-            if attempt < max_retries - 1:
-                logger.info(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
-                time.sleep(retry_delay)
+    #         if attempt < max_retries - 1:
+    #             logger.info(f"[GPU={gpu}] Retrying NCCL init in {retry_delay}s...")
+    #             time.sleep(retry_delay)
 
-                # Clean up any partial initialization
-                if dist.is_initialized():
-                    try:
-                        dist.destroy_process_group()
-                    except:
-                        pass
-            else:
-                logger.info(
-                    f"[GPU={gpu}] Failed to initialize NCCL after "
-                    f"{max_retries} attempts: {e}"
-                )
-                raise
+    #             # Clean up any partial initialization
+    #             if dist.is_initialized():
+    #                 try:
+    #                     dist.destroy_process_group()
+    #                 except:
+    #                     pass
+    #         else:
+    #             logger.info(
+    #                 f"[GPU={gpu}] Failed to initialize NCCL after "
+    #                 f"{max_retries} attempts: {e}"
+    #             )
+    #             raise

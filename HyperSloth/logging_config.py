@@ -12,6 +12,8 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
+# from speedy_utils import setup_logger
+
 
 class StepTimer:
     """Helper class to track timing for individual steps."""
@@ -67,6 +69,7 @@ class HyperSlothLogger:
         from loguru import logger as base_logger
 
         self.logger = base_logger.bind(gpu_id=self.gpu_id)
+        self.logger.level(self.log_level)
         base_logger.remove()
         log_format = (
             "<green>{time:HH:mm:ss}</green> | "

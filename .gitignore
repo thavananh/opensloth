@@ -60,3 +60,5 @@ model_store/
 lm-evaluation-harness
 output
 wandb
+*.json
+assets/all_batches.pkl

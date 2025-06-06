@@ -5,11 +5,11 @@ hyper_config_model = HyperConfig(
     data=HFDatasetConfig(
         dataset_name="llamafactory/OpenThoughts-114k",
         split="train",
-        tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
-        num_samples=1000,
+        tokenizer_name="unsloth/Qwen3-0.6b-bnb-4bit",  # does not matter same family qwen3
+        num_samples=10000,
         instruction_part="<|im_start|>user\n",
         response_part="<|im_start|>assistant\n",
-        chat_template="chatml",
+        chat_template="qwen3",
     ),
     training=TrainingConfig(
         gpus=[0, 1],
@@ -40,9 +40,9 @@ hyper_config_model = HyperConfig(
 
 # Training arguments using Pydantic model
 training_config_model = TrainingArgsConfig(
-    output_dir="outputs/qwen3-8b-openthought-2gpus/",
+    output_dir="outputs/qwen3-0.6b-openthoughts-10k-lora-2gpus",
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=8,
+    gradient_accumulation_steps=32,
     learning_rate=1e-5,
     logging_steps=3,
     num_train_epochs=3,
