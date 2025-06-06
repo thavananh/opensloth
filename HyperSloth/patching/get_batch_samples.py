@@ -36,15 +36,6 @@ def pack(
         "attention_mask" will have shape (1, total_len, total_len).
     """
 
-    ids = list(range(len(input_ids_list)))
-    # shuffle ids
-    import random
-
-    random.shuffle(ids)
-    input_ids_list = [input_ids_list[i] for i in ids]
-    labels_list = [labels_list[i] for i in ids]
-    attention_mask_list = [attention_mask_list[i] for i in ids]
-
     if not input_ids_list:
         raise ValueError("Cannot pack empty sequence list.")
 
