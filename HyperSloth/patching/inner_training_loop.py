@@ -500,9 +500,15 @@ def patch_inner_training_loop():
 
                         model.zero_grad()
                         self.state.global_step += 1
-                        self.state.epoch = (
-                            epoch + (step + 1 + steps_skipped) / steps_in_epoch
-                        )
+                        if DISABLE_PACKING:
+                            # When packing is disabled, use update_step for epoch calculation
+                            # since each update_step represents one gradient accumulation cycle
+                            self.state.epoch = epoch + (update_step + 1) / total_updates
+                        else:
+                            # When packing is enabled, use the original calculation
+                            self.state.epoch = (
+                                epoch + (step + 1 + steps_skipped) / steps_in_epoch
+                            )
                         self.control = self.callback_handler.on_step_end(
                             args, self.state, self.control
                         )
