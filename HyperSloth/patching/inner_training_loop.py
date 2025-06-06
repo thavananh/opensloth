@@ -169,23 +169,6 @@ def patch_inner_training_loop(trainer):
             # Use packed items as batch_samples
             batch_samples = packed_items
 
-            # Debug log
-            shaped_each = [
-                (
-                    packed["input_ids"].shape,
-                    packed["labels"].shape,
-                    packed["attention_mask"].shape,
-                    packed["position_ids"].shape,
-                )
-                for packed in packed_items
-            ]
-            logger.info(
-                f"Rank {hp_local_rank} packed {len(packed_items)} batches "
-                f"from {orig_num_ga} accumulated batches with batch size {orig_batch_size} "
-                f"and max sequence length {max_seql_len}. "
-                f"Packed shapes: {shaped_each}"
-            )
-
         return batch_samples, num_items_in_batch
 
     @patch
@@ -518,6 +501,7 @@ def patch_inner_training_loop(trainer):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches, args.device
                 )
+                num_tokens, trained_tokens = 0, 0
                 for i, inputs in enumerate(batch_samples):
                     step += 1
 
@@ -530,6 +514,12 @@ def patch_inner_training_loop(trainer):
                     else:
                         # we overwrite the GA so this new rule applies
                         do_sync_step = i == len(batch_samples) - 1
+                        num_tokens += inputs["input_ids"].numel()
+                        trained_tokens += inputs["attention_mask"].sum().item()
+                        logger.info(
+                            f"Step {step} - do_sync_step: {do_sync_step}, "
+                            f"i: {i}, len(batch_samples): {len(batch_samples)}|num tokens: {num_tokens}|num trained tokens: {trained_tokens}"
+                        )
 
                     # Since we perform prefetching, we need to manually set sync_gradients
                     self.accelerator.gradient_state._set_sync_gradients(do_sync_step)

@@ -69,7 +69,6 @@ class HyperSlothLogger:
         from loguru import logger as base_logger
 
         self.logger = base_logger.bind(gpu_id=self.gpu_id)
-        self.logger.level(self.log_level)
         base_logger.remove()
         log_format = (
             "<green>{time:HH:mm:ss}</green> | "
@@ -79,13 +78,6 @@ class HyperSlothLogger:
             "<level>{message}</level>"
         )
 
-        # Only add handlers if this is the first setup or in single GPU mode
-        # if (
-        #     self.gpu_id == "0"
-        #     or len(os.environ.get("HYPERSLOTH_GPUS", "0").split(",")) == 1
-        # ):
-
-        # Console handler with colors
         base_logger.add(
             sys.stderr,
             format=log_format,
@@ -94,6 +86,7 @@ class HyperSlothLogger:
             enqueue=True,
             filter=lambda record: record["extra"].get("gpu_id") is not None,
         )
+        self.logger.level(self.log_level)
 
         # File handler for individual GPU logs (always add these)
         log_dir = ".log"

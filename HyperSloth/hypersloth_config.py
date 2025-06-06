@@ -12,7 +12,10 @@ class DatasetConfigBase(BaseModel):
     instruction_part: str
     response_part: str
     num_samples: Optional[int] = None
-    # dataset_num_proc: int = CPU_COUNT
+    nproc: int = Field(
+        default=WORKERS,
+        description="Number of processes to use for dataset preparation",
+    )
 
 
 class HFDatasetConfig(DatasetConfigBase):

@@ -53,6 +53,7 @@ def prepare_text_dataset(
     tokenizer_name: str,
     chat_template: str,
     num_samples: Optional[int] = None,
+    nproc: Optional[int] = None,
 ):
     """
     Prepare a chat dataset by formatting conversations into text.
@@ -81,7 +82,9 @@ def prepare_text_dataset(
         ]
         return {"text": texts}
 
-    text_dataset = std_chat_dataset.map(formatting_prompts_func, batched=True)
+    text_dataset = std_chat_dataset.map(
+        formatting_prompts_func, batched=True, nproc=nproc
+    )
     return text_dataset
 
 
@@ -147,6 +150,7 @@ def get_text_dataset_hf(
     tokenizer_name: str,
     chat_template: str,
     num_samples: Optional[int] = None,
+    nproc: Optional[int] = None,
 ):
     """Load and prepare a text dataset from Hugging Face."""
     std_chat_dataset = _get_std_chat_dataset_from_hf(dataset_name, split=split)
@@ -155,6 +159,7 @@ def get_text_dataset_hf(
         tokenizer_name=tokenizer_name,
         chat_template=chat_template,
         num_samples=num_samples,
+        nproc=nproc,
     )
 
 
@@ -163,6 +168,7 @@ def get_text_dataset_from_path(
     tokenizer_name: str,
     chat_template: str,
     num_samples: Optional[int] = None,
+    nproc: Optional[int] = None,
 ):
     """Load a text dataset from local path."""
     std_chat_dataset = _get_std_chat_dataset_from_path(path)
@@ -171,6 +177,7 @@ def get_text_dataset_from_path(
         tokenizer_name=tokenizer_name,
         chat_template=chat_template,
         num_samples=num_samples,
+        nproc=nproc,
     )
 
 
@@ -191,6 +198,7 @@ def get_text_dataset(config: DatasetConfig):
             tokenizer_name=config.tokenizer_name,
             chat_template=config.chat_template,
             num_samples=config.num_samples,
+            nproc=config.nproc,
         )
     else:  # path
         return get_text_dataset_from_path(
@@ -198,6 +206,7 @@ def get_text_dataset(config: DatasetConfig):
             tokenizer_name=config.tokenizer_name,
             chat_template=config.chat_template,
             num_samples=config.num_samples,
+            nproc=config.nproc,
         )
 
 
@@ -250,6 +259,7 @@ def _get_tokenized_dataset(
         tmp_trainer,
         instruction_part=config.instruction_part,
         response_part=config.response_part,
+        num_proc=config.nproc,
     )
 
     logger.finish_timing("dataset_tokenization")
