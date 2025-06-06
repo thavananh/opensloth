@@ -6,6 +6,7 @@ from speedy_utils import identify
 
 from HyperSloth import HYPERSLOTH_DATA_DIR
 from HyperSloth.hypersloth_config import HFDatasetConfig, PathDatasetConfig
+import datasets
 
 
 DatasetConfig = Union[HFDatasetConfig, PathDatasetConfig]
@@ -49,7 +50,7 @@ def _get_std_chat_dataset_from_path(path: str):
 
 
 def prepare_text_dataset(
-    std_chat_dataset,
+    std_chat_dataset: datasets.Dataset,
     tokenizer_name: str,
     chat_template: str,
     num_samples: Optional[int] = None,
@@ -83,8 +84,9 @@ def prepare_text_dataset(
         return {"text": texts}
 
     text_dataset = std_chat_dataset.map(
-        formatting_prompts_func, batched=True, nproc=nproc
+        formatting_prompts_func, batched=True, num_proc=nproc
     )
+
     return text_dataset
 
 

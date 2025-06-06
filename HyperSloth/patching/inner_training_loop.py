@@ -99,9 +99,7 @@ def patch_inner_training_loop(trainer):
 
         # Apply GPU-specific optimizations if multi-GPU
         if hp_wolrd_size > 1:
-            orig_num_ga = len(batch_samples)
-            orig_batch_size = batch_samples[0]["input_ids"].shape[0]
-            max_seql_len = max(batch["input_ids"].shape[1] for batch in batch_samples)
+            max_seql_len = trainer.args.max_seq_length
 
             all_items = []
             for accumulated_batch in batch_samples:
@@ -137,9 +135,8 @@ def patch_inner_training_loop(trainer):
             pack_items_pending = []
             while item_this_gpus:
                 item = item_this_gpus.pop(0)
-                if (
-                    cumulative_len + item["num_non_padding_tokens"] > max_seql_len
-                ):  # check if we can pack it
+                ft_len = cumulative_len + item["num_non_padding_tokens"]
+                if ft_len > max_seql_len:  # check if we can pack it
                     # Pack current batch
                     packed = pack(
                         [item["input_ids"] for item in pack_items_pending],
@@ -147,6 +144,10 @@ def patch_inner_training_loop(trainer):
                         [item["attention_mask"] for item in pack_items_pending],
                     )
                     # Add packed batch to the list
+                    logger.info(
+                        f"Packing multiple items of lens {', '.join(str(item['num_non_padding_tokens']) for item in pack_items_pending)} "
+                        f"into a single batch of length {packed['input_ids'].shape[1]}."
+                    )
                     packed_items.append(packed)
 
                     # Reset for next batch
@@ -163,6 +164,10 @@ def patch_inner_training_loop(trainer):
                     [item["input_ids"] for item in pack_items_pending],
                     [item["labels"] for item in pack_items_pending],
                     [item["attention_mask"] for item in pack_items_pending],
+                )
+                logger.info(
+                    f"Packing remaining items of lens {', '.join(str(item['num_non_padding_tokens']) for item in pack_items_pending)} "
+                    f"into a single batch of length {packed['input_ids'].shape[1]}."
                 )
                 packed_items.append(packed)
 
