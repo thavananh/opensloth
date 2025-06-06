@@ -314,6 +314,12 @@ def initialize_training_config(config_file):
     temp_logger.log_config_table(
         combined_config, "🔧 HyperSloth Training Configuration"
     )
+
+    # override max_seq_len if provided in training_config
+    if training_config.max_seq_len is not None:
+        print(f"Overriding max_seq_len to {training_config.max_seq_len}")
+        hyper_config.fast_model_args.max_seq_length = training_config.max_seq_len
+
     setup_envs(hyper_config, training_config)
     return hyper_config, training_config
     # Display combined config with enhanced formatting
