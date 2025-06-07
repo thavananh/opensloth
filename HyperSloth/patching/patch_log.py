@@ -2,22 +2,13 @@ import os
 import time
 from typing import Dict, Optional
 import numpy as np
-from filelock import FileLock, BaseFileLock  # Import FileLock
+from filelock import FileLock, BaseFileLock
 from fastcore.all import patch
 from transformers.trainer_utils import speed_metrics
 
-# Assuming the Flag class from the 'safe lock' example is available
-# If not, copy the Flag class definition here.
-# <safe lock> code (Flag class definition) should be placed here or imported
-# --- Start of Flag class definition (copied from 'safe lock') ---
-import os
-import time
-import numpy as np
-from filelock import FileLock
-
 TIME_OUT = 300
-SLEEP_TIME = 0.01  # Use a small sleep time for waiting loops
-WAIT_WARNING_THRESHOLD = 2  # Log a warning if waiting longer than this
+SLEEP_TIME = 0.01
+WAIT_WARNING_THRESHOLD = 2
 
 
 class Flag:
@@ -28,30 +19,29 @@ class Flag:
         self.lock_path = self.file_path + ".lock"
         self.lock = FileLock(self.lock_path)
 
-        # Master process creates the directory and the file
         if self.is_master:
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            # Ensure file exists and has the correct size before memmap
-            with self.lock:  # Lock during file creation/truncation
+            with self.lock:
                 with open(self.file_path, "wb") as f:
-                    f.truncate(world_size * 4)  # 4 bytes per float32
+                    f.truncate(world_size * 4)
         else:
-            # Worker processes wait for the file to be created by the master
-            t0 = time.time()
-            while not os.path.exists(self.file_path):
-                time.sleep(SLEEP_TIME)
-                if time.time() - t0 > TIME_OUT:
-                    raise TimeoutError(
-                        f"Worker timed out waiting for flag file {self.file_path}"
-                    )
+            self._wait_for_file()
 
-        # All processes create the memmap
-        # Need to ensure file is ready and has correct size before mapping
-        file_ready = False
+        self._create_memmap()
+        if self.is_master:
+            self.reset()
+
+    def _wait_for_file(self) -> None:
         t0 = time.time()
-        while not file_ready:
+        while not os.path.exists(self.file_path):
+            time.sleep(SLEEP_TIME)
+            if time.time() - t0 > TIME_OUT:
+                raise TimeoutError(f"Worker timed out waiting for {self.file_path}")
+
+    def _create_memmap(self) -> None:
+        t0 = time.time()
+        while True:
             try:
-                # Check file size to ensure master has finished truncating
                 if os.path.getsize(self.file_path) == self.world_size * 4:
                     self.mem = np.memmap(
                         self.file_path,
@@ -59,375 +49,287 @@ class Flag:
                         mode="r+",
                         shape=(self.world_size,),
                     )
-                    file_ready = True
-                else:
-                    time.sleep(SLEEP_TIME)
-            except FileNotFoundError:
-                time.sleep(SLEEP_TIME)  # File might not be visible yet
-            except Exception as e:
-                print(f"Error creating memmap for {self.file_path}: {e}")
-                time.sleep(SLEEP_TIME * 10)  # Wait longer if error
+                    return
+                time.sleep(SLEEP_TIME)
+            except (FileNotFoundError, Exception):
+                time.sleep(SLEEP_TIME)
 
-            if time.time() - t0 > TIME_OUT and not file_ready:
-                raise TimeoutError(
-                    f"Timeout waiting for correct size or mapping flag file {self.file_path}. "
-                    f"Expected size: {self.world_size * 4}, Found: {os.path.getsize(self.file_path) if os.path.exists(self.file_path) else 'Not Found'}"
-                )
+            if time.time() - t0 > TIME_OUT:
+                raise TimeoutError(f"Timeout creating memmap for {self.file_path}")
 
-        if self.is_master:
-            self.reset()
-
-    def update(self, rank: int):
+    def update(self, rank: int) -> None:
         with self.lock:
             self.mem[rank] = 1.0
             self.mem.flush()
 
-    def wait_for_all(
-        self, step: int = -1, timeout: float = TIME_OUT
-    ):  # Add default step
+    def wait_for_all(self, step: int = -1, timeout: float = TIME_OUT) -> None:
         t0 = time.time()
         has_logged = False
 
         while True:
-            all_set = False
             with self.lock:
-                # Read the current state safely
-                flags_copy = self.mem.copy()
-                if np.all(flags_copy == 1.0):
-                    all_set = True
-
-            if all_set:
-                break  # Exit loop if all flags are set
-
-            # Check for timeout and log warnings outside the lock
-            elapsed = time.time() - t0
-            if elapsed > WAIT_WARNING_THRESHOLD and not has_logged:
-                # Log outside lock to avoid holding it while logging
-                logger.warning(
-                    f"[Flag={self.file_path}] waiting {elapsed:.1f}s at step={step}, flags={flags_copy.tolist()}"
-                )
-                has_logged = True
-
-            if elapsed > timeout:
-                # Log outside lock
-                raise RuntimeError(
-                    f"[Flag={self.file_path}] Timeout after {elapsed:.1f}s waiting at step={step}, flags={flags_copy.tolist()}"
-                )
-
-            time.sleep(SLEEP_TIME)  # Sleep outside the lock
-
-        # Optional: Debug log when successful (outside lock)
-        # print(f"[Flag={self.file_path}] all ranks ready at step={step}")
-
-    def wait_for_reset(self, rank: int, step: int = -1, timeout: float = TIME_OUT):
-        """Wait until the flag for the given rank is reset (becomes 0.0)."""
-        t0 = time.time()
-        has_logged = False
-        while True:
-            is_reset = False
-            current_val = -1.0  # Default invalid value
-            with self.lock:
-                current_val = self.mem[rank]
-                if current_val == 0.0:
-                    is_reset = True
-
-            if is_reset:
-                break  # Exit loop if flag is reset
+                if np.all(self.mem == 1.0):
+                    return
 
             elapsed = time.time() - t0
             if elapsed > WAIT_WARNING_THRESHOLD and not has_logged:
-                logger.warning(
-                    f"[Flag={self.file_path}] rank={rank} waiting for reset {elapsed:.1f}s at step={step}, current_val={current_val}"
-                )
+                print(f"[Flag] waiting {elapsed:.1f}s at step={step}")
                 has_logged = True
 
             if elapsed > timeout:
-                raise RuntimeError(
-                    f"[Flag={self.file_path}] rank={rank} Timeout after {elapsed:.1f}s waiting for reset at step={step}, current_val={current_val}"
-                )
+                raise RuntimeError(f"Timeout after {elapsed:.1f}s at step={step}")
 
             time.sleep(SLEEP_TIME)
 
-    def reset(self):
+    def wait_for_reset(
+        self, rank: int, step: int = -1, timeout: float = TIME_OUT
+    ) -> None:
+        t0 = time.time()
+        has_logged = False
+
+        while True:
+            with self.lock:
+                if self.mem[rank] == 0.0:
+                    return
+
+            elapsed = time.time() - t0
+            if elapsed > WAIT_WARNING_THRESHOLD and not has_logged:
+                print(f"[Flag] rank={rank} waiting reset {elapsed:.1f}s at step={step}")
+                has_logged = True
+
+            if elapsed > timeout:
+                raise RuntimeError(f"Timeout waiting reset at step={step}")
+
+            time.sleep(SLEEP_TIME)
+
+    def reset(self) -> None:
         if not self.is_master:
-            # This check might be overly strict if workers might need to reset in some scenarios,
-            # but for this specific log patching, only master should reset.
-            raise RuntimeError("Only master can reset a flag array.")
+            raise RuntimeError("Only master can reset")
         with self.lock:
             self.mem[:] = 0.0
             self.mem.flush()
-        # print(f"[Flag={self.file_path}] Master reset flags.")
 
 
-def patch_log(T: type):
-    support_keys = [
-        "loss",
-        "grad_norm",
-    ]
+def patch_log(T: type) -> type:
+    support_keys = ["loss", "grad_norm"]
     LOG_MMAP: Dict[str, np.memmap] = {}
-    LOG_LOCKS: Dict[str, BaseFileLock] = {}  # Dictionary for locks
+    LOG_LOCKS: Dict[str, BaseFileLock] = {}
 
-    # --- Initialization (runs once when the patch is applied) ---
     try:
         LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
         WORLD_SIZE = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
-        LOG_CACHE_DIR = ".cache"
+        LOG_CACHE_DIR = os.environ["HYPERSLOTH_OUTPUT_DIR"]
         is_main = LOCAL_RANK == 0
 
-        print(
-            f"[{LOCAL_RANK=}] Patching log function. Run Dir: {LOG_CACHE_DIR}, Num GPUs: {WORLD_SIZE}"
-        )
+        print(f"[{LOCAL_RANK=}] Patching log. Dir: {LOG_CACHE_DIR}, GPUs: {WORLD_SIZE}")
 
-        # Create run directory if it doesn't exist (master should do this)
         if is_main:
             os.makedirs(LOG_CACHE_DIR, exist_ok=True)
         else:
-            # Workers wait briefly for the directory to be created
-            t0 = time.time()
-            while not os.path.exists(LOG_CACHE_DIR):
-                time.sleep(SLEEP_TIME)
-                if time.time() - t0 > 60:  # 1 minute timeout for dir creation
-                    raise TimeoutError(
-                        f"Worker {LOCAL_RANK} timed out waiting for run directory {LOG_CACHE_DIR}"
-                    )
+            _wait_for_directory(LOG_CACHE_DIR, LOCAL_RANK)
 
-        # Initialize mmaps and locks
-        for key in support_keys:
-            mmap_path = f"{LOG_CACHE_DIR}/log_{key}.mmap"
-            lock_path = mmap_path + ".lock"
-            LOG_LOCKS[key] = FileLock(lock_path)
+        _initialize_mmaps(
+            support_keys,
+            LOG_CACHE_DIR,
+            WORLD_SIZE,
+            LOCAL_RANK,
+            is_main,
+            LOG_MMAP,
+            LOG_LOCKS,
+        )
 
-            # Master creates/truncates the file
-            if is_main:
-                with LOG_LOCKS[key]:
-                    # print(f"Master creating/truncating {mmap_path} for {n} GPUs.")
-                    with open(mmap_path, "wb") as f:
-                        f.truncate(WORLD_SIZE * 4)  # float32 = 4 bytes
-            else:
-                # Workers wait for file existence
-                t0 = time.time()
-                while not os.path.exists(mmap_path):
-                    time.sleep(SLEEP_TIME)
-                    if time.time() - t0 > TIME_OUT:
-                        raise TimeoutError(
-                            f"Worker {LOCAL_RANK} timed out waiting for mmap file {mmap_path}"
-                        )
-
-            # All processes create the memmap (ensure file size is correct first)
-            file_ready = False
-            t0 = time.time()
-            while not file_ready:
-                try:
-                    expected_size = WORLD_SIZE * 4
-                    if (
-                        os.path.exists(mmap_path)
-                        and os.path.getsize(mmap_path) == expected_size
-                    ):
-                        LOG_MMAP[key] = np.memmap(
-                            mmap_path,
-                            dtype="float32",
-                            mode="r+",
-                            shape=(WORLD_SIZE,),
-                        )
-                        file_ready = True
-                        # print(f"Rank {HYPERSLOTH_LOCAL_RANK} successfully mapped {mmap_path}")
-                    else:
-                        # # print(f"Rank {HYPERSLOTH_LOCAL_RANK} waiting for {mmap_path}. Size: {os.path.getsize(mmap_path) if os.path.exists(mmap_path) else 'N/A'}, Expected: {expected_size}")
-                        time.sleep(SLEEP_TIME)
-                except FileNotFoundError:
-                    time.sleep(SLEEP_TIME)
-                except Exception as e:
-                    print(
-                        f"Rank {LOCAL_RANK} error mapping {mmap_path}: {e}. Retrying..."
-                    )
-                    time.sleep(SLEEP_TIME * 10)  # Wait longer on error
-
-                if time.time() - t0 > TIME_OUT and not file_ready:
-                    raise TimeoutError(
-                        f"Rank {LOCAL_RANK} timeout waiting for correct size or mapping {mmap_path}. "
-                        f"Expected size: {expected_size}, Found: {os.path.getsize(mmap_path) if os.path.exists(mmap_path) else 'Not Found'}"
-                    )
-
-            # Master initializes the mmap to zero
-            if is_main:
-                with LOG_LOCKS[key]:
-                    LOG_MMAP[key][:] = 0.0
-                    LOG_MMAP[key].flush()
-
-        # Initialize the synchronization Flag
-        log_sync_flag_path = f"{LOG_CACHE_DIR}/log_sync_flag.dat"
         log_sync_flag = Flag(
-            world_size=WORLD_SIZE, file_path=log_sync_flag_path, is_master=is_main
+            world_size=WORLD_SIZE,
+            file_path=f"{LOG_CACHE_DIR}/log_sync_flag.dat",
+            is_master=is_main,
         )
         print(f"[{LOCAL_RANK=}] Log patch initialization complete.")
 
     except Exception as e:
-        print(f"[{LOCAL_RANK=}] CRITICAL ERROR during log patch initialization: {e}")
-        # Depending on the desired behavior, you might want to raise the exception
-        # to halt the process or log and attempt to continue (though logging might fail).
-        raise e  # Re-raise to make the failure explicit
+        print(f"[{LOCAL_RANK=}] CRITICAL ERROR during initialization: {e}")
+        raise e
 
-    # --- Patched log method definition ---
     @patch
     def log(
-        self: T, logs: Dict[str, float], start_time: Optional[float] = None  # type: ignore
+        self: T, logs: Dict[str, float], start_time: Optional[float] = None
     ) -> None:
-        """
-        Log `logs` on the various objects watching training. (Patched for mmap sync)
-
-        Subclass and override this method to inject custom behavior.
-
-        Args:
-            logs (`Dict[str, float]`):
-                The values to log.
-            start_time (`Optional[float]`):
-                The start of training.
-        """
-        # Standard HuggingFace logging setup
         if self.state.epoch is not None:
             logs["epoch"] = round(self.state.epoch, 2)
+
         if self.args.include_num_input_tokens_seen:
             logs["num_input_tokens_seen"] = self.state.num_input_tokens_seen
-            # Note: speed_metrics might involve communication if not careful,
-            # but it's usually called only on the main process by default trainer.
-            # If called here by all processes, ensure it's safe for multiprocessing.
-            # Original code calls it without checks, assuming it's safe or handled internally.
-            if start_time is not None and is_main:  # Safest to call only on main
+            if start_time is not None and is_main:
                 speed_metrics(
                     "train", start_time, num_tokens=self.state.num_input_tokens_seen
                 )
-        # ===HYPER SLOTH specific field >>>>
-        if hasattr(self.state, "trained_token_ratio"):
-            logs["trained_token_ratio"] = self.state.trained_token_ratio
-        if hasattr(self.state, "non_padding_ratio_before"):
-            logs["non_padding_ratio_before"] = self.state.non_padding_ratio_before
-        if hasattr(self.state, "non_padding_ratio_after"):
-            logs["non_padding_ratio_after"] = self.state.non_padding_ratio_after
+
+        # HyperSloth specific fields
+        for attr in [
+            "trained_token_ratio",
+            "non_padding_ratio_before",
+            "non_padding_ratio_after",
+        ]:
+            if hasattr(self.state, attr):
+                logs[attr] = getattr(self.state, attr)
 
         output = {**logs, **{"step": self.state.global_step}}
-        current_step = self.state.global_step  # For logging/debugging clarity
-
-        # Append to local log history regardless of synchronization
+        current_step = self.state.global_step
         self.state.log_history.append(output)
 
-        # --- Synchronization logic for training steps (identified by 'loss' key) ---
         if "loss" in logs:
-            # 1. Write local log data to mmap (with locks)
             try:
-                for key in support_keys:
-                    if key in logs:  # Only write keys present in this log call
-                        with LOG_LOCKS[key]:
-                            LOG_MMAP[key][LOCAL_RANK] = logs[key]
-                            LOG_MMAP[key].flush()
-                    # else: # Handle missing keys if necessary (e.g., write 0 or NaN)
-                    #    with LOG_LOCKS[key]:
-                    #       LOG_MMAP[key][HYPERSLOTH_LOCAL_RANK] = 0.0 # Or np.nan
-                    #       LOG_MMAP[key].flush()
-                # print(f"Rank {HYPERSLOTH_LOCAL_RANK} wrote logs to mmap at step {current_step}")
-
-                # 2. Signal that this rank has written its data
+                _write_logs_to_mmap(logs, support_keys, LOG_MMAP, LOG_LOCKS, LOCAL_RANK)
                 log_sync_flag.update(LOCAL_RANK)
-                # print(f"Rank {HYPERSLOTH_LOCAL_RANK} updated log sync flag at step {current_step}")
+
+                if is_main:
+                    _handle_master_logging(
+                        log_sync_flag,
+                        support_keys,
+                        LOG_MMAP,
+                        LOG_LOCKS,
+                        logs,
+                        current_step,
+                        self,
+                    )
+                else:
+                    log_sync_flag.wait_for_reset(rank=LOCAL_RANK, step=current_step)
 
             except Exception as e:
-                print(
-                    f"Rank {LOCAL_RANK} failed during mmap write or flag update at step {current_step}: {e}"
-                )
-                # Handle error appropriately - maybe try to continue or raise
+                print(f"Rank {LOCAL_RANK} logging error at step {current_step}: {e}")
 
-            # 3. Synchronize, Aggregate (main), and Wait (workers)
-            if is_main:
-                try:
-                    # Wait for all ranks to write and signal
-                    # print(f"Master waiting for all ranks on log sync flag at step {current_step}")
-                    log_sync_flag.wait_for_all(step=current_step)
-                    # print(f"Master confirmed all ranks ready at step {current_step}")
-
-                    # Aggregate results from mmaps (with locks)
-                    aggregated_logs = (
-                        logs.copy()
-                    )  # Start with local logs (contains epoch, etc.)
-                    for key in support_keys:
-                        with LOG_LOCKS[key]:
-                            all_vals = LOG_MMAP[
-                                key
-                            ].copy()  # Read all values under lock
-                        # Decide aggregation strategy (sum for counts, mean for ratios/losses)
-                        if key in ["num_input_tokens_seen"]:
-                            aggregated_logs[key] = int(all_vals.sum())
-                        elif key in ["trained_token_ratio"]:
-                            # Use nanmean if zeros should be ignored, or simple mean if zeros are valid
-                            valid_vals = all_vals[
-                                all_vals != 0.0
-                            ]  # Example: Ignore ranks that didn't log this
-                            aggregated_logs[key] = (
-                                float(np.mean(valid_vals))
-                                if len(valid_vals) > 0
-                                else 0.0
-                            )
-                            # aggregated_logs[key] = float(np.mean(all_vals)) # Simpler mean
-                        else:  # Default: sum (e.g., loss, grad_norm - assuming additive makes sense)
-                            aggregated_logs[key] = float(all_vals.sum())
-
-                    # print(f"Master aggregated logs at step {current_step}: {aggregated_logs}")
-
-                    # Call the actual logging handlers (TensorBoard, etc.) with aggregated logs
-                    self.control = self.callback_handler.on_log(
-                        self.args,
-                        self.state,
-                        self.control,
-                        aggregated_logs,  # Use aggregated logs
-                    )
-
-                    # Reset mmaps to zero (with locks)
-                    for key in support_keys:
-                        with LOG_LOCKS[key]:
-                            LOG_MMAP[key][:] = 0.0
-                            LOG_MMAP[key].flush()
-
-                    # Reset the flag to signal workers they can proceed
-                    log_sync_flag.reset()
-                    # print(f"Master finished logging and reset flag at step {current_step}")
-
-                except Exception as e:
-                    print(
-                        f"Master failed during log aggregation/reset at step {current_step}: {e}"
-                    )
-                    # Attempt to reset flag anyway to potentially unblock workers, but log the error
-                    try:
-                        log_sync_flag.reset()
-                        logger.warning(
-                            f"Master attempted flag reset after error at step {current_step}"
-                        )
-                    except Exception as reset_e:
-                        print(
-                            f"Master failed even to reset flag after error at step {current_step}: {reset_e}"
-                        )
-                    # Consider raising the original error e
-
-            else:  # Worker process
-                try:
-                    # Wait for the master to finish processing and reset the flag
-                    # print(f"Worker {HYPERSLOTH_LOCAL_RANK} waiting for flag reset at step {current_step}")
-                    log_sync_flag.wait_for_reset(rank=LOCAL_RANK, step=current_step)
-                    # print(f"Worker {HYPERSLOTH_LOCAL_RANK} detected flag reset at step {current_step}")
-                except Exception as e:
-                    print(
-                        f"Worker {LOCAL_RANK} failed waiting for flag reset at step {current_step}: {e}"
-                    )
-                    # Handle error - worker might be stuck or proceed with inconsistent state
-
-        # --- Handle non-training logs (e.g., evaluation) ---
-        # These typically don't need aggregation across ranks in the same way.
-        # The original code calls on_log only on the main process for these.
         elif is_main:
-            # print(f"Master logging non-training step {current_step}: {logs}")
             self.control = self.callback_handler.on_log(
                 self.args, self.state, self.control, logs
             )
 
-    # Return the modified class type with the patched method
     return T
+
+
+def _wait_for_directory(cache_dir: str, rank: int) -> None:
+    t0 = time.time()
+    while not os.path.exists(cache_dir):
+        time.sleep(SLEEP_TIME)
+        if time.time() - t0 > 60:
+            raise TimeoutError(f"Worker {rank} timed out waiting for {cache_dir}")
+
+
+def _initialize_mmaps(
+    support_keys: list,
+    cache_dir: str,
+    world_size: int,
+    rank: int,
+    is_main: bool,
+    log_mmap: Dict,
+    log_locks: Dict,
+) -> None:
+    for key in support_keys:
+        mmap_path = f"{cache_dir}/log_{key}.mmap"
+        log_locks[key] = FileLock(mmap_path + ".lock")
+
+        if is_main:
+            with log_locks[key]:
+                with open(mmap_path, "wb") as f:
+                    f.truncate(world_size * 4)
+        else:
+            t0 = time.time()
+            while not os.path.exists(mmap_path):
+                time.sleep(SLEEP_TIME)
+                if time.time() - t0 > TIME_OUT:
+                    raise TimeoutError(
+                        f"Worker {rank} timed out waiting for {mmap_path}"
+                    )
+
+        _create_mmap(mmap_path, world_size, rank, log_mmap, key)
+
+        if is_main:
+            with log_locks[key]:
+                log_mmap[key][:] = 0.0
+                log_mmap[key].flush()
+
+
+def _create_mmap(
+    mmap_path: str, world_size: int, rank: int, log_mmap: Dict, key: str
+) -> None:
+    t0 = time.time()
+    expected_size = world_size * 4
+
+    while True:
+        try:
+            if (
+                os.path.exists(mmap_path)
+                and os.path.getsize(mmap_path) == expected_size
+            ):
+                log_mmap[key] = np.memmap(
+                    mmap_path, dtype="float32", mode="r+", shape=(world_size,)
+                )
+                return
+            time.sleep(SLEEP_TIME)
+        except (FileNotFoundError, Exception):
+            time.sleep(SLEEP_TIME)
+
+        if time.time() - t0 > TIME_OUT:
+            raise TimeoutError(f"Rank {rank} timeout creating mmap {mmap_path}")
+
+
+def _write_logs_to_mmap(
+    logs: Dict[str, float],
+    support_keys: list,
+    log_mmap: Dict,
+    log_locks: Dict,
+    rank: int,
+) -> None:
+    for key in support_keys:
+        if key in logs:
+            with log_locks[key]:
+                log_mmap[key][rank] = logs[key]
+                log_mmap[key].flush()
+
+
+def _aggregate_logs(
+    logs: Dict[str, float], support_keys: list, log_mmap: Dict, log_locks: Dict
+) -> Dict[str, float]:
+    aggregated = logs.copy()
+
+    for key in support_keys:
+        with log_locks[key]:
+            all_vals = log_mmap[key].copy()
+
+        if key in ["num_input_tokens_seen"]:
+            aggregated[key] = int(all_vals.sum())
+        elif key in ["trained_token_ratio"]:
+            valid_vals = all_vals[all_vals != 0.0]
+            aggregated[key] = float(np.mean(valid_vals)) if len(valid_vals) > 0 else 0.0
+        else:
+            aggregated[key] = float(all_vals.sum())
+
+    return aggregated
+
+
+def _reset_mmaps(support_keys: list, log_mmap: Dict, log_locks: Dict) -> None:
+    for key in support_keys:
+        with log_locks[key]:
+            log_mmap[key][:] = 0.0
+            log_mmap[key].flush()
+
+
+def _handle_master_logging(
+    flag,
+    support_keys: list,
+    log_mmap: Dict,
+    log_locks: Dict,
+    logs: Dict,
+    step: int,
+    trainer,
+) -> None:
+    flag.wait_for_all(step=step)
+    aggregated_logs = _aggregate_logs(logs, support_keys, log_mmap, log_locks)
+
+    trainer.control = trainer.callback_handler.on_log(
+        trainer.args, trainer.state, trainer.control, aggregated_logs
+    )
+
+    _reset_mmaps(support_keys, log_mmap, log_locks)
+    flag.reset()
 
 
 __all__ = ["patch_log"]
