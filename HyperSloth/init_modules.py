@@ -174,10 +174,7 @@ def configure_batch_size(hf_train_args, gpu_ith, num_gpus):
         hf_train_args.per_device_train_batch_size *= num_gpus  # This is the total batch size loaded by dataloader, the trainer later will chose the correct batch size for each GPU
 
     if not gpu_ith == 0:
-        # disable reporting for all GPUs except the first one
         hf_train_args.report_to = "none"
-        # disable evaluation for all GPUs except the first one
-        hf_train_args.do_eval = False
 
 
 __all__ = [
