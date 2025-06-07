@@ -54,4 +54,6 @@ training_config_model = TrainingArgsConfig(
     seed=3407,
     report_to="none",  # tensorboard or wawndb
     max_seq_length=32_000,
+    include_tokens_per_second=True,  # This enables tokens/sec logging
+    include_num_input_tokens_seen=True,
 )
