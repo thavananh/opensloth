@@ -170,13 +170,13 @@ def patch_log(T: type):
 
     # --- Initialization (runs once when the patch is applied) ---
     try:
-        HYPERSLOTH_LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-        n = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
+        LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
+        WORLD_SIZE = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
         LOG_CACHE_DIR = ".cache"
-        is_main = HYPERSLOTH_LOCAL_RANK == 0
+        is_main = LOCAL_RANK == 0
 
         logger.info(
-            f"[{HYPERSLOTH_LOCAL_RANK=}] Patching log function. Run Dir: {LOG_CACHE_DIR}, Num GPUs: {n}"
+            f"[{LOCAL_RANK=}] Patching log function. Run Dir: {LOG_CACHE_DIR}, Num GPUs: {WORLD_SIZE}"
         )
 
         # Create run directory if it doesn't exist (master should do this)
@@ -189,7 +189,7 @@ def patch_log(T: type):
                 time.sleep(SLEEP_TIME)
                 if time.time() - t0 > 60:  # 1 minute timeout for dir creation
                     raise TimeoutError(
-                        f"Worker {HYPERSLOTH_LOCAL_RANK} timed out waiting for run directory {LOG_CACHE_DIR}"
+                        f"Worker {LOCAL_RANK} timed out waiting for run directory {LOG_CACHE_DIR}"
                     )
 
         # Initialize mmaps and locks
@@ -203,7 +203,7 @@ def patch_log(T: type):
                 with LOG_LOCKS[key]:
                     # logger.debug(f"Master creating/truncating {mmap_path} for {n} GPUs.")
                     with open(mmap_path, "wb") as f:
-                        f.truncate(n * 4)  # float32 = 4 bytes
+                        f.truncate(WORLD_SIZE * 4)  # float32 = 4 bytes
             else:
                 # Workers wait for file existence
                 t0 = time.time()
@@ -211,7 +211,7 @@ def patch_log(T: type):
                     time.sleep(SLEEP_TIME)
                     if time.time() - t0 > TIME_OUT:
                         raise TimeoutError(
-                            f"Worker {HYPERSLOTH_LOCAL_RANK} timed out waiting for mmap file {mmap_path}"
+                            f"Worker {LOCAL_RANK} timed out waiting for mmap file {mmap_path}"
                         )
 
             # All processes create the memmap (ensure file size is correct first)
@@ -219,7 +219,7 @@ def patch_log(T: type):
             t0 = time.time()
             while not file_ready:
                 try:
-                    expected_size = n * 4
+                    expected_size = WORLD_SIZE * 4
                     if (
                         os.path.exists(mmap_path)
                         and os.path.getsize(mmap_path) == expected_size
@@ -228,7 +228,7 @@ def patch_log(T: type):
                             mmap_path,
                             dtype="float32",
                             mode="r+",
-                            shape=(n,),
+                            shape=(WORLD_SIZE,),
                         )
                         file_ready = True
                         # logger.debug(f"Rank {HYPERSLOTH_LOCAL_RANK} successfully mapped {mmap_path}")
@@ -239,13 +239,13 @@ def patch_log(T: type):
                     time.sleep(SLEEP_TIME)
                 except Exception as e:
                     logger.error(
-                        f"Rank {HYPERSLOTH_LOCAL_RANK} error mapping {mmap_path}: {e}. Retrying..."
+                        f"Rank {LOCAL_RANK} error mapping {mmap_path}: {e}. Retrying..."
                     )
                     time.sleep(SLEEP_TIME * 10)  # Wait longer on error
 
                 if time.time() - t0 > TIME_OUT and not file_ready:
                     raise TimeoutError(
-                        f"Rank {HYPERSLOTH_LOCAL_RANK} timeout waiting for correct size or mapping {mmap_path}. "
+                        f"Rank {LOCAL_RANK} timeout waiting for correct size or mapping {mmap_path}. "
                         f"Expected size: {expected_size}, Found: {os.path.getsize(mmap_path) if os.path.exists(mmap_path) else 'Not Found'}"
                     )
 
@@ -258,13 +258,13 @@ def patch_log(T: type):
         # Initialize the synchronization Flag
         log_sync_flag_path = f"{LOG_CACHE_DIR}/log_sync_flag.dat"
         log_sync_flag = Flag(
-            world_size=n, file_path=log_sync_flag_path, is_master=is_main
+            world_size=WORLD_SIZE, file_path=log_sync_flag_path, is_master=is_main
         )
-        logger.info(f"[{HYPERSLOTH_LOCAL_RANK=}] Log patch initialization complete.")
+        logger.info(f"[{LOCAL_RANK=}] Log patch initialization complete.")
 
     except Exception as e:
         logger.error(
-            f"[{HYPERSLOTH_LOCAL_RANK=}] CRITICAL ERROR during log patch initialization: {e}"
+            f"[{LOCAL_RANK=}] CRITICAL ERROR during log patch initialization: {e}"
         )
         # Depending on the desired behavior, you might want to raise the exception
         # to halt the process or log and attempt to continue (though logging might fail).
@@ -320,7 +320,7 @@ def patch_log(T: type):
                 for key in support_keys:
                     if key in logs:  # Only write keys present in this log call
                         with LOG_LOCKS[key]:
-                            LOG_MMAP[key][HYPERSLOTH_LOCAL_RANK] = logs[key]
+                            LOG_MMAP[key][LOCAL_RANK] = logs[key]
                             LOG_MMAP[key].flush()
                     # else: # Handle missing keys if necessary (e.g., write 0 or NaN)
                     #    with LOG_LOCKS[key]:
@@ -329,12 +329,12 @@ def patch_log(T: type):
                 # logger.debug(f"Rank {HYPERSLOTH_LOCAL_RANK} wrote logs to mmap at step {current_step}")
 
                 # 2. Signal that this rank has written its data
-                log_sync_flag.update(HYPERSLOTH_LOCAL_RANK)
+                log_sync_flag.update(LOCAL_RANK)
                 # logger.debug(f"Rank {HYPERSLOTH_LOCAL_RANK} updated log sync flag at step {current_step}")
 
             except Exception as e:
                 logger.error(
-                    f"Rank {HYPERSLOTH_LOCAL_RANK} failed during mmap write or flag update at step {current_step}: {e}"
+                    f"Rank {LOCAL_RANK} failed during mmap write or flag update at step {current_step}: {e}"
                 )
                 # Handle error appropriately - maybe try to continue or raise
 
@@ -412,13 +412,11 @@ def patch_log(T: type):
                 try:
                     # Wait for the master to finish processing and reset the flag
                     # logger.debug(f"Worker {HYPERSLOTH_LOCAL_RANK} waiting for flag reset at step {current_step}")
-                    log_sync_flag.wait_for_reset(
-                        rank=HYPERSLOTH_LOCAL_RANK, step=current_step
-                    )
+                    log_sync_flag.wait_for_reset(rank=LOCAL_RANK, step=current_step)
                     # logger.debug(f"Worker {HYPERSLOTH_LOCAL_RANK} detected flag reset at step {current_step}")
                 except Exception as e:
                     logger.error(
-                        f"Worker {HYPERSLOTH_LOCAL_RANK} failed waiting for flag reset at step {current_step}: {e}"
+                        f"Worker {LOCAL_RANK} failed waiting for flag reset at step {current_step}: {e}"
                     )
                     # Handle error - worker might be stuck or proceed with inconsistent state
 

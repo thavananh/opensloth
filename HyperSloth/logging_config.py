@@ -310,6 +310,10 @@ class HyperSlothLogger:
 
         self._log_with_depth("info", model_info, depth=2)
 
+    def log_debug(self, message: str) -> None:
+        """Log debug information with enhanced formatting."""
+        self._log_with_depth("debug", f"🔍 {message}", depth=2)
+
     def log_dataset_info(
         self,
         train_size: int,
