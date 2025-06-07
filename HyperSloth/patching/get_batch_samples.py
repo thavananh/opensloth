@@ -218,7 +218,7 @@ def patch_get_batch_samples(hyper_config: HyperConfig):
                     [item["labels"] for item in pack_items_pending],
                     [item["attention_mask"] for item in pack_items_pending],
                 )
-                logger.log_debug(
+                logger.debug(
                     f"Packed {len(pack_items_pending)} items into batch of length {packed['input_ids'].shape[1]}"
                 )
                 packed_items.append(packed)

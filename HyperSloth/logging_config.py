@@ -13,6 +13,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 # from speedy_utils import setup_logger
+COUNT = 0
 
 
 class StepTimer:
@@ -68,8 +69,12 @@ class HyperSlothLogger:
         """Setup loguru logger with enhanced formatting."""
         from loguru import logger as base_logger
 
+        # global COUNT
+        # COUNT += 1
+
         self.logger = base_logger.bind(gpu_id=self.gpu_id)
-        base_logger.remove()
+        self.logger.remove()
+        del base_logger  # Avoid confusion with loguru's logger
         log_format = (
             "<green>{time:HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
@@ -77,46 +82,28 @@ class HyperSlothLogger:
             "<cyan>{file}:{line}</cyan> | "
             "<level>{message}</level>"
         )
-
-        base_logger.add(
+        self.logger.add(
             sys.stderr,
             format=log_format,
             level=self.log_level,
             colorize=True,
             enqueue=True,
-            filter=lambda record: record["extra"].get("gpu_id") is not None,
         )
 
         # File handler for individual GPU logs (always add these)
-        log_dir = ".log"
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = f"{log_dir}/gpu_{self.gpu_id}.log"
+        try:
+            log_file = os.path.join(os.environ["HYPERSLOTH_OUTPUT_DIR"], "training.log")
 
-        base_logger.add(
-            log_file,
-            format=log_format,
-            level="DEBUG",
-            rotation="10 MB",
-            retention="1 week",
-            enqueue=True,
-            filter=lambda record: record["extra"].get("gpu_id") == self.gpu_id,
-        )
-
-        # Master log file (all GPUs write here)
-        if self.gpu_id == "0":
-            master_log = f"{log_dir}/master.log"
-            if os.path.exists(master_log):
-                os.remove(master_log)
-
-            base_logger.add(
-                master_log,
+            self.logger.add(
+                log_file,
                 format=log_format,
-                level="INFO",
-                rotation="50 MB",
+                level="DEBUG",
+                rotation="10 MB",
                 retention="1 week",
                 enqueue=True,
-                filter=lambda record: record["extra"].get("gpu_id") is not None,
             )
+        except KeyError:
+            pass
 
     def _log_with_depth(self, level: str, message: str, depth: int = 2) -> None:
         """Log message with loguru's built-in caller information."""
@@ -539,13 +526,13 @@ def get_hypersloth_logger(
     log_level="INFO", allow_unknown_gpu=False
 ) -> HyperSlothLogger:
     """Setup and return enhanced logger instance."""
-    global VALID_LOGGER
-    if VALID_LOGGER is not None:
-        return VALID_LOGGER
+    # global VALID_LOGGER
+    # if VALID_LOGGER is not None:
+    #     return VALID_LOGGER
 
     logger = HyperSlothLogger(log_level=log_level, allow_unknown_gpu=allow_unknown_gpu)
-    if not allow_unknown_gpu:
-        VALID_LOGGER = logger
+    # if not allow_unknown_gpu:
+    #     VALID_LOGGER = logger
     return logger
 
 

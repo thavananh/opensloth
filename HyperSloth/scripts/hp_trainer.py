@@ -325,7 +325,7 @@ def initialize_training_config(config_file):
     # Display combined config with enhanced formatting
 
 
-def setup_envs(hyper_config, training_config):
+def setup_envs(hyper_config: HyperConfig, training_config: TrainingArgsConfig):
     os.environ["HYPERSLOTH_WORLD_SIZE"] = str(len(hyper_config.training.gpus))
     os.environ["HYPERSLOTH_FORWARD_BZ"] = str(
         training_config.per_device_train_batch_size
@@ -345,3 +345,5 @@ def setup_envs(hyper_config, training_config):
     os.environ["HYPERSLOTH_PER_DEVICE_TRAIN_BZ"] = str(
         training_config.per_device_train_batch_size
     )
+    # output dir
+    os.environ["HYPERSLOTH_OUTPUT_DIR"] = training_config.output_dir

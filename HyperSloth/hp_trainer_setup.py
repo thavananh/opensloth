@@ -12,7 +12,8 @@ from HyperSloth.init_modules import (
 )
 
 from .hypersloth_config import HyperConfig, TrainingArgsConfig
-from loguru import logger
+
+# from loguru import logger
 
 
 def _change_compiler_location() -> None:
@@ -25,7 +26,7 @@ def _change_compiler_location() -> None:
     compiler.UNSLOTH_COMPILE_LOCATION = ".cache/{}_{}".format(
         compiler.UNSLOTH_COMPILE_LOCATION, gpu_ith
     )
-    logger.info(f"Using compiler location: {compiler.UNSLOTH_COMPILE_LOCATION}")
+    print(f"Using compiler location: {compiler.UNSLOTH_COMPILE_LOCATION}")
 
 
 def setup_model_and_training(
