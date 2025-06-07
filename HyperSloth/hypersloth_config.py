@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-WORKERS = max(1, cpu_count() - 2)
+WORKERS = max(1, cpu_count() // 3)
 
 
 class DatasetConfigBase(BaseModel):
