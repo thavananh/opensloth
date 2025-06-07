@@ -103,7 +103,7 @@ def create_trainer(
     from HyperSloth.patching.patch_log import patch_log
 
     patch_log(type(trainer))
-    patch_inner_training_loop()
+    patch_inner_training_loop(hyper_config)
 
     from .patching.get_batch_samples import patch_get_batch_samples
 

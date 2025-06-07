@@ -1,19 +1,20 @@
 from fastcore.all import patch
 from transformers.trainer import *
+from ..hypersloth_config import HyperConfig
 
 # from HyperSloth.patching.patch_log import patch_log
 # from ..logging_config import get_hypersloth_logger
 
 # DISABLE_PACKING = True
-from .get_batch_samples import DISABLE_PACKING
 
 
-def patch_inner_training_loop():
+def patch_inner_training_loop(hypersloth_config: HyperConfig):
     """
     Ultra-minimal patch that only adds essential HyperSloth customizations.
     This approach patches specific methods instead of duplicating the entire training loop.
     """
     # Get environment variables
+    DISABLE_PACKING = hypersloth_config.disable_packing
 
     @patch
     def _inner_training_loop(

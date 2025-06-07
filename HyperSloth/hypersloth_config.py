@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-WORKERS = max(1, cpu_count() // 2)
+WORKERS = max(1, cpu_count() - 2)
 
 
 class DatasetConfigBase(BaseModel):
@@ -116,6 +116,10 @@ class HyperConfig(BaseModel):
     pretrained_lora: Optional[str] = Field(
         default=None,
         description="Path to pretrained LoRA model for continous lora training",
+    )
+    disable_packing: bool = Field(
+        default=False,
+        description="Disable packing of sequences for training",
     )
 
     class Config:
