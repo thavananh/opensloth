@@ -107,11 +107,18 @@ def create_trainer(
 
     from .patching.get_batch_samples import patch_get_batch_samples
 
-    trainer = patch_get_batch_samples(trainer)
+    patch_get_batch_samples(hyper_config)
 
     # ====
-    trainer = apply_patch_sampler(trainer)
+    apply_patch_sampler(hyper_config)
     logger.finish_timing("training_loop_patch")
+
+    # ===
+    from .patching.patch_sampler import ShuffleData
+
+    logger.info(f"Add callback ShuffleData to Trainer {trainer.__class__.__name__}")
+    trainer.add_callback(ShuffleData())
+
     return trainer
 
 

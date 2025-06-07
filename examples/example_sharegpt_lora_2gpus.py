@@ -17,7 +17,6 @@ hyper_config_model = HyperConfig(
     ),
     fast_model_args=FastModelArgs(
         model_name="unsloth/Qwen3-0.6b-bnb-4bit",
-        max_seq_length=32_000,
         full_finetuning=True,
         # load_in_4bit=True,
     ),
@@ -54,4 +53,5 @@ training_config_model = TrainingArgsConfig(
     optim="adamw_8bit",
     seed=3407,
     report_to="none",  # tensorboard or wawndb
+    max_seq_length=32_000,
 )

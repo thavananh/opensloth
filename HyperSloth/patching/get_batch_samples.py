@@ -114,7 +114,10 @@ def pack(
     }
 
 
-def patch_get_batch_samples(trainer):
+from ..hypersloth_config import HyperConfig
+
+
+def patch_get_batch_samples(hyper_config: HyperConfig):
     """
     Ultra-minimal patch that only adds essential HyperSloth customizations.
     This approach patches specific methods instead of duplicating the entire training loop.
@@ -134,7 +137,7 @@ def patch_get_batch_samples(trainer):
         batch_samples, num_items_in_batch = original_get_batch_samples(
             self, epoch_iterator, num_batches, device
         )
-        if DISABLE_PACKING:
+        if hyper_config.disable_packing:
             # all_items = {gpu: {} for gpu in range(hp_world_size)}
             ga_batches = []
             for accumulated_batch in batch_samples:
@@ -151,7 +154,7 @@ def patch_get_batch_samples(trainer):
 
         # Apply GPU-specific optimizations if multi-GPU
         if hp_world_size > 1:
-            max_seq_len = trainer.args.max_seq_length
+            max_seq_len = self.args.max_seq_length
 
             all_items = []
             for accumulated_batch in batch_samples:
@@ -195,7 +198,7 @@ def patch_get_batch_samples(trainer):
                         [item["attention_mask"] for item in pack_items_pending],
                     )
                     # Add packed batch to the list
-                    logger.info(
+                    logger.debug(
                         f"Packed {len(pack_items_pending)} items into batch of length {packed['input_ids'].shape[1]}"
                     )
                     packed_items.append(packed)
@@ -224,5 +227,3 @@ def patch_get_batch_samples(trainer):
             batch_samples = packed_items
 
         return batch_samples, num_items_in_batch
-
-    return trainer

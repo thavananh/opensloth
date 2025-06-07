@@ -65,7 +65,10 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
         )
 
 
-def apply_patch_sampler(trainer: Trainer):
+from ..hypersloth_config import HyperConfig
+
+
+def apply_patch_sampler(hyper_config: HyperConfig):
     logger = get_hypersloth_logger(log_level="INFO", allow_unknown_gpu=True)
     logger.info("🔧 Patching Trainer to use RandomSamplerSeededByEpoch")
 
@@ -82,8 +85,3 @@ def apply_patch_sampler(trainer: Trainer):
         ), "train_dataset must be a Dataset or IterableDataset"
 
         return RandomSamplerSeededByEpoch(train_dataset)  # type: ignore
-
-    logger.info(f"Add callback ShuffleData to Trainer {trainer.__class__.__name__}")
-    trainer.add_callback(ShuffleData())
-
-    return trainer
