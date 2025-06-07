@@ -36,16 +36,8 @@ def train_on_single_gpu(
     from HyperSloth.hp_trainer_setup import setup_model_and_training
 
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
-
     # Setup enhanced logger
     logger = HyperSlothLogger()
-
-    # Use enhanced logging
-    logger.log_gpu_info(
-        gpu=gpu,
-        world_size=len(hyper_config.training.gpus),
-        model_name=hyper_config.fast_model_args.model_name,
-    )
 
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
@@ -307,14 +299,6 @@ def initialize_training_config(config_file):
     assert os.path.exists(config_file), f"Config file {config_file} not found"
 
     hyper_config, training_config = load_config_from_path(config_file)
-    from HyperSloth.logging_config import format_config_display, get_hypersloth_logger
-
-    temp_logger = get_hypersloth_logger(log_level="INFO", allow_unknown_gpu=True)
-    combined_config = format_config_display(hyper_config, training_config)
-    temp_logger.log_config_table(
-        combined_config, "🔧 HyperSloth Training Configuration"
-    )
-
     # override max_seq_len if provided in training_config
     if training_config.max_seq_len is not None:
         print(f"Overriding max_seq_len to {training_config.max_seq_len}")
@@ -322,7 +306,6 @@ def initialize_training_config(config_file):
 
     setup_envs(hyper_config, training_config)
     return hyper_config, training_config
-    # Display combined config with enhanced formatting
 
 
 def setup_envs(hyper_config: HyperConfig, training_config: TrainingArgsConfig):
@@ -347,3 +330,4 @@ def setup_envs(hyper_config: HyperConfig, training_config: TrainingArgsConfig):
     )
     # output dir
     os.environ["HYPERSLOTH_OUTPUT_DIR"] = training_config.output_dir
+    os.environ["HYPERSLOTH_LOG_LEVEL"] = hyper_config.log_level

@@ -69,8 +69,8 @@ from ..hypersloth_config import HyperConfig
 
 
 def apply_patch_sampler(hyper_config: HyperConfig):
-    logger = get_hypersloth_logger(log_level="INFO", allow_unknown_gpu=True)
-    logger.info("🔧 Patching Trainer to use RandomSamplerSeededByEpoch")
+
+    print("🔧 Patching Trainer to use RandomSamplerSeededByEpoch")
 
     @patch
     def _get_train_sampler(

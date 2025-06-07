@@ -122,6 +122,11 @@ class HyperConfig(BaseModel):
         description="Disable packing of sequences for training",
     )
 
+    log_level: Literal["info", "debug"] = Field(
+        default="info",
+        description="Logging level for the training process",
+    )
+
     class Config:
         """Pydantic configuration for DataConfig."""
 
