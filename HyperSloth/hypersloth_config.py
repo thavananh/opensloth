@@ -7,14 +7,30 @@ WORKERS = max(1, cpu_count() // 2)
 
 
 class DatasetConfigBase(BaseModel):
-    tokenizer_name: str
-    chat_template: str
-    instruction_part: str
-    response_part: str
+    tokenizer_name: Optional[str] = Field(
+        default=None,
+        description="Name of the tokenizer to use for text processing",
+    )
+    chat_template: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Chat template for formatting input data",
+    )
+    instruction_part: Optional[str] = Field(
+        default="<|im_start|>user\n",
+        description="Part of the input that contains the instruction",
+    )
+    response_part: Optional[str] = Field(
+        default="<|im_start|>assistant\n",
+        description="Part of the input that contains the response",
+    )
     num_samples: Optional[int] = None
     nproc: int = Field(
         default=WORKERS,
         description="Number of processes to use for dataset preparation",
+    )
+    max_seq_length: int = Field(
+        default=32_000,
+        description="Maximum sequence length for tokenization",
     )
 
 

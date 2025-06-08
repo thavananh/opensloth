@@ -5,11 +5,12 @@ hyper_config_model = HyperConfig(
     data=HFDatasetConfig(
         dataset_name="llamafactory/OpenThoughts-114k",
         split="train",
-        tokenizer_name="unsloth/Qwen3-0.6b-bnb-4bit",  # does not matter same family qwen3
-        num_samples=10000,
+        # tokenizer_name="unsloth/Qwen3-0.6b-bnb-4bit",  # does not matter same family qwen3
+        # num_samples=10000,
         instruction_part="<|im_start|>user\n",
         response_part="<|im_start|>assistant\n",
         chat_template="qwen3",
+        nproc=16,
     ),
     training=TrainingConfig(
         gpus=[0, 1],

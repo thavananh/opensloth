@@ -136,10 +136,7 @@ def _get_trainer(
 
     # Get the tokenized dataset using the dataset_utils function
     train_dataset = get_tokenized_dataset(
-        data_config=hyper_config.data,
-        model=model,
-        tokenizer=tokenizer,
-        hf_train_args=hf_train_args,
+        config=hyper_config.data,
     )
 
     logger.info("Creating final SFTTrainer with prepared dataset...")
