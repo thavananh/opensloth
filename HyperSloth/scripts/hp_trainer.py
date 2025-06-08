@@ -300,7 +300,7 @@ def initialize_training_config(config_file):
 
     hyper_config, training_config = load_config_from_path(config_file)
     print(f"Overriding max_seq_len to {hyper_config.fast_model_args.max_seq_length}")
-    training_config.max_seq_len = hyper_config.fast_model_args.max_seq_length
+    # training_config.max_seq_len = hyper_config.fast_model_args.max_seq_length
     hyper_config.data.max_seq_length = hyper_config.fast_model_args.max_seq_length
     hyper_config.data.tokenizer_name = (
         hyper_config.data.tokenizer_name or hyper_config.fast_model_args.model_name

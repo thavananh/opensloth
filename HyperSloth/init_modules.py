@@ -135,7 +135,7 @@ def _get_trainer(
     logger = get_hypersloth_logger(log_level="INFO")
 
     # Get the tokenized dataset using the dataset_utils function
-    train_dataset = get_tokenized_dataset(
+    tokenized_train_dataset = get_tokenized_dataset(
         config=hyper_config.data,
     )
 
@@ -144,10 +144,8 @@ def _get_trainer(
     hf_train_args.skip_prepare_dataset = True
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
-        train_dataset=train_dataset,
+        train_dataset=tokenized_train_dataset,
         args=hf_train_args,
-        max_seq_length=hf_train_args.max_seq_len,
     )
     logger.finish_timing("final_trainer_creation")
 

@@ -4,6 +4,44 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 WORKERS = max(1, cpu_count() // 2)
+# In [3]: from unsloth.chat_templates import CHAT_TEMPLATES
+# In [4]: CHAT_TEMPLATES.keys()
+
+KNOWN_CHAT_TEMPLATES = [
+    "unsloth",
+    "zephyr",
+    "chatml",
+    "mistral",
+    "llama",
+    "vicuna",
+    "vicuna_old",
+    "vicuna old",
+    "alpaca",
+    "gemma",
+    "gemma_chatml",
+    "gemma2",
+    "gemma2_chatml",
+    "llama-3",
+    "llama3",
+    "phi-3",
+    "phi-35",
+    "phi-3.5",
+    "llama-3.1",
+    "llama-31",
+    "llama-3.2",
+    "llama-3.3",
+    "llama-32",
+    "llama-33",
+    "qwen-2.5",
+    "qwen-25",
+    "qwen25",
+    "qwen2.5",
+    "phi-4",
+    "gemma-3",
+    "gemma3",
+    "qwen-3",
+    "qwen3",
+]
 
 
 class DatasetConfigBase(BaseModel):
@@ -29,11 +67,23 @@ class DatasetConfigBase(BaseModel):
         description="Number of processes to use for dataset preparation",
     )
 
-    # Already set in FastModelArgs
-    # max_seq_length: int = Field(
-    #     default=32_000,
-    #     description="Maximum sequence length for tokenization",
-    # )
+    max_seq_length: Optional[int] = Field(
+        default=32_000,
+        description="Maximum sequence length for tokenization",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Validate chat template after model initialization."""
+        if self.chat_template is not None:
+            templates = [self.chat_template] if isinstance(
+                self.chat_template, str
+            ) else self.chat_template
+            for template in templates:
+                if template not in KNOWN_CHAT_TEMPLATES:
+                    raise ValueError(
+                        f"Unknown chat template '{template}'. "
+                        f"Must be one of: {KNOWN_CHAT_TEMPLATES}"
+                    )
 
 
 class HFDatasetConfig(DatasetConfigBase):
