@@ -295,9 +295,9 @@ def get_text_dataset(config: DatasetConfig) -> datasets.Dataset:
     return _prepare_text_dataset(
         std_chat_dataset=std_chat_dataset,
         tokenizer_name=config.tokenizer_name,
-        chat_template=getattr(config, "chat_template", None),
-        num_samples=getattr(config, "num_samples", None),
-        nproc=getattr(config, "nproc", None),
+        chat_template=config.chat_template,
+        num_samples=config.num_samples,
+        nproc=config.nproc,
     )
 
 
@@ -313,10 +313,14 @@ def get_tokenized_dataset(
 
     if config.max_seq_length <= 0:
         raise ValueError("max_seq_length must be positive")
-
+    ignore_keys = ["nproc"]
+    _config = config.model_dump()
+    for key in ignore_keys:
+        if key in _config:
+            del _config[key]
     cache_id = identify(
         [
-            config.model_dump_json(),
+            _config,
             do_tokenize,
             response_only,
             config.max_seq_length,
@@ -336,7 +340,7 @@ def get_tokenized_dataset(
             )
 
         tokenizer = _get_tokenizer(
-            config.tokenizer_name, getattr(config, "chat_template", None)
+            config.tokenizer_name, config.chat_template, trust_remote_code=True
         )
 
         def _pipeline(example: dict) -> dict:
