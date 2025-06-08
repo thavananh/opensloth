@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-WORKERS = max(1, cpu_count() // 3)
+WORKERS = max(1, cpu_count() // 2)
 
 
 class DatasetConfigBase(BaseModel):
@@ -55,7 +55,7 @@ class FastModelArgs(BaseModel):
     """Configuration for Unsloth's FastModel initialization."""
 
     model_name: str = "unsloth/gemma-3-4b-it"
-    max_seq_length: Optional[int] = None
+    max_seq_length: int = 4096
     load_in_4bit: bool = True
     load_in_8bit: bool = False
     full_finetuning: bool = False
@@ -153,7 +153,6 @@ class TrainingArgsConfig(BaseModel):
     report_to: Literal["tensorboard", "wandb", "none"] = "tensorboard"
     eval_strategy: str = "no"  # must be no, when using multigpus
     dataset_num_proc: int = WORKERS
-    max_seq_len: int = 32_000
 
     class Config:
         """Pydantic configuration for DataConfig."""

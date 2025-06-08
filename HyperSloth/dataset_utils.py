@@ -70,12 +70,7 @@ def prepare_text_dataset(
     ), f"Dataset must contain 'conversations' column, found: {std_chat_dataset.column_names}"
 
     if num_samples is not None:
-        indices = list(range(len(std_chat_dataset)))
-        random.seed(42)
-        random.shuffle(indices)
-        selected_indices = indices[:num_samples]
-        std_chat_dataset = std_chat_dataset.select(selected_indices)
-
+        std_chat_dataset = std_chat_dataset.shuffle(seed=42).select(range(num_samples))
     tokenizer = _get_tokenizer(tokenizer_name, chat_template)
 
     def formatting_prompts_func(examples):
@@ -92,7 +87,10 @@ def prepare_text_dataset(
         nproc = min(nproc, len(std_chat_dataset) // 10_000)
         nproc = max(nproc, 1)  # Ensure at least one process
     text_dataset = std_chat_dataset.map(
-        formatting_prompts_func, batched=True, num_proc=nproc
+        formatting_prompts_func,
+        batched=True,
+        num_proc=nproc,
+        desc="Formatting conversations into text",
     )
 
     return text_dataset

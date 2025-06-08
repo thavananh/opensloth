@@ -299,10 +299,8 @@ def initialize_training_config(config_file):
     assert os.path.exists(config_file), f"Config file {config_file} not found"
 
     hyper_config, training_config = load_config_from_path(config_file)
-    # override max_seq_len if provided in training_config
-    if training_config.max_seq_len is not None:
-        print(f"Overriding max_seq_len to {training_config.max_seq_len}")
-        hyper_config.fast_model_args.max_seq_length = training_config.max_seq_len
+    print(f"Overriding max_seq_len to {hyper_config.fast_model_args.max_seq_length}")
+    training_config.max_seq_len = hyper_config.fast_model_args.max_seq_length
 
     setup_envs(hyper_config, training_config)
     return hyper_config, training_config
