@@ -18,25 +18,24 @@ hyper_config_model = HyperConfig(
     ),
     fast_model_args=FastModelArgs(
         model_name="unsloth/Qwen3-0.6b-bnb-4bit",
-        full_finetuning=True,
-        # load_in_4bit=True,
+        max_seq_length=4096,
     ),
-    # lora_args=LoraArgs(
-    #     r=8,
-    #     lora_alpha=16,
-    #     target_modules=[
-    #         "q_proj",
-    #         "k_proj",
-    #         "v_proj",
-    #         "o_proj",
-    #         "gate_proj",
-    #         "up_proj",
-    #         "down_proj",
-    #     ],
-    #     lora_dropout=0,
-    #     bias="none",
-    #     use_rslora=False,
-    # ),
+    lora_args=LoraArgs(
+        r=8,
+        lora_alpha=16,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+        lora_dropout=0,
+        bias="none",
+        use_rslora=False,
+    ),
 )
 
 # Training arguments using Pydantic model
@@ -54,5 +53,4 @@ training_config_model = TrainingArgsConfig(
     optim="adamw_8bit",
     seed=3407,
     report_to="none",  # tensorboard or wawndb
-    max_seq_length=32_000,
 )

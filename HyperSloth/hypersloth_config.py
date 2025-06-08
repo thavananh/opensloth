@@ -28,10 +28,12 @@ class DatasetConfigBase(BaseModel):
         default=WORKERS,
         description="Number of processes to use for dataset preparation",
     )
-    max_seq_length: int = Field(
-        default=32_000,
-        description="Maximum sequence length for tokenization",
-    )
+
+    # Already set in FastModelArgs
+    # max_seq_length: int = Field(
+    #     default=32_000,
+    #     description="Maximum sequence length for tokenization",
+    # )
 
 
 class HFDatasetConfig(DatasetConfigBase):

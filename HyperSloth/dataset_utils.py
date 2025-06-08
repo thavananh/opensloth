@@ -340,7 +340,7 @@ def get_tokenized_dataset(
             )
 
         tokenizer = _get_tokenizer(
-            config.tokenizer_name, config.chat_template, trust_remote_code=True
+            config.tokenizer_name, getattr(config, "chat_template", None)
         )
 
         def _pipeline(example: dict) -> dict:
