@@ -1,7 +1,7 @@
 from HyperSloth.hypersloth_config import *
 from HyperSloth.scripts.hp_trainer import run_mp_training, setup_envs
 
-for n_gpu in [2, 4]:
+for n_gpu in [2]:
     # Main configuration using Pydantic models
     hyper_config_model = HyperConfig(
         data=HFDatasetConfig(
