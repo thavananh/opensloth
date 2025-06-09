@@ -9,7 +9,7 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
     This approach patches specific methods instead of duplicating the entire training loop.
     """
     # Get environment variables
-    DISABLE_PACKING = opensloth_config.disable_packing
+    packing = opensloth_config.sequence_packing
 
     @patch
     def _inner_training_loop(
@@ -346,14 +346,14 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                     step += 1
 
                     # === OpenSloth Customization ===#
-                    if DISABLE_PACKING:
+                    if packing:
+                        do_sync_step = i == len(batch_samples) - 1
+                    else:
                         do_sync_step = (
                             step + 1
                         ) % args.gradient_accumulation_steps == 0 or (
                             step + 1
                         ) == steps_in_epoch
-                    else:
-                        do_sync_step = i == len(batch_samples) - 1
                     # track tokens
                     # token_metrics = _compute_tokens(inputs["attention_mask"])
 
@@ -397,13 +397,13 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                     elif steps_trained_progress_bar is not None:
                         steps_trained_progress_bar.close()
                         steps_trained_progress_bar = None
-                    if DISABLE_PACKING:
-                        if step % args.gradient_accumulation_steps == 0:
+                    if packing:
+                        if i == 0:
                             self.control = self.callback_handler.on_step_begin(
                                 args, self.state, self.control
                             )
                     else:
-                        if i == 0:
+                        if step % args.gradient_accumulation_steps == 0:
                             self.control = self.callback_handler.on_step_begin(
                                 args, self.state, self.control
                             )
@@ -496,15 +496,15 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
 
                         model.zero_grad()
                         self.state.global_step += 1
-                        if DISABLE_PACKING:
-                            # When packing is disabled, use update_step for epoch calculation
-                            # since each update_step represents one gradient accumulation cycle
-                            self.state.epoch = epoch + (update_step + 1) / total_updates
-                        else:
+                        if packing:
                             # When packing is enabled, use the original calculation
                             self.state.epoch = (
                                 epoch + (step + 1 + steps_skipped) / steps_in_epoch
                             )
+                        else:
+                            # When packing is disabled, use update_step for epoch calculation
+                            # since each update_step represents one gradient accumulation cycle
+                            self.state.epoch = epoch + (update_step + 1) / total_updates
                         self.control = self.callback_handler.on_step_end(
                             args, self.state, self.control
                         )

@@ -6,13 +6,9 @@ from opensloth.opensloth_config import (
     LoraArgs,
     TrainingArguments,
 )
-from loguru import logger
-
-# from transformers.training_args import TrainingArguments
 
 
-# # Main configuration using Pydantic models
-def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
+def get_configs() -> tuple[OpenSlothConfig, TrainingArguments]:
     opensloth_config = OpenSlothConfig(
         data=HFDatasetConfig(
             tokenizer_name="Qwen/Qwen3-8B",
@@ -26,7 +22,7 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
             dataset_name="mlabonne/FineTome-100k",
             split="train",
         ),
-        devices=[0, 1, 2, 3][:n],
+        devices=[0, 1, 2, 3],
         fast_model_args=FastModelArgs(
             model_name="model_store/unsloth/Qwen3-14B-bnb-4bit",
             max_seq_length=4096,
@@ -48,13 +44,14 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
             bias="none",
             use_rslora=False,
         ),
-        # disable_packing=True,
+        sequence_packing=True,  # ref: https://huggingface.co/blog/sirluk/llm-sequence-packing
     )
 
     # # Training arguments using Pydantic model
+    num_devices = len(opensloth_config.devices)
     training_config = TrainingArguments(
-        output_dir=f"outputs/exps/qwen3-14b-FineTome-{n}gpus",
-        per_device_train_batch_size=8 // n,
+        output_dir=f"outputs/exps/qwen3-14b-FineTome-{num_devices}gpus",
+        per_device_train_batch_size=8,
         gradient_accumulation_steps=1,  # Adjust based on n_gpu
         learning_rate=1e-5,
         logging_steps=1,
@@ -72,6 +69,5 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
 
 
 if __name__ == "__main__":
-    for n in [1, 2, 4]:
-        opensloth_config, training_config = get_configs(n)
-        run_mp_training(opensloth_config.devices, opensloth_config, training_config)
+    opensloth_config, training_config = get_configs()
+    run_mp_training(opensloth_config.devices, opensloth_config, training_config)

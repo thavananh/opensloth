@@ -7,8 +7,6 @@ from opensloth.patching.patch_log import patch_log
 
 from ..logging_config import get_opensloth_logger
 
-DISABLE_PACKING = False
-
 
 def pack(
     input_ids_list: List[torch.Tensor],
@@ -104,7 +102,7 @@ def patch_get_batch_samples(opensloth_config: OpenSlothConfig):
         batch_samples, num_items_in_batch = original_get_batch_samples(
             self, epoch_iterator, num_batches, device
         )
-        if opensloth_config.disable_packing:
+        if opensloth_config.sequence_packing:
             # all_items = {gpu: {} for gpu in range(hp_world_size)}
             ga_batches = []
             for accumulated_batch in batch_samples:

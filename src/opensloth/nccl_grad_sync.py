@@ -102,15 +102,16 @@ class NCCLGradSyncCallback(TrainerCallback):
 # Add this integration code for opensloth at the end of the file
 
 
-def setup_nccl_for_opensloth(gpu: int, gpus: list) -> None:
+def setup_nccl_for_opensloth(rank: int, gpus: list) -> None:
     """Setup NCCL environment variables for opensloth integration."""
     import os
     import time
     import torch.distributed as dist
 
     # Map opensloth parameters to NCCL environment variables
-    rank = gpus.index(gpu)  # Local rank based on position in GPU list
+    # rank = gpus.index(gpu)  # Local rank based on position in GPU list
     world_size = len(gpus)  # Total number of GPUs
+    gpu = gpus[rank]  # Get the GPU ID for this rank
 
     # Set required NCCL environment variables
     os.environ["RANK"] = str(rank)

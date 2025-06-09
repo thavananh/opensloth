@@ -57,7 +57,7 @@ def train_qwen3_model():
         ],
         lora_dropout=0,
         bias="none",
-        use_gradient_checkpointing="unsloth",
+        use_gradient_checkpointing=True,
         random_state=3407,
         use_rslora=False,
         loftq_config=None,

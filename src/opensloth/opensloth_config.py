@@ -49,7 +49,7 @@ class DatasetConfigBase(BaseModel):
         default=None,
         description="Name of the tokenizer to use for text processing",
     )
-    chat_template: Optional[Union[str, List[str]]] = Field(
+    chat_template: Optional[str] = Field(
         default=None,
         description="Chat template for formatting input data",
     )
@@ -94,8 +94,8 @@ class DatasetConfigBase(BaseModel):
 
 class HFDatasetConfig(DatasetConfigBase):
     source_type: Literal["hf"] = "hf"
-    dataset_name: str
-    split: str
+    dataset_name: str = ""
+    split: Optional[str] = "train"
 
 
 class PathDatasetConfig(DatasetConfigBase):
@@ -176,8 +176,8 @@ class OpenSlothConfig(BaseModel):
         default=None,
         description="Path to pretrained LoRA model for continous lora training",
     )
-    disable_packing: bool = Field(
-        default=False,
+    sequence_packing: bool = Field(
+        default=True,
         description="Disable packing of sequences for training",
     )
 

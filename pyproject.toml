@@ -61,8 +61,4 @@ version = "0.1.4"
 packages = [{ include = "opensloth", from = "src" }]
 
 [tool.poetry.scripts]
-opensloth-train = "opensloth.scripts.hp_trainer:train"
-# opensloth-init = "opensloth.scripts.get_example_config:main"
-# opensloth-prepare-unsloth-model = "opensloth.scripts.prepare_model:main"
-# opensloth-export = "opensloth.scripts.export:main"
-# opensloth-build-dataset = "opensloth.scripts.build_dataset:main"
+opensloth-train = "opensloth.scripts.opensloth_sft_trainer"
