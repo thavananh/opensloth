@@ -72,7 +72,7 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
 
 if __name__ == "__main__":
     try:
-        for n in [4]:
+        for n in [1]:
             opensloth_config, training_config = get_configs(n)
             run_mp_training(opensloth_config.devices, opensloth_config, training_config)
 

@@ -52,24 +52,19 @@ class NCCLGradSyncCallback(TrainerCallback):
 
     def _sync_gradients(self, model: torch.nn.Module, step: int) -> None:
         """Synchronize gradients across all ranks using NCCL all-reduce."""
-        params = 0
 
-        for _, param in model.named_parameters():
-            if param.grad is None:
-                continue
+        # for _, param in model.named_parameters():
+        #     if param.grad is None:
+        #         continue
+        #     dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
+        #     param.grad.div_(self.world_size)
 
-            params += param.grad.numel()
-
-            # All-reduce gradient across all ranks
-            dist.all_reduce(param.grad, op=dist.ReduceOp.SUM)
-
-            # Average by dividing by world size
-            param.grad.div_(self.world_size)
-
-        self.logger.debug(
-            f"[GPU={self.gpu}] Gradient sync step {step}: "
-            f"{params / 1e6:.2f}M params"
-        )
+        for param in model.parameters():
+            if param.grad is not None:  # Optional: check for unused parameters
+                dist.all_reduce(param.grad.data, op=dist.ReduceOp.AVG)
+        # for param in model.parameters():
+        #     if param.grad is not None:
+        #         param.grad.data /= dist.get_world_size()
 
     def on_pre_optimizer_step(
         self, args, state: TrainerState, control: TrainerControl, **kwargs

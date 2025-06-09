@@ -468,6 +468,10 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                         # Since we perform prefetching, we need to manually set sync_gradients to True
                         self.accelerator.gradient_state._set_sync_gradients(True)
 
+                        # Gradient synchronization on the callback before normal optimizer step to avoid gradient being supressed with wrong values
+                        self.control = self.callback_handler.on_pre_optimizer_step(
+                            args, self.state, self.control
+                        )
                         # Gradient clipping
                         if args.max_grad_norm is not None and args.max_grad_norm > 0:
                             if is_sagemaker_mp_enabled() and args.fp16:
@@ -497,10 +501,6 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                                     grad_norm = grad_norm.item()
                             else:
                                 grad_norm = _grad_norm
-
-                        self.control = self.callback_handler.on_pre_optimizer_step(
-                            args, self.state, self.control
-                        )
 
                         self.optimizer.step()
 
