@@ -38,8 +38,10 @@ def _process_token_slice(
     else:
         pad_count = 0
 
+    is_truncated = b - a > max_tokens
+    if is_truncated:
+        decode_token = decode_token[:max_tokens]
     text = tokenizer.decode(decode_token, skip_special_tokens=False)
-    is_truncated = len(decode_token) > max_tokens or pad_count > 0
 
     if is_truncated:
         if pad_count:
