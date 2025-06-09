@@ -3,20 +3,6 @@ from transformers.trainer import *
 from ..opensloth_config import OpenSlothConfig
 
 
-def _compute_tokens(attention_mask: torch.Tensor) -> int:
-    """
-    Compute the number of tokens in a batch based on the attention mask.
-    This is used to calculate the number of tokens processed during training.
-    """
-    # num of non-padding tokens in the batch
-    num_non_padding_tokens = attention_mask.sum().item()
-    num_total_tokens = attention_mask.numel()
-    return {
-        "num_non_padding_tokens": num_non_padding_tokens,
-        "num_total_tokens": num_total_tokens,
-    }
-
-
 def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
     """
     Ultra-minimal patch that only adds essential opensloth customizations.
@@ -138,12 +124,6 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
         )
         self.state.is_hyper_param_search = trial is not None
         self.state.train_batch_size = self._train_batch_size
-
-        # Initialize cumulative token counters for tracking token metrics
-        if not hasattr(self.state, "num_non_padding_tokens"):
-            self.state.num_non_padding_tokens = 0
-        if not hasattr(self.state, "num_total_tokens"):
-            self.state.num_total_tokens = 0
 
         # Compute absolute values for logging, eval, and save if given as ratio
         self.state.compute_steps(args, max_steps)
@@ -375,13 +355,10 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                     else:
                         do_sync_step = i == len(batch_samples) - 1
                     # track tokens
-                    token_metrics = _compute_tokens(inputs["attention_mask"])
+                    # token_metrics = _compute_tokens(inputs["attention_mask"])
 
                     # Accumulate the new token metrics to the trainer state
-                    self.state.num_non_padding_tokens += token_metrics[
-                        "num_non_padding_tokens"
-                    ]
-                    self.state.num_total_tokens += token_metrics["num_total_tokens"]
+
                     # <<< OpenSloth Customization <<<#
 
                     # Since we perform prefetching, we need to manually set sync_gradients
