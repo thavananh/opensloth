@@ -6,7 +6,14 @@ authors = [{ name = "anhvth", email = "anhvth.226@gmail.com" }]
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
-keywords = ["machine learning", "deep learning", "transformers", "fine-tuning", "multi-gpu", "llm"]
+keywords = [
+    "machine learning",
+    "deep learning",
+    "transformers",
+    "fine-tuning",
+    "multi-gpu",
+    "llm",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -21,7 +28,15 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["pyyaml (>=6.0.2,<7.0.0)", "jupyterlab (>=4.3.5,<5.0.0)", "fastcore (>=1.7.29,<2.0.0)", "speedy-utils (>=0.1.20,<0.2.0)", "tensorboard (>=2.19.0,<3.0.0)", "fire (>=0.7.0,<0.8.0)", "tensorboardx (>=2.6.2.2,<3.0.0.0)"]
+dependencies = [
+    "pyyaml (>=6.0.2,<7.0.0)",
+    "jupyterlab (>=4.3.5,<5.0.0)",
+    "fastcore (>=1.7.29,<2.0.0)",
+    "speedy-utils (>=0.1.20,<0.2.0)",
+    "tensorboard (>=2.19.0,<3.0.0)",
+    "fire (>=0.7.0,<0.8.0)",
+    "tensorboardx (>=2.6.2.2,<3.0.0.0)",
+]
 
 [project.urls]
 Homepage = "https://github.com/anhvth/opensloth"
@@ -43,13 +58,11 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry]
 name = "opensloth"
 version = "0.1.4"
-packages = [
-    { include = "opensloth", from = "src" }
-]
+packages = [{ include = "opensloth", from = "src" }]
 
 [tool.poetry.scripts]
 opensloth-train = "opensloth.scripts.hp_trainer:train"
-opensloth-init = "opensloth.scripts.get_example_config:main"
-opensloth-prepare-unsloth-model = "opensloth.scripts.prepare_model:main"
-opensloth-export = "opensloth.scripts.export:main"
-opensloth-build-dataset = "opensloth.scripts.build_dataset:main"
+# opensloth-init = "opensloth.scripts.get_example_config:main"
+# opensloth-prepare-unsloth-model = "opensloth.scripts.prepare_model:main"
+# opensloth-export = "opensloth.scripts.export:main"
+# opensloth-build-dataset = "opensloth.scripts.build_dataset:main"

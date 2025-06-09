@@ -35,7 +35,7 @@ def train_qwen3_model():
     # Load model
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name="unsloth/Qwen3-0.6B-bnb-4bit",
-        max_seq_length=2048,
+        max_seq_length=4096,
         load_in_4bit=True,
         load_in_8bit=False,
         full_finetuning=False,
@@ -75,8 +75,8 @@ def train_qwen3_model():
         weight_decay=0.01,
         lr_scheduler_type="linear",
         seed=3407,
-        max_steps=100,
-        report_to="none",
+        # max_steps=100,
+        report_to="tensorboard",  # or "wandb"
     )
 
     # args.skip_prepare_dataset = True

@@ -218,16 +218,6 @@ def run_mp_training(
 
     print(f"[MP] Running on {len(gpus)} GPUs")
     processes = []
-    if len(gpus) == 1:
-        print("Only one GPU detected, running single GPU training")
-        train_on_single_gpu(
-            gpu=gpus[0],
-            opensloth_config=opensloth_config,
-            hf_train_args=training_config,
-        )
-        return
-    assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
-
     for gpu_index in gpus:
         p = mp.Process(
             target=train_on_single_gpu,

@@ -1,4 +1,4 @@
-from opensloth.scripts.opensloth_trainer import run_mp_training, setup_envs
+from opensloth.scripts.opensloth_sft_trainer import run_mp_training, setup_envs
 from opensloth.opensloth_config import (
     OpenSlothConfig,
     HFDatasetConfig,
@@ -28,7 +28,7 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
         ),
         devices=[0, 1, 2, 3][:n],
         fast_model_args=FastModelArgs(
-            model_name="unsloth/Qwen3-0.6B-bnb-4bit",
+            model_name="model_store/unsloth/Qwen3-14B-bnb-4bit",
             max_seq_length=4096,
             load_in_4bit=True,
         ),
@@ -48,12 +48,12 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
             bias="none",
             use_rslora=False,
         ),
-        disable_packing=True,
+        # disable_packing=True,
     )
 
     # # Training arguments using Pydantic model
     training_config = TrainingArguments(
-        output_dir=f"outputs/exps/qwen3-0.6b-FineTome-{n}gpus-no-packing/",
+        output_dir=f"outputs/exps/qwen3-14b-FineTome-{n}gpus",
         per_device_train_batch_size=8 // n,
         gradient_accumulation_steps=1,  # Adjust based on n_gpu
         learning_rate=1e-5,
@@ -72,11 +72,6 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
 
 
 if __name__ == "__main__":
-    try:
-        for n in [2, 4]:
-            opensloth_config, training_config = get_configs(n)
-            run_mp_training(opensloth_config.devices, opensloth_config, training_config)
-
-    except Exception as e:
-        logger.exception("An error occurred during training setup or execution.")
-        raise e
+    for n in [1, 2, 4]:
+        opensloth_config, training_config = get_configs(n)
+        run_mp_training(opensloth_config.devices, opensloth_config, training_config)

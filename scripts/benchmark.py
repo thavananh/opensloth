@@ -1,5 +1,5 @@
 from opensloth.opensloth_config import *
-from opensloth.scripts.opensloth_trainer import run_mp_training, setup_envs
+from opensloth.scripts.opensloth_sft_trainer import run_mp_training, setup_envs
 
 for n_gpu in [2]:
     # Main configuration using Pydantic models
@@ -57,7 +57,7 @@ for n_gpu in [2]:
     setup_envs(opensloth_config, training_config)
     if n_gpu == 1:
         # For single GPU, we can run the training directly
-        from opensloth.scripts.opensloth_trainer import train_on_single_gpu
+        from opensloth.scripts.opensloth_sft_trainer import train_on_single_gpu
 
         train_on_single_gpu(
             gpu=0,
