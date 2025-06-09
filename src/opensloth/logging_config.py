@@ -74,14 +74,14 @@ class OpenslothLogger:
         # Check if we're in tmux mode
         use_tmux = os.environ.get("USE_TMUX")
         is_tmux_mode = use_tmux == "1"
-        
+
         # Get local rank for distributed training
         local_rank = int(os.environ.get("HYPERSLOTH_LOCAL_RANK", "0"))
-        
+
         # In tmux mode, all ranks log to stderr
         if is_tmux_mode:
             return True
-            
+
         # In non-tmux mode, only rank 0 logs to stderr
         return local_rank == 0
 
@@ -102,10 +102,10 @@ class OpenslothLogger:
             "<cyan>{file}:{line}</cyan> | "
             "<level>{message}</level>"
         )
-        
+
         # Check if we should add stderr handler based on tmux mode and rank
         should_log_to_stderr = self._should_log_to_stderr()
-        
+
         if should_log_to_stderr:
             self.logger.add(
                 sys.stderr,

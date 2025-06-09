@@ -107,13 +107,17 @@ DatasetConfig = Union[HFDatasetConfig, PathDatasetConfig]
 
 
 class FastModelArgs(BaseModel):
-    """Configuration for Unsloth's FastModel initialization."""
+    """Configuration for Unsloth's FastModel initialization.
+
+    Derived from unsloth/models/loader.py: FastModel.from_pretrained
+    """
 
     model_name: str
     max_seq_length: int = 4096
     load_in_4bit: bool = True
     load_in_8bit: bool = False
     full_finetuning: bool = False
+    use_gradient_checkpointing: str = "unsloth"
 
     class Config:
         """Pydantic configuration for DataConfig."""

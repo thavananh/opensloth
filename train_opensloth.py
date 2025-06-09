@@ -5,12 +5,14 @@ from opensloth.opensloth_config import (
     FastModelArgs,
     LoraArgs,
 )
+from loguru import logger
+
+from transformers.training_args import TrainingArguments
 
 
 # # Main configuration using Pydantic models
-def get_configs():
+def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
     # Important: do not import transformers/unsloth related modules at the top level
-    from transformers import TrainingArguments
 
     opensloth_config = OpenSlothConfig(
         data=HFDatasetConfig(
@@ -25,9 +27,9 @@ def get_configs():
             dataset_name="mlabonne/FineTome-100k",
             split="train",
         ),
-        devices=[0, 1, 2, 3],
+        devices=[0, 1, 2, 3][:n],
         fast_model_args=FastModelArgs(
-            model_name="unsloth/Qwen3-8B-bnb-4bit",
+            model_name="unsloth/Qwen3-0.6B-bnb-4bit",
             max_seq_length=4096,
             load_in_4bit=True,
         ),
@@ -51,9 +53,9 @@ def get_configs():
 
     # # Training arguments using Pydantic model
     training_config = TrainingArguments(
-        output_dir="outputs/qwen3-8b-FineTome-4gpus/",
+        output_dir=f"outputs/exps/qwen3-0.6b-FineTome-{n}gpus/",
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,
+        gradient_accumulation_steps=8 // n,  # Adjust based on n_gpu
         learning_rate=1e-5,
         logging_steps=1,
         num_train_epochs=1,
@@ -70,5 +72,11 @@ def get_configs():
 
 
 if __name__ == "__main__":
-    opensloth_config, training_config = get_configs()
-    run_mp_training(opensloth_config.devices, opensloth_config, training_config)
+    try:
+        for n in [1, 2, 3]:
+            opensloth_config, training_config = get_configs(n)
+            run_mp_training(opensloth_config.devices, opensloth_config, training_config)
+
+    except Exception as e:
+        logger.exception("An error occurred during training setup or execution.")
+        raise e

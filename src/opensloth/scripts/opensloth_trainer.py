@@ -32,7 +32,6 @@ def get_current_python_path():
 def train_on_single_gpu(
     gpu: int, opensloth_config: OpenSlothConfig, hf_train_args: TrainingArgsConfig
 ):
-    from opensloth.nccl_grad_sync import NCCLGradSyncCallback
     from opensloth.opensloth_trainer_setup import setup_model_and_training
 
     os.environ["HYPERSLOTH_LOCAL_RANK"] = str(opensloth_config.devices.index(gpu))
@@ -54,16 +53,21 @@ def train_on_single_gpu(
     )
     logger.finish_timing("model_and_training_setup")
 
-    logger.start_timing("callback_setup")
     assert trainer.model is not None, "Trainer model is None"
-    grad_sync_cb = NCCLGradSyncCallback(
-        model=trainer.model,
-        gpu=gpu,
-        gpus=opensloth_config.devices,
-    )
-    logger.info(f"Using gradient sync callback for GPU {gpu}")
-    trainer.add_callback(grad_sync_cb)
-    logger.finish_timing("callback_setup")
+
+    # Only use NCCL gradient sync for multi-GPU training
+    if len(opensloth_config.devices) > 1:
+        from opensloth.nccl_grad_sync import NCCLGradSyncCallback
+
+        grad_sync_cb = NCCLGradSyncCallback(
+            model=trainer.model,
+            gpu=gpu,
+            gpus=opensloth_config.devices,
+        )
+        logger.info(f"Using gradient sync callback for GPU {gpu}")
+        trainer.add_callback(grad_sync_cb)
+    else:
+        logger.info(f"Single GPU training detected, skipping NCCL gradient sync")
 
     logger.start_timing("actual_training")
     trainer.train()
@@ -214,6 +218,14 @@ def run_mp_training(
 
     print(f"[MP] Running on {len(gpus)} GPUs")
     processes = []
+    if len(gpus) == 1:
+        print("Only one GPU detected, running single GPU training")
+        train_on_single_gpu(
+            gpu=gpus[0],
+            opensloth_config=opensloth_config,
+            hf_train_args=training_config,
+        )
+        return
     assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
 
     for gpu_index in gpus:
