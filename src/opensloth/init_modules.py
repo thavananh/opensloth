@@ -23,7 +23,7 @@ def init_model_and_tokenizer(opensloth_config: OpenSlothConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
 
-    logger = get_opensloth_logger(log_level="INFO")
+    logger = get_opensloth_logger()
 
     logger.start_timing("model_loading")
 
@@ -86,7 +86,7 @@ def create_trainer(
 
     # Get enhanced logger for timing
 
-    logger = get_opensloth_logger(log_level="INFO")
+    logger = get_opensloth_logger()
 
     logger.start_timing("trainer_setup")
 
@@ -113,7 +113,7 @@ def create_trainer(
     patch_get_batch_samples(opensloth_config)
 
     # ====
-    patch_sampler()
+    trainer = patch_sampler(trainer)
     logger.finish_timing("training_loop_patch")
 
     # ===
@@ -138,7 +138,7 @@ def _get_trainer(
     from transformers import DataCollatorForSeq2Seq
     from .logging_config import get_opensloth_logger
 
-    logger = get_opensloth_logger(log_level="INFO")
+    logger = get_opensloth_logger()
 
     # Get the tokenized dataset using the dataset_utils function
     tokenized_train_dataset = get_tokenized_dataset(

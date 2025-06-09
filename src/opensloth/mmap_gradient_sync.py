@@ -28,7 +28,7 @@ if False:
     )
     from opensloth.logging_config import get_opensloth_logger
 
-    logger = get_opensloth_logger(log_level="INFO")
+    logger = get_opensloth_logger()
 
     # Use safe logger that handles gpu_id properly
 

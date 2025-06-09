@@ -17,7 +17,7 @@ class ShuffleData(TrainerCallback):
         if local_rank != 0:
             return
 
-        logger = get_opensloth_logger(log_level="INFO")
+        logger = get_opensloth_logger(allow_unknown_gpu=True)
         logger.info(f"🔄 Starting epoch {state.epoch + 1}")
 
         try:
@@ -36,7 +36,7 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
     def __init__(self, data_source) -> None:
         self.data_source = data_source
         self.epoch = 0
-        self.logger = get_opensloth_logger(log_level="DEBUG")
+        self.logger = get_opensloth_logger(allow_unknown_gpu=True)
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = epoch
@@ -68,20 +68,14 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
 from ..opensloth_config import OpenSlothConfig
 
 
-def patch_sampler():
-
+def patch_sampler(trainer: Trainer) -> None:
+    """Patch trainer to use RandomSamplerSeededByEpoch."""
     print("🔧 Patching Trainer to use RandomSamplerSeededByEpoch")
 
-    @patch
-    def _get_train_sampler(
-        self: Trainer, train_dataset=None
-    ) -> RandomSamplerSeededByEpoch:
-        """Get a custom sampler for the training dataset."""
+    def _get_train_sampler(train_dataset=None) -> RandomSamplerSeededByEpoch:
         if train_dataset is None:
-            train_dataset = self.train_dataset
+            train_dataset = trainer.train_dataset
+        return RandomSamplerSeededByEpoch(train_dataset)
 
-        assert isinstance(
-            train_dataset, (Dataset, IterableDataset)
-        ), "train_dataset must be a Dataset or IterableDataset"
-
-        return RandomSamplerSeededByEpoch(train_dataset)  # type: ignore
+    trainer._get_train_sampler = _get_train_sampler
+    return trainer

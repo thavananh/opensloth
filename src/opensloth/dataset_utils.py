@@ -181,7 +181,7 @@ def _get_cached_dataset(
     lock_path = output_path.with_suffix(".lock")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger = get_opensloth_logger(log_level="INFO", allow_unknown_gpu=False)
+    logger = get_opensloth_logger(log_level="INFO", allow_unknown_gpu=True)
     max_retries = 30
     retry_delay = 3
 

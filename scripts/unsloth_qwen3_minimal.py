@@ -6,24 +6,35 @@ import os
 from opensloth.patching.patch_sampler import patch_sampler
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["HYPERSLOTH_LOCAL_RANK"] = "0"
 
 
 def train_qwen3_model():
     """Train Qwen3 model with minimal setup."""
-    # Import CUDA-related libraries inside function for proper GPU initialization
+    from opensloth.dataset_utils import get_tokenized_dataset, HFDatasetConfig
 
-    from datasets import Dataset
-
-    dataset_path = "~/.cache/opensloth/openthoughts-1k_tokenized/"
-    processed_dataset = Dataset.load_from_disk(dataset_path)
-
+    text_dataset = get_tokenized_dataset(
+        HFDatasetConfig(
+            tokenizer_name="Qwen/Qwen3-8B",
+            chat_template="qwen3",
+            instruction_part="<|im_start|>user\n",
+            response_part="<|im_start|>assistant\n",
+            num_samples=1000,
+            nproc=52,
+            max_seq_length=4096,
+            source_type="hf",
+            dataset_name="mlabonne/FineTome-100k",
+            split="train",
+        ),
+        do_tokenize=False,
+    )
     from unsloth import FastLanguageModel
     import torch
     from trl import SFTTrainer, SFTConfig
 
     # Load model
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="model_store/unsloth/Qwen3-8B-bnb-4bit",
+        model_name="unsloth/Qwen3-0.6B-bnb-4bit",
         max_seq_length=2048,
         load_in_4bit=True,
         load_in_8bit=False,
@@ -34,6 +45,7 @@ def train_qwen3_model():
     model = FastLanguageModel.get_peft_model(
         model,
         r=8,
+        lora_alpha=16,
         target_modules=[
             "q_proj",
             "k_proj",
@@ -43,7 +55,6 @@ def train_qwen3_model():
             "up_proj",
             "down_proj",
         ],
-        lora_alpha=16,
         lora_dropout=0,
         bias="none",
         use_gradient_checkpointing="unsloth",
@@ -51,37 +62,38 @@ def train_qwen3_model():
         use_rslora=False,
         loftq_config=None,
     )
+    args = SFTConfig(
+        output_dir="outputs/exps/qwen3-0.6b-FineTome-unsloth-no-packing",
+        dataset_text_field="text",
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        warmup_steps=5,
+        learning_rate=1e-5,
+        num_train_epochs=1,
+        logging_steps=1,
+        optim="adamw_8bit",
+        weight_decay=0.01,
+        lr_scheduler_type="linear",
+        seed=3407,
+        max_steps=100,
+        report_to="none",
+    )
 
-    # Load pre-built dataset
-
+    # args.skip_prepare_dataset = True
     trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
-        train_dataset=processed_dataset,
+        train_dataset=text_dataset,
         eval_dataset=None,
-        args=SFTConfig(
-            output_dir="outputs/qwen3-minimal",
-            dataset_text_field="text",
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=32,
-            warmup_steps=5,
-            learning_rate=2e-4,
-            num_train_epochs=1,
-            logging_steps=1,
-            optim="adamw_8bit",
-            weight_decay=0.01,
-            lr_scheduler_type="linear",
-            seed=3407,
-            max_steps=100,
-            report_to="none",
-        ),
+        args=args,
     )
-    from unsloth.chat_templates import train_on_responses_only
+    from unsloth_zoo.dataset_utils import train_on_responses_only
 
     trainer = train_on_responses_only(
         trainer,
-        instruction_part="<|im_start|>user",
-        response_part="<|im_start|>assistant",
+        tokenizer=tokenizer,
+        instruction_part="<|im_start|>user\n",
+        response_part="<|im_start|>assistant\n",
     )
 
     # Show memory stats
@@ -95,7 +107,7 @@ def train_qwen3_model():
 
     # from ._patch_sampler import patch_sampler
 
-    trainer = patch_sampler()
+    trainer = patch_sampler(trainer)
     trainer_stats = trainer.train()
 
     # Show final memory and time stats

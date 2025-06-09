@@ -43,7 +43,7 @@ def setup_model_and_training(
     # Get enhanced logger for timing
     from .logging_config import get_opensloth_logger
 
-    hp_logger = get_opensloth_logger(log_level="INFO")
+    hp_logger = get_opensloth_logger()
 
     # Start total setup timing
     hp_logger.start_timing("total_setup")
