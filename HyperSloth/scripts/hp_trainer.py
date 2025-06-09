@@ -206,10 +206,10 @@ def run_mp_training(
 ):
     """Handle multi-GPU training using multi-processing."""
     import multiprocessing as mp
-    
+
     # Set spawn method for CUDA compatibility
-    mp.set_start_method('spawn', force=True)
-    
+    mp.set_start_method("spawn", force=True)
+
     print(f"[MP] Running on {len(gpus)} GPUs")
     processes = []
     assert len(gpus) > 1, "Cannot use multi-processing with a single GPU"
@@ -219,9 +219,9 @@ def run_mp_training(
             target=train_on_single_gpu,
             args=(gpu_index,),
             kwargs={
-                'hyper_config': hyper_config,
-                'hf_train_args': training_config,
-            }
+                "hyper_config": hyper_config,
+                "hf_train_args": training_config,
+            },
         )
         p.start()
         processes.append(p)
