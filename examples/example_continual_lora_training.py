@@ -1,9 +1,9 @@
 # Continual LoRA training from pretrained checkpoint
-# To run: hypersloth-train example_continual_lora_training.py
-from HyperSloth.hypersloth_config import *
+# To run: opensloth-train example_continual_lora_training.py
+from opensloth.opensloth_config import *
 
 # Configuration for continuing training from existing LoRA
-hyper_config_model = HyperConfig(
+opensloth_config = OpenSlothConfig(
     data=DataConfig.from_dataset_name("finetom"),  # Use prepared dataset from registry
     training=TrainingConfig(
         gpus=[0],  # Single GPU for continual training
@@ -18,8 +18,13 @@ hyper_config_model = HyperConfig(
         r=64,  # Medium rank for balanced performance
         lora_alpha=128,
         target_modules=[
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
         ],
         lora_dropout=0.1,
         bias="none",
@@ -30,7 +35,7 @@ hyper_config_model = HyperConfig(
 )
 
 # Training arguments for continual training
-training_config_model = TrainingArgsConfig(
+training_config = TrainingArgsConfig(
     output_dir="outputs/qwen3-8b-continual-lora/",
     per_device_train_batch_size=4,
     gradient_accumulation_steps=8,

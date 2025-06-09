@@ -5,9 +5,9 @@ from typing import Optional, Union, List, Tuple, Callable, Any
 import datasets
 from speedy_utils import identify, load_by_ext
 
-from HyperSloth import HYPERSLOTH_DATA_DIR
-from HyperSloth.logging_config import get_hypersloth_logger
-from HyperSloth.hypersloth_config import HFDatasetConfig, PathDatasetConfig
+from opensloth import HYPERSLOTH_DATA_DIR
+from opensloth.logging_config import get_opensloth_logger
+from opensloth.opensloth_config import HFDatasetConfig, PathDatasetConfig
 
 DatasetConfig = Union[HFDatasetConfig, PathDatasetConfig]
 
@@ -181,7 +181,7 @@ def _get_cached_dataset(
     lock_path = output_path.with_suffix(".lock")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger = get_hypersloth_logger(log_level="INFO")
+    logger = get_opensloth_logger(log_level="INFO")
     max_retries = 30
     retry_delay = 3
 

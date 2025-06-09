@@ -1,9 +1,9 @@
 # Basic LoRA fine-tuning with HuggingFace dataset on single GPU
-# To run: hypersloth-train example_hf_dataset_lora_single_gpu.py
-from HyperSloth.hypersloth_config import *
+# To run: opensloth-train example_hf_dataset_lora_single_gpu.py
+from opensloth.opensloth_config import *
 
 # Configuration for single GPU LoRA training with HuggingFace dataset
-hyper_config_model = HyperConfig(
+opensloth_config = OpenSlothConfig(
     data=DataConfigHF(
         dataset_name="mlabonne/FineTome-100k",  # Popular instruction dataset
         tokenizer_name="Qwen/Qwen3-8B",  # Tokenizer from same model family
@@ -25,8 +25,13 @@ hyper_config_model = HyperConfig(
         r=8,  # LoRA rank - lower for efficiency
         lora_alpha=16,  # LoRA alpha (typically 2x rank)
         target_modules=[  # Standard transformer attention/MLP modules
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
         ],
         lora_dropout=0.1,  # Dropout for regularization
         bias="none",  # No bias adaptation
@@ -35,7 +40,7 @@ hyper_config_model = HyperConfig(
 )
 
 # Training arguments optimized for single GPU
-training_config_model = TrainingArgsConfig(
+training_config = TrainingArgsConfig(
     output_dir="outputs/qwen3-8b-finetome-lora/",
     per_device_train_batch_size=2,  # Small batch size for memory
     gradient_accumulation_steps=8,  # Simulate larger batch size

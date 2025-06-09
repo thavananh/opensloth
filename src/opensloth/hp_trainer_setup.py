@@ -5,13 +5,13 @@ Handles weight synchronization, model setup, and distributed training coordinati
 
 import os
 
-from HyperSloth.init_modules import (
+from opensloth.init_modules import (
     configure_batch_size,
     create_trainer,
     init_model_and_tokenizer,
 )
 
-from .hypersloth_config import HyperConfig, TrainingArgsConfig
+from .opensloth_config import OpenSlothConfig, TrainingArgsConfig
 
 # from loguru import logger
 
@@ -30,7 +30,7 @@ def _change_compiler_location() -> None:
 
 
 def setup_model_and_training(
-    hyper_config: HyperConfig,
+    opensloth_config: OpenSlothConfig,
     hf_train_args: TrainingArgsConfig,
 ):
     """
@@ -41,9 +41,9 @@ def setup_model_and_training(
     num_gpus = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
 
     # Get enhanced logger for timing
-    from .logging_config import get_hypersloth_logger
+    from .logging_config import get_opensloth_logger
 
-    hp_logger = get_hypersloth_logger(log_level="INFO")
+    hp_logger = get_opensloth_logger(log_level="INFO")
 
     # Start total setup timing
     hp_logger.start_timing("total_setup")
@@ -55,12 +55,12 @@ def setup_model_and_training(
 
     # Time model initialization
     hp_logger.start_timing("model_init")
-    model, tokenizer = init_model_and_tokenizer(hyper_config)
+    model, tokenizer = init_model_and_tokenizer(opensloth_config)
     hp_logger.finish_timing("model_init")
 
     # Time trainer creation
     hp_logger.start_timing("trainer_creation")
-    trainer = create_trainer(model, tokenizer, hyper_config, hf_train_args)
+    trainer = create_trainer(model, tokenizer, opensloth_config, hf_train_args)
     hp_logger.finish_timing("trainer_creation")
 
     # Finish total setup timing

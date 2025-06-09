@@ -1,4 +1,4 @@
-# conda create -n hypersloth -f environment.yaml -y
+# conda create -n opensloth -f environment.yaml -y
 
 # conda %                                                                                                                            
 conda create --name unsloth_env \

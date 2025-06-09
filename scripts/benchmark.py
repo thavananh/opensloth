@@ -1,9 +1,9 @@
-from HyperSloth.hypersloth_config import *
-from HyperSloth.scripts.hp_trainer import run_mp_training, setup_envs
+from opensloth.opensloth_config import *
+from opensloth.scripts.hp_trainer import run_mp_training, setup_envs
 
 for n_gpu in [2]:
     # Main configuration using Pydantic models
-    hyper_config_model = HyperConfig(
+    opensloth_config = OpenSlothConfig(
         data=HFDatasetConfig(
             dataset_name="llamafactory/OpenThoughts-114k",
             split="train",
@@ -41,7 +41,7 @@ for n_gpu in [2]:
     )
 
     # Training arguments using Pydantic model
-    training_config_model = TrainingArgsConfig(
+    training_config = TrainingArgsConfig(
         output_dir=f"outputs/experiment/Qwen3-8B-openthought5k-{n_gpu}gpu/",
         per_device_train_batch_size=4,
         gradient_accumulation_steps=8 // n_gpu,  # Adjust based on n_gpu
@@ -57,17 +57,17 @@ for n_gpu in [2]:
         report_to="wandb",  # tensorboard or wawndb
     )
 
-    setup_envs(hyper_config_model, training_config_model)
+    setup_envs(opensloth_config, training_config)
     if n_gpu == 1:
         # For single GPU, we can run the training directly
-        from HyperSloth.scripts.hp_trainer import train_on_single_gpu
+        from opensloth.scripts.hp_trainer import train_on_single_gpu
 
         train_on_single_gpu(
             gpu=0,
-            hyper_config=hyper_config_model,
-            hf_train_args=training_config_model,
+            opensloth_config=opensloth_config,
+            hf_train_args=training_config,
         )
     else:
         run_mp_training(
-            hyper_config_model.training.gpus, hyper_config_model, training_config_model
+            opensloth_config.training.gpus, opensloth_config, training_config
         )

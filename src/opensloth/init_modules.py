@@ -8,40 +8,41 @@ import os
 from speedy_utils import identify
 
 
-from HyperSloth.dataset_utils import get_tokenized_dataset
+from opensloth.dataset_utils import get_tokenized_dataset
 
 
-from .hypersloth_config import (
-    HyperConfig,
+from .opensloth_config import (
+    OpenSlothConfig,
     TrainingArgsConfig,
 )
 
-from .logging_config import get_hypersloth_logger
+from .logging_config import get_opensloth_logger
 
 
-def init_model_and_tokenizer(hyper_config: HyperConfig):
+def init_model_and_tokenizer(opensloth_config: OpenSlothConfig):
     """Initialize and optionally set up LoRA for the model."""
     from unsloth import FastModel
 
-    logger = get_hypersloth_logger(log_level="INFO")
+    logger = get_opensloth_logger(log_level="INFO")
 
     logger.start_timing("model_loading")
 
-    if hyper_config.pretrained_lora:
+    if opensloth_config.pretrained_lora:
         logger.info(
-            f"Loading model from {hyper_config.pretrained_lora} with LoRA weights"
+            f"Loading model from {opensloth_config.pretrained_lora} with LoRA weights"
         )
-        hyper_config.fast_model_args.model_name = hyper_config.pretrained_lora
-    from HyperSloth.nccl_grad_sync import setup_nccl_for_hypersloth
+        opensloth_config.fast_model_args.model_name = opensloth_config.pretrained_lora
+    from opensloth.nccl_grad_sync import setup_nccl_for_opensloth
 
     model, tokenizer = FastModel.from_pretrained(
-        **hyper_config.fast_model_args.model_dump()
+        **opensloth_config.fast_model_args.model_dump()
     )
     logger.finish_timing("model_loading")
 
     logger.start_timing("nccl_setup")
-    setup_nccl_for_hypersloth(
-        gpu=int(os.environ["HYPERSLOTH_LOCAL_RANK"]), gpus=hyper_config.training.gpus
+    setup_nccl_for_opensloth(
+        gpu=int(os.environ["HYPERSLOTH_LOCAL_RANK"]),
+        gpus=opensloth_config.training.gpus,
     )
     logger.finish_timing("nccl_setup")
 
@@ -51,22 +52,24 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
     )
 
     if (
-        not hyper_config.fast_model_args.full_finetuning
-        and not hyper_config.pretrained_lora
+        not opensloth_config.fast_model_args.full_finetuning
+        and not opensloth_config.pretrained_lora
     ):
         logger.start_timing("lora_setup")
-        model = FastModel.get_peft_model(model, **hyper_config.lora_args.model_dump())
+        model = FastModel.get_peft_model(
+            model, **opensloth_config.lora_args.model_dump()
+        )
         logger.finish_timing("lora_setup")
 
     # Allow custom chat templates
     if (
-        hasattr(hyper_config.training, "chat_template")
-        and hyper_config.training.chat_template is not None
+        hasattr(opensloth_config.training, "chat_template")
+        and opensloth_config.training.chat_template is not None
     ):
         from transformers import AutoTokenizer  # type: ignore
 
         new_template = AutoTokenizer.from_pretrained(
-            hyper_config.training.chat_template
+            opensloth_config.training.chat_template
         ).chat_template
         tokenizer.chat_template = new_template
         logger.warning(f"Using chat template of {new_template}")
@@ -77,40 +80,40 @@ def init_model_and_tokenizer(hyper_config: HyperConfig):
 def create_trainer(
     model,
     tokenizer,
-    hyper_config: HyperConfig,
+    opensloth_config: OpenSlothConfig,
     hf_train_args: TrainingArgsConfig,
 ):
     """Load or prepare the dataset and create the SFTTrainer."""
 
     # Get enhanced logger for timing
 
-    logger = get_hypersloth_logger(log_level="INFO")
+    logger = get_opensloth_logger(log_level="INFO")
 
     logger.start_timing("trainer_setup")
 
     trainer = _get_trainer(
         model,
         tokenizer,
-        hyper_config,
+        opensloth_config,
         hf_train_args,
     )
 
     logger.finish_timing("trainer_setup")
 
     logger.start_timing("training_loop_patch")
-    from HyperSloth.patching.inner_training_loop import patch_inner_training_loop
-    from HyperSloth.patching.patch_sampler import apply_patch_sampler
-    from HyperSloth.patching.patch_log import patch_log
+    from opensloth.patching.inner_training_loop import patch_inner_training_loop
+    from opensloth.patching.patch_sampler import apply_patch_sampler
+    from opensloth.patching.patch_log import patch_log
 
     patch_log(type(trainer))
-    patch_inner_training_loop(hyper_config)
+    patch_inner_training_loop(opensloth_config)
 
     from .patching.get_batch_samples import patch_get_batch_samples
 
-    patch_get_batch_samples(hyper_config)
+    patch_get_batch_samples(opensloth_config)
 
     # ====
-    apply_patch_sampler(hyper_config)
+    apply_patch_sampler(opensloth_config)
     logger.finish_timing("training_loop_patch")
 
     # ===
@@ -123,20 +126,23 @@ def create_trainer(
 
 
 def _get_trainer(
-    model, tokenizer, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig
+    model,
+    tokenizer,
+    opensloth_config: OpenSlothConfig,
+    hf_train_args: TrainingArgsConfig,
 ):
     """
     Returns an SFTTrainer instance with a tokenized dataset.
     """
     from trl import SFTTrainer
     from transformers import DataCollatorForSeq2Seq
-    from .logging_config import get_hypersloth_logger
+    from .logging_config import get_opensloth_logger
 
-    logger = get_hypersloth_logger(log_level="INFO")
+    logger = get_opensloth_logger(log_level="INFO")
 
     # Get the tokenized dataset using the dataset_utils function
     tokenized_train_dataset = get_tokenized_dataset(
-        config=hyper_config.data,
+        config=opensloth_config.data,
     )
 
     logger.info("Creating final SFTTrainer with prepared dataset...")

@@ -3,9 +3,9 @@ from typing import Dict, List
 from fastcore.all import patch
 from transformers.trainer import *
 
-from HyperSloth.patching.patch_log import patch_log
+from opensloth.patching.patch_log import patch_log
 
-from ..logging_config import get_hypersloth_logger
+from ..logging_config import get_opensloth_logger
 
 DISABLE_PACKING = False
 
@@ -114,30 +114,30 @@ def pack(
     }
 
 
-from ..hypersloth_config import HyperConfig
+from ..opensloth_config import OpenSlothConfig
 
 
-def patch_get_batch_samples(hyper_config: HyperConfig):
+def patch_get_batch_samples(opensloth_config: OpenSlothConfig):
     """
-    Ultra-minimal patch that only adds essential HyperSloth customizations.
+    Ultra-minimal patch that only adds essential opensloth customizations.
     This approach patches specific methods instead of duplicating the entire training loop.
     """
     # Get environment variables
     hp_local_rank = int(os.getenv("HYPERSLOTH_LOCAL_RANK", "0"))
     hp_world_size = int(os.getenv("HYPERSLOTH_WORLD_SIZE", "1"))
     # Get enhanced logger
-    logger = get_hypersloth_logger("DEBUG")
+    logger = get_opensloth_logger("DEBUG")
 
     # TrainerState.__init__ = setup_hyper_sloth_trainer_state
     original_get_batch_samples = Trainer.get_batch_samples
 
     @patch
     def get_batch_samples(self: Trainer, epoch_iterator, num_batches, device=None):
-        """Enhanced batch sampling with GPU slicing and token tracking for HyperSloth."""
+        """Enhanced batch sampling with GPU slicing and token tracking for opensloth."""
         batch_samples, num_items_in_batch = original_get_batch_samples(
             self, epoch_iterator, num_batches, device
         )
-        if hyper_config.disable_packing:
+        if opensloth_config.disable_packing:
             # all_items = {gpu: {} for gpu in range(hp_world_size)}
             ga_batches = []
             for accumulated_batch in batch_samples:

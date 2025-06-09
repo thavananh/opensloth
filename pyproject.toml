@@ -1,5 +1,5 @@
 [project]
-name = "hypersloth"
+name = "opensloth"
 version = "0.1.4"
 description = "A high-performance framework for fine-tuning large language models with multi-GPU support"
 authors = [{ name = "anhvth", email = "anhvth.226@gmail.com" }]
@@ -24,32 +24,32 @@ classifiers = [
 dependencies = ["pyyaml (>=6.0.2,<7.0.0)", "jupyterlab (>=4.3.5,<5.0.0)", "fastcore (>=1.7.29,<2.0.0)", "speedy-utils (>=0.1.20,<0.2.0)", "tensorboard (>=2.19.0,<3.0.0)", "fire (>=0.7.0,<0.8.0)", "tensorboardx (>=2.6.2.2,<3.0.0.0)"]
 
 [project.urls]
-Homepage = "https://github.com/anhvth/hypersloth"
-Repository = "https://github.com/anhvth/hypersloth"
-Documentation = "https://github.com/anhvth/hypersloth"
-"Bug Tracker" = "https://github.com/anhvth/hypersloth/issues"
+Homepage = "https://github.com/anhvth/opensloth"
+Repository = "https://github.com/anhvth/opensloth"
+Documentation = "https://github.com/anhvth/opensloth"
+"Bug Tracker" = "https://github.com/anhvth/opensloth/issues"
 
 [project.scripts]
-hypersloth-train = "HyperSloth.scripts.hp_trainer:train"
-hypersloth-init = "HyperSloth.scripts.get_example_config:main"
-hypersloth-prepare-unsloth-model = "HyperSloth.scripts.prepare_model:main"
-hypersloth-export = "HyperSloth.scripts.export:main"
-hypersloth-build-dataset = "HyperSloth.scripts.build_dataset:main"
+opensloth-train = "opensloth.scripts.hp_trainer:train"
+opensloth-init = "opensloth.scripts.get_example_config:main"
+opensloth-prepare-unsloth-model = "opensloth.scripts.prepare_model:main"
+opensloth-export = "opensloth.scripts.export:main"
+opensloth-build-dataset = "opensloth.scripts.build_dataset:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "hypersloth"
+name = "opensloth"
 version = "0.1.4"
 packages = [
-    { include = "HyperSloth" }
+    { include = "opensloth", from = "src" }
 ]
 
 [tool.poetry.scripts]
-hypersloth-train = "HyperSloth.scripts.hp_trainer:train"
-hypersloth-init = "HyperSloth.scripts.get_example_config:main"
-hypersloth-prepare-unsloth-model = "HyperSloth.scripts.prepare_model:main"
-hypersloth-export = "HyperSloth.scripts.export:main"
-hypersloth-build-dataset = "HyperSloth.scripts.build_dataset:main"
+opensloth-train = "opensloth.scripts.hp_trainer:train"
+opensloth-init = "opensloth.scripts.get_example_config:main"
+opensloth-prepare-unsloth-model = "opensloth.scripts.prepare_model:main"
+opensloth-export = "opensloth.scripts.export:main"
+opensloth-build-dataset = "opensloth.scripts.build_dataset:main"

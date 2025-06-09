@@ -3,8 +3,8 @@
 
 import os
 
-# from hypersloth.patching.patch_sampler import patch_sampler
-from HyperSloth.patching.patch_sampler import apply_patch_sampler
+# from opensloth.patching.patch_sampler import patch_sampler
+from opensloth.patching.patch_sampler import apply_patch_sampler
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -15,7 +15,7 @@ def train_qwen3_model():
 
     from datasets import Dataset
 
-    dataset_path = "~/.cache/hypersloth/openthoughts-1k_tokenized/"
+    dataset_path = "~/.cache/opensloth/openthoughts-1k_tokenized/"
     processed_dataset = Dataset.load_from_disk(dataset_path)
 
     from unsloth import FastLanguageModel

@@ -1,10 +1,10 @@
-# HyperSloth Performance Benchmarks
+# opensloth Performance Benchmarks
 
 ## Training Time Comparison (4x RTX 4090)
 
 | Framework    | Training Time | VRAM Peak | Notes |
 | ------------ | ------------- | --------- | ----- |
-| **HyperSloth** | **19 minutes** | **6 GB** | 4 GPUs, adaptive batching |
+| **opensloth** | **19 minutes** | **6 GB** | 4 GPUs, adaptive batching |
 | LlamaFactory | 30 minutes | 21 GB | 4 GPUs, standard approach |
 | Unsloth (1X) | ~70 minutes | 6 GB | Single GPU baseline |
 

@@ -1,4 +1,4 @@
-name: hypersloth_env
+name: opensloth_env
 channels:
   - pytorch
   - nvidia
@@ -126,7 +126,7 @@ dependencies:
       - httpcore==1.0.9
       - httpx==0.28.1
       - huggingface-hub==0.32.3
-      - hypersloth==0.1.1
+      - opensloth==0.1.1
       - id==1.5.0
       - idna==3.10
       - importlib-metadata==8.7.0

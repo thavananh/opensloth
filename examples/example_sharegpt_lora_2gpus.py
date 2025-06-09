@@ -1,7 +1,7 @@
-from HyperSloth.hypersloth_config import *
+from opensloth.opensloth_config import *
 
 # Main configuration using Pydantic models
-hyper_config_model = HyperConfig(
+opensloth_config = OpenSlothConfig(
     data=HFDatasetConfig(
         dataset_name="llamafactory/OpenThoughts-114k",
         split="train",
@@ -16,7 +16,7 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/Qwen3-0.6b-bnb-4bit",
+        model_name="unsloth/Qwen3-8B-bnb-4bit",
         max_seq_length=4096,
     ),
     lora_args=LoraArgs(
@@ -38,7 +38,7 @@ hyper_config_model = HyperConfig(
 )
 
 # Training arguments using Pydantic model
-training_config_model = TrainingArgsConfig(
+training_config = TrainingArgsConfig(
     output_dir="outputs/qwen3-0.6b-openthoughts-10k-lora-2gpus",
     per_device_train_batch_size=1,
     gradient_accumulation_steps=8,

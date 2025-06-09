@@ -163,7 +163,7 @@ def patch_log(T: type) -> type:
                     "train", start_time, num_tokens=self.state.num_input_tokens_seen
                 )
 
-        # HyperSloth specific fields
+        # opensloth specific fields
         for attr in [
             "trained_token_ratio",
             "non_padding_ratio_before",

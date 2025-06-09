@@ -173,7 +173,7 @@ class LoraArgs(BaseModel):
         extra = "allow"
 
 
-class HyperConfig(BaseModel):
+class OpenSlothConfig(BaseModel):
     """Main configuration class combining all sub-configurations."""
 
     data: DatasetConfig = Field(

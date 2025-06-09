@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="images/hpsloth.webp" alt="HyperSloth Logo" width="200" />
+    <img src="images/hpsloth.webp" alt="opensloth Logo" width="200" />
 </p>
 
 # Hyper-Sloth
@@ -8,9 +8,9 @@ A high-performance framework for fine-tuning large language models.
 
 ## Overview
 
-**Built on top of [Unsloth](https://github.com/unslothai/unsloth)** - HyperSloth extends Unsloth's excellent foundation with multi-GPU support and optimized batching strategies.
+**Built on top of [Unsloth](https://github.com/unslothai/unsloth)** - opensloth extends Unsloth's excellent foundation with multi-GPU support and optimized batching strategies.
 
-**What HyperSloth adds:**
+**What opensloth adds:**
 - **Multi-GPU training via NCCL**: Scale your Unsloth workflows across multiple GPUs
 - **Adaptive batching optimizations**: Sequence sorting, round-robin load balancing, and minimal padding strategies to reduce computational waste and improve GPU utilization
 
@@ -23,7 +23,7 @@ A high-performance framework for fine-tuning large language models.
 
 **Multi-GPU Optimization Strategy:**
 
-HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
+opensloth optimizes multi-GPU training by addressing three key bottlenecks:
 
 1. **GPU Underutilization Problem:**
    - Unsloth typically trains with 1 sample per forward pass
@@ -46,26 +46,26 @@ HyperSloth optimizes multi-GPU training by addressing three key bottlenecks:
 
 ```bash
 
-conda create --name hypersloth_env python=3.11
+conda create --name opensloth_env python=3.11
 pip install uv
 uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install unsloth xformers hypersloth
-# or from source pip install git+https://github.com/anhvth/HyperSloth.git
+pip install unsloth xformers opensloth
+# or from source pip install git+https://github.com/anhvth/opensloth.git
 ```
 
 ## ⚡ Quickstart
 
 ```python
 # Basic multi-GPU training
-hypersloth-train examples/example_sharegpt_lora_2gpus.py
+opensloth-train examples/example_sharegpt_lora_2gpus.py
 ```
 
 | Example | Description | Link/Command |
 |---------|-------------|--------------|
 | **Kaggle Notebook (T4x2)** | Live training example on Kaggle's dual T4 GPU environment | [🔗 Qwen3 Unsloth 2GPUs](https://www.kaggle.com/code/anhvth226/qwen3-unsloth-2gpus?scriptVersionId=243436741) |
 | **Local Jupyter Notebook** | Interactive training notebook for local development | [`notebooks/train.ipynb`](notebooks/train.ipynb) |
-| **Command Line Example** | Quick start with pre-configured 2-GPU ShareGPT training | `hypersloth-train examples/example_sharegpt_lora_2gpus.py` |
-| **Tmux Multi-windows** | Training with separate tmux sessions for each GPU monitoring | `hypersloth-train ./example_training_config.py --tmux train` |
+| **Command Line Example** | Quick start with pre-configured 2-GPU ShareGPT training | `opensloth-train examples/example_sharegpt_lora_2gpus.py` |
+| **Tmux Multi-windows** | Training with separate tmux sessions for each GPU monitoring | `opensloth-train ./example_training_config.py --tmux train` |
 
 
 
@@ -84,7 +84,7 @@ hypersloth-train examples/example_sharegpt_lora_2gpus.py
 
 **[📊 View Full WandB Comparison](https://wandb.ai/anhvth/CompareUnsloth)**
 
-### HyperSloth vs Unsloth Direct Comparison
+### opensloth vs Unsloth Direct Comparison
 
 We conducted a controlled comparison using identical configurations:
 
@@ -94,20 +94,20 @@ We conducted a controlled comparison using identical configurations:
 - **Dataset**: Fixed data sampler ensures identical training data
 
 **Results:**
-- **HyperSloth (2 GPUs)**: 8m 28s ⚡
+- **opensloth (2 GPUs)**: 8m 28s ⚡
 - **Unsloth (1 GPU)**: 19m 34s
 - **Performance Gain**: ~2.3x faster 
 
 **Why 2.3x Speedup on 2 GPUs?**
 
-Theoretical maximum speedup with 2 GPUs would be 2x, but communication overhead typically reduces this to ~1.7x in practice. HyperSloth achieves **2.3x speedup** through several optimizations:
+Theoretical maximum speedup with 2 GPUs would be 2x, but communication overhead typically reduces this to ~1.7x in practice. opensloth achieves **2.3x speedup** through several optimizations:
 
 ```
 🔄 Standard Multi-GPU: ~1.7x speedup
     ├─ GPU communication overhead
     └─ Load balancing inefficiencies
 
-⚡ HyperSloth: 2.3x speedup  
+⚡ opensloth: 2.3x speedup  
     ├─ ✅ Sequence length sorting: reduces padding waste
     ├─ ✅ Adaptive batching: improves memory efficiency  
     ├─ ✅ Round-robin load balancing: better GPU utilization
@@ -123,7 +123,7 @@ The 2.3x speedup shown above is **per GPU pair** - meaning you can expect simila
 - **4 GPUs**: ~4.6x faster than single GPU (2.3x × 2)
 - **8 GPUs**: ~9.2x faster than single GPU (2.3x × 4)
 
-This scaling efficiency comes from HyperSloth's optimizations working consistently across different GPU counts, not just the 2-GPU case shown in the benchmark.
+This scaling efficiency comes from opensloth's optimizations working consistently across different GPU counts, not just the 2-GPU case shown in the benchmark.
 
 ### Key Performance Features
 
@@ -160,8 +160,8 @@ This approach maximizes GPU utilization while minimizing the communication overh
 
 ## 🛠 Command-Line Tools
 
-- **`hypersloth-train`**: Main training launcher with multi-GPU and tmux support
-- **`hypersloth-init`**: Generate configuration templates for new projects
+- **`opensloth-train`**: Main training launcher with multi-GPU and tmux support
+- **`opensloth-init`**: Generate configuration templates for new projects
 
 
 
@@ -169,7 +169,7 @@ This approach maximizes GPU utilization while minimizing the communication overh
 
 ### Adaptive Batch Partitioning
 
-HyperSloth patches the trainer's inner training loop with `adaptive_partition_batches()` that:
+opensloth patches the trainer's inner training loop with `adaptive_partition_batches()` that:
 
 1. **Sorts sequences by length**: Groups similar-length sequences together within each batch slice
 2. **Round-robin GPU distribution**: Distributes batch slices across GPUs in round-robin fashion for load balancing
@@ -178,11 +178,11 @@ HyperSloth patches the trainer's inner training loop with `adaptive_partition_ba
 
 ### Distributed Training with NCCL
 
-For multi-GPU setups, HyperSloth uses:
+For multi-GPU setups, opensloth uses:
 
 1. **Standard PyTorch DDP**: Each GPU runs a separate process with `torch.distributed`
 2. **NCCL gradient synchronization**: Automatic all-reduce operations for gradient averaging
-3. **Process spawning**: `hypersloth-train` launches one process per GPU using `spawn_training_process()`
+3. **Process spawning**: `opensloth-train` launches one process per GPU using `spawn_training_process()`
 4. **Tmux integration**: Optional `--tmux` flag creates separate terminal sessions for monitoring each GPU
 
 ## 🔧 Troubleshooting
@@ -205,7 +205,7 @@ For multi-GPU setups, HyperSloth uses:
 
 **Debugging Tips:**
 ```bash
-hypersloth-train configs/your_config.py --tmux train
+opensloth-train configs/your_config.py --tmux train
 Or change gpus=[0] # use first gpu for training
 # Then attach to sessions: tmux a -t train_gpu_0
 ```

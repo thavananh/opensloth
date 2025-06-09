@@ -2,7 +2,7 @@ import torch
 import torch.distributed as dist
 from transformers.trainer_callback import TrainerCallback, TrainerControl, TrainerState
 from typing import List
-from HyperSloth.logging_config import get_hypersloth_logger
+from opensloth.logging_config import get_opensloth_logger
 
 
 class NCCLGradSyncCallback(TrainerCallback):
@@ -23,7 +23,7 @@ class NCCLGradSyncCallback(TrainerCallback):
         self.gpus = gpus
         self.local_rank = gpus.index(gpu)
         self.world_size = len(gpus)
-        self.logger = get_hypersloth_logger(log_level="DEBUG")
+        self.logger = get_opensloth_logger(log_level="DEBUG")
 
         # Ensure distributed is initialized
         if not dist.is_initialized():
@@ -104,16 +104,16 @@ class NCCLGradSyncCallback(TrainerCallback):
         # This method is kept for interface compatibility
 
 
-# Add this integration code for HyperSloth at the end of the file
+# Add this integration code for opensloth at the end of the file
 
 
-def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
-    """Setup NCCL environment variables for HyperSloth integration."""
+def setup_nccl_for_opensloth(gpu: int, gpus: list) -> None:
+    """Setup NCCL environment variables for opensloth integration."""
     import os
     import time
     import torch.distributed as dist
 
-    # Map HyperSloth parameters to NCCL environment variables
+    # Map opensloth parameters to NCCL environment variables
     rank = gpus.index(gpu)  # Local rank based on position in GPU list
     world_size = len(gpus)  # Total number of GPUs
 
@@ -123,7 +123,7 @@ def setup_nccl_for_hypersloth(gpu: int, gpus: list) -> None:
     os.environ["MASTER_ADDR"] = "127.0.0.1"  # Localhost for single machine
     if "MASTER_PORT" not in os.environ:
         os.environ["MASTER_PORT"] = "29501"  # Use fixed port
-    logger = get_hypersloth_logger(log_level="DEBUG")
+    logger = get_opensloth_logger(log_level="DEBUG")
     # Log all set environment variables
     logger.info(
         f'[GPU={gpu}] NCCL env: RANK={os.environ["RANK"]}, WORLD_SIZE={os.environ["WORLD_SIZE"]}, MASTER_ADDR={os.environ["MASTER_ADDR"]}, MASTER_PORT={os.environ["MASTER_PORT"]}'

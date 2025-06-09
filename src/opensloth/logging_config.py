@@ -1,5 +1,5 @@
 """
-Enhanced logging configuration for HyperSloth with improved formatting and organization.
+Enhanced logging configuration for opensloth with improved formatting and organization.
 """
 
 import os
@@ -37,11 +37,11 @@ class StepTimer:
         return self.end_time - self.start_time
 
 
-class HyperSlothLogger:
-    """Enhanced logger for HyperSloth with better formatting and GPU-aware logging."""
+class openslothLogger:
+    """Enhanced logger for opensloth with better formatting and GPU-aware logging."""
 
     def __init__(self, allow_unknown_gpu: bool = False):
-        """Initialize the HyperSlothLogger with specified log level and GPU awareness."""
+        """Initialize the openslothLogger with specified log level and GPU awareness."""
         self.allow_unknown_gpu = (
             allow_unknown_gpu  # allow to run without setting HYPERSLOTH_LOCAL_RANK
         )
@@ -276,14 +276,14 @@ class HyperSlothLogger:
 VALID_LOGGER = None
 
 
-def get_hypersloth_logger(log_level=None, allow_unknown_gpu=False) -> HyperSlothLogger:
+def get_opensloth_logger(log_level=None, allow_unknown_gpu=False) -> openslothLogger:
     # log level is now overridden by environment variable HYPERSLOTH_LOG_LEVEL
     """Setup and return enhanced logger instance."""
     global VALID_LOGGER
     if VALID_LOGGER is not None:
         return VALID_LOGGER
 
-    logger = HyperSlothLogger(allow_unknown_gpu=allow_unknown_gpu)
+    logger = openslothLogger(allow_unknown_gpu=allow_unknown_gpu)
     if not allow_unknown_gpu:
         VALID_LOGGER = logger
     return logger

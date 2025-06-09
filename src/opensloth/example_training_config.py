@@ -1,11 +1,10 @@
-# To run this code hypersloth-train example_training_config.py
-from HyperSloth.hypersloth_config import *
+# To run this code opensloth-train example_training_config.py
+from opensloth.opensloth_config import *
 
 # Main configuration using Pydantic models
-hyper_config_model = HyperConfig(
-
+opensloth_config = OpenSlothConfig(
     data=DataConfigHF(
-        dataset_name="llamafactory/OpenThoughts-114k",
+        dataset_name="mlabonne/FineTome-100k",
         split="train",
         tokenizer_name="Qwen/Qwen3-8B",  # does not matter same family qwen3
     ),
@@ -14,7 +13,7 @@ hyper_config_model = HyperConfig(
         loss_type="response_only",
     ),
     fast_model_args=FastModelArgs(
-        model_name="unsloth/Qwen3-0.6b-bnb-4bit",
+        model_name="unsloth/Qwen3-8B-bnb-4bit",
         max_seq_length=2048,
     ),
     lora_args=LoraArgs(
@@ -36,7 +35,7 @@ hyper_config_model = HyperConfig(
 )
 
 # Training arguments using Pydantic model
-training_config_model = TrainingArgsConfig(
+training_config = TrainingArgsConfig(
     output_dir="outputs/qwen3-0.6b-2card.1/",
     per_device_train_batch_size=2,
     gradient_accumulation_steps=8,

@@ -1,9 +1,9 @@
 # Full fine-tuning configuration with HuggingFace dataset
-# To run: hypersloth-train example_hf_dataset_full_finetuning.py
-from HyperSloth.hypersloth_config import *
+# To run: opensloth-train example_hf_dataset_full_finetuning.py
+from opensloth.opensloth_config import *
 
 # Configuration for full fine-tuning (no LoRA)
-hyper_config_model = HyperConfig(
+opensloth_config = OpenSlothConfig(
     data=HFDatasetConfig(
         dataset_name="mlabonne/FineTome-100k",  # Popular instruction dataset
         tokenizer_name="Qwen/Qwen3-8B",  # Tokenizer from same model family
@@ -27,7 +27,7 @@ hyper_config_model = HyperConfig(
 )
 
 # Training arguments for full fine-tuning
-training_config_model = TrainingArgsConfig(
+training_config = TrainingArgsConfig(
     output_dir="outputs/qwen3-0.6b-openthoughts-full-ft/",
     per_device_train_batch_size=1,  # Very small batch for full FT memory usage
     gradient_accumulation_steps=4,  # Large accumulation for effective batch size

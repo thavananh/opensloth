@@ -7,7 +7,7 @@ from fastcore.all import patch
 from torch.utils.data.sampler import SequentialSampler
 from transformers import Trainer, TrainerCallback
 
-from HyperSloth.logging_config import get_hypersloth_logger
+from opensloth.logging_config import get_opensloth_logger
 
 
 class ShuffleData(TrainerCallback):
@@ -17,7 +17,7 @@ class ShuffleData(TrainerCallback):
         if local_rank != 0:
             return
 
-        logger = get_hypersloth_logger(log_level="INFO")
+        logger = get_opensloth_logger(log_level="INFO")
         logger.info(f"🔄 Starting epoch {state.epoch + 1}")
 
         try:
@@ -36,7 +36,7 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
     def __init__(self, data_source) -> None:
         self.data_source = data_source
         self.epoch = 0
-        self.logger = get_hypersloth_logger(log_level="DEBUG")
+        self.logger = get_opensloth_logger(log_level="DEBUG")
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = epoch
@@ -65,10 +65,10 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
         )
 
 
-from ..hypersloth_config import HyperConfig
+from ..opensloth_config import OpenSlothConfig
 
 
-def apply_patch_sampler(hyper_config: HyperConfig):
+def apply_patch_sampler(opensloth_config: OpenSlothConfig):
 
     print("🔧 Patching Trainer to use RandomSamplerSeededByEpoch")
 

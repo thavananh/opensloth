@@ -9,7 +9,7 @@ Please use the native distributed training capabilities of your framework instea
 import warnings
 
 warnings.warn(
-    "The HyperSloth mmap_gradient_sync module is deprecated and will be removed in a future version. "
+    "The opensloth mmap_gradient_sync module is deprecated and will be removed in a future version. "
     "Please use the native distributed training capabilities of your framework instead.",
     DeprecationWarning,
     stacklevel=2,
@@ -26,9 +26,9 @@ if False:
         TrainerControl,
         TrainerState,
     )
-    from HyperSloth.logging_config import get_hypersloth_logger
+    from opensloth.logging_config import get_opensloth_logger
 
-    logger = get_hypersloth_logger(log_level="INFO")
+    logger = get_opensloth_logger(log_level="INFO")
 
     # Use safe logger that handles gpu_id properly
 
@@ -106,7 +106,7 @@ if False:
             model: torch.nn.Module,
             gpu: int,
             gpus: list,
-            grad_dir: str = "/dev/shm/hypersloth/",
+            grad_dir: str = "/dev/shm/opensloth/",
         ):
             self.gpu = gpu
             self.gpus = gpus

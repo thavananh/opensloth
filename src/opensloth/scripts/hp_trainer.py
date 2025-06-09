@@ -6,8 +6,8 @@ import warnings
 import importlib.util
 from fastcore.all import threaded, call_parse
 
-from HyperSloth.hypersloth_config import HyperConfig, TrainingArgsConfig
-from HyperSloth.logging_config import HyperSlothLogger
+from opensloth.opensloth_config import OpenSlothConfig, TrainingArgsConfig
+from opensloth.logging_config import openslothLogger
 
 
 warnings.filterwarnings("ignore")
@@ -30,26 +30,26 @@ def get_current_python_path():
 
 
 def train_on_single_gpu(
-    gpu: int, hyper_config: HyperConfig, hf_train_args: TrainingArgsConfig
+    gpu: int, opensloth_config: OpenSlothConfig, hf_train_args: TrainingArgsConfig
 ):
-    from HyperSloth.nccl_grad_sync import NCCLGradSyncCallback
-    from HyperSloth.hp_trainer_setup import setup_model_and_training
+    from opensloth.nccl_grad_sync import NCCLGradSyncCallback
+    from opensloth.hp_trainer_setup import setup_model_and_training
 
-    os.environ["HYPERSLOTH_LOCAL_RANK"] = str(hyper_config.training.gpus.index(gpu))
+    os.environ["HYPERSLOTH_LOCAL_RANK"] = str(opensloth_config.training.gpus.index(gpu))
     # Setup enhanced logger
-    logger = HyperSlothLogger()
+    logger = openslothLogger()
 
     logger.info(f"Training on GPU {gpu} with output_dir {hf_train_args.output_dir}")
 
     # Start total training timer
     logger.start_total_training_timer()
 
-    # setup_nccl_for_hypersloth(gpu, hyper_config.training.gpus)
+    # setup_nccl_for_opensloth(gpu, opensloth_config.training.gpus)
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     logger.start_timing("model_and_training_setup")
     trainer, model, tokenizer = setup_model_and_training(
-        hyper_config=hyper_config,
+        opensloth_config=opensloth_config,
         hf_train_args=hf_train_args,
     )
     logger.finish_timing("model_and_training_setup")
@@ -59,7 +59,7 @@ def train_on_single_gpu(
     grad_sync_cb = NCCLGradSyncCallback(
         model=trainer.model,
         gpu=gpu,
-        gpus=hyper_config.training.gpus,
+        gpus=opensloth_config.training.gpus,
     )
     logger.info(f"Using gradient sync callback for GPU {gpu}")
     trainer.add_callback(grad_sync_cb)
@@ -70,7 +70,7 @@ def train_on_single_gpu(
     logger.finish_timing("actual_training")
 
     # Save once from rank=0
-    if gpu == hyper_config.training.gpus[0]:
+    if gpu == opensloth_config.training.gpus[0]:
         logger.start_timing("model_saving")
         logger.info(f"Save model to {hf_train_args.output_dir}")
         model.save_pretrained(hf_train_args.output_dir)
@@ -81,27 +81,29 @@ def train_on_single_gpu(
         logger.log_training_summary()
 
 
-def load_config_from_path(config_path: str) -> tuple[HyperConfig, TrainingArgsConfig]:
+def load_config_from_path(
+    config_path: str,
+) -> tuple[OpenSlothConfig, TrainingArgsConfig]:
     """Load configuration from Python file path."""
     spec = importlib.util.spec_from_file_location("config_module", config_path)
     config_module = importlib.util.module_from_spec(spec)  # type: ignore
     spec.loader.exec_module(config_module)  # type: ignore
     # return config_module
     # Retrieve configs from the module
-    if hasattr(config_module, "hyper_config_model"):
-        hyper_config = config_module.hyper_config_model
-    elif hasattr(config_module, "hyper_config"):
-        hyper_config = HyperConfig(**config_module.hyper_config)
+    if hasattr(config_module, "opensloth_config"):
+        opensloth_config = config_module.opensloth_config
+    elif hasattr(config_module, "opensloth_config"):
+        opensloth_config = OpenSlothConfig(**config_module.opensloth_config)
     else:
-        hyper_config = HyperConfig()
-    # return hyper_config,
-    if hasattr(config_module, "training_config_model"):
-        training_config = config_module.training_config_model
+        opensloth_config = OpenSlothConfig()
+    # return opensloth_config,
+    if hasattr(config_module, "training_config"):
+        training_config = config_module.training_config
     elif hasattr(config_module, "training_config"):
         training_config = TrainingArgsConfig(**config_module.training_config)
     else:
         raise ValueError("No training configuration found")
-    return hyper_config, training_config
+    return opensloth_config, training_config
 
 
 # We'll just detect if the user wants a tmux script:
@@ -201,7 +203,7 @@ def run_tmux_training(
 
 def run_mp_training(
     gpus: list,
-    hyper_config: HyperConfig,
+    opensloth_config: OpenSlothConfig,
     training_config: TrainingArgsConfig,
 ):
     """Handle multi-GPU training using multi-processing."""
@@ -219,7 +221,7 @@ def run_mp_training(
             target=train_on_single_gpu,
             args=(gpu_index,),
             kwargs={
-                "hyper_config": hyper_config,
+                "opensloth_config": opensloth_config,
                 "hf_train_args": training_config,
             },
         )
@@ -250,14 +252,14 @@ def train(
     tmux: str = None,
     y: bool = False,
 ):
-    hyper_config, training_config = initialize_training_config(config_file)
+    opensloth_config, training_config = initialize_training_config(config_file)
 
     # CASE 1: Child process => single GPU
     if rank is not None and world_size is not None:
         print(f"[CASE 1] Running on rank {rank} with world size {world_size}")
         train_on_single_gpu(
-            gpu=hyper_config.training.gpus[rank],
-            hyper_config=hyper_config,
+            gpu=opensloth_config.training.gpus[rank],
+            opensloth_config=opensloth_config,
             hf_train_args=training_config,
         )
         return
@@ -265,28 +267,28 @@ def train(
     # CASE 2: Top-level process => spawn multi-GPU or single GPU
 
     # If multiple GPUs:
-    if len(hyper_config.training.gpus) > 1:
+    if len(opensloth_config.training.gpus) > 1:
         if os.environ.get("USE_TMUX", "0") == "1" or tmux is not None:
             session_name = tmux if tmux is not None else "train_hp"
             run_tmux_training(
                 session_name=session_name,
                 config_file=config_file,
                 training_config=training_config,
-                gpus=hyper_config.training.gpus,
+                gpus=opensloth_config.training.gpus,
                 auto_kill=y,
             )
         else:
             run_mp_training(
-                gpus=hyper_config.training.gpus,
-                hyper_config=hyper_config,
+                gpus=opensloth_config.training.gpus,
+                opensloth_config=opensloth_config,
                 training_config=training_config,
             )
     else:
         # Single GPU
         assert tmux is None, "Cannot use tmux with a single GPU"
         train_on_single_gpu(
-            gpu=hyper_config.training.gpus[0],
-            hyper_config=hyper_config,
+            gpu=opensloth_config.training.gpus[0],
+            opensloth_config=opensloth_config,
             hf_train_args=training_config,
         )
 
@@ -302,29 +304,34 @@ def initialize_training_config(config_file):
     config_file = os.path.abspath(config_file)
     assert os.path.exists(config_file), f"Config file {config_file} not found"
 
-    hyper_config, training_config = load_config_from_path(config_file)
-    print(f"Overriding max_seq_len to {hyper_config.fast_model_args.max_seq_length}")
-    # training_config.max_seq_len = hyper_config.fast_model_args.max_seq_length
-    hyper_config.data.max_seq_length = hyper_config.fast_model_args.max_seq_length
-    hyper_config.data.tokenizer_name = (
-        hyper_config.data.tokenizer_name or hyper_config.fast_model_args.model_name
+    opensloth_config, training_config = load_config_from_path(config_file)
+    print(
+        f"Overriding max_seq_len to {opensloth_config.fast_model_args.max_seq_length}"
+    )
+    # training_config.max_seq_len = opensloth_config.fast_model_args.max_seq_length
+    opensloth_config.data.max_seq_length = (
+        opensloth_config.fast_model_args.max_seq_length
+    )
+    opensloth_config.data.tokenizer_name = (
+        opensloth_config.data.tokenizer_name
+        or opensloth_config.fast_model_args.model_name
     )
 
-    setup_envs(hyper_config, training_config)
-    return hyper_config, training_config
+    setup_envs(opensloth_config, training_config)
+    return opensloth_config, training_config
 
 
-def setup_envs(hyper_config: HyperConfig, training_config: TrainingArgsConfig):
-    os.environ["HYPERSLOTH_WORLD_SIZE"] = str(len(hyper_config.training.gpus))
+def setup_envs(opensloth_config: OpenSlothConfig, training_config: TrainingArgsConfig):
+    os.environ["HYPERSLOTH_WORLD_SIZE"] = str(len(opensloth_config.training.gpus))
     os.environ["HYPERSLOTH_FORWARD_BZ"] = str(
         training_config.per_device_train_batch_size
         # * training_config.gradient_accumulation_steps
-        * len(hyper_config.training.gpus)
+        * len(opensloth_config.training.gpus)
     )
     os.environ["HYPERSLOTH_GLOBAL_BZ"] = str(
         training_config.per_device_train_batch_size
         * training_config.gradient_accumulation_steps
-        * len(hyper_config.training.gpus)
+        * len(opensloth_config.training.gpus)
     )
 
     print(f"Global batch size: {os.environ['HYPERSLOTH_GLOBAL_BZ']}")
@@ -336,4 +343,4 @@ def setup_envs(hyper_config: HyperConfig, training_config: TrainingArgsConfig):
     )
     # output dir
     os.environ["HYPERSLOTH_OUTPUT_DIR"] = training_config.output_dir
-    os.environ["HYPERSLOTH_LOG_LEVEL"] = hyper_config.log_level
+    os.environ["HYPERSLOTH_LOG_LEVEL"] = opensloth_config.log_level
