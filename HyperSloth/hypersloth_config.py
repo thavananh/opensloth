@@ -75,9 +75,11 @@ class DatasetConfigBase(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Validate chat template after model initialization."""
         if self.chat_template is not None:
-            templates = [self.chat_template] if isinstance(
-                self.chat_template, str
-            ) else self.chat_template
+            templates = (
+                [self.chat_template]
+                if isinstance(self.chat_template, str)
+                else self.chat_template
+            )
             for template in templates:
                 if template not in KNOWN_CHAT_TEMPLATES:
                     raise ValueError(
@@ -122,7 +124,7 @@ class TrainingConfig(BaseModel):
 class FastModelArgs(BaseModel):
     """Configuration for Unsloth's FastModel initialization."""
 
-    model_name: str = "unsloth/gemma-3-4b-it"
+    model_name: str
     max_seq_length: int = 4096
     load_in_4bit: bool = True
     load_in_8bit: bool = False
