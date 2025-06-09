@@ -6,7 +6,7 @@ import warnings
 import importlib.util
 from fastcore.all import threaded, call_parse
 
-from opensloth.opensloth_config import OpenSlothConfig, TrainingArgsConfig
+from opensloth.opensloth_config import OpenSlothConfig, TrainingArguments
 from opensloth.logging_config import OpenslothLogger
 
 
@@ -30,7 +30,7 @@ def get_current_python_path():
 
 
 def train_on_single_gpu(
-    gpu: int, opensloth_config: OpenSlothConfig, hf_train_args: TrainingArgsConfig
+    gpu: int, opensloth_config: OpenSlothConfig, hf_train_args: TrainingArguments
 ):
     from opensloth.opensloth_trainer_setup import setup_model_and_training
 
@@ -87,7 +87,7 @@ def train_on_single_gpu(
 
 def load_config_from_path(
     config_path: str,
-) -> tuple[OpenSlothConfig, TrainingArgsConfig]:
+) -> tuple[OpenSlothConfig, TrainingArguments]:
     """Load configuration from Python file path."""
     spec = importlib.util.spec_from_file_location("config_module", config_path)
     config_module = importlib.util.module_from_spec(spec)  # type: ignore
@@ -104,7 +104,7 @@ def load_config_from_path(
     if hasattr(config_module, "training_config"):
         training_config = config_module.training_config
     elif hasattr(config_module, "training_config"):
-        training_config = TrainingArgsConfig(**config_module.training_config)
+        training_config = TrainingArguments(**config_module.training_config)
     else:
         raise ValueError("No training configuration found")
     return opensloth_config, training_config
@@ -189,7 +189,7 @@ tmux new-session -d -s {session_name} -n MAIN"""
 def run_tmux_training(
     session_name: str,
     config_file: str,
-    training_config: TrainingArgsConfig,
+    training_config: TrainingArguments,
     gpus: list,
     auto_kill: bool = False,
 ):
@@ -208,7 +208,7 @@ def run_tmux_training(
 def run_mp_training(
     gpus: list,
     opensloth_config: OpenSlothConfig,
-    training_config: TrainingArgsConfig,
+    training_config: TrainingArguments,
 ):
     """Handle multi-GPU training using multi-processing."""
     import multiprocessing as mp
@@ -333,7 +333,7 @@ def initialize_training_config(config_file):
     return opensloth_config, training_config
 
 
-def setup_envs(opensloth_config: OpenSlothConfig, training_config: TrainingArgsConfig):
+def setup_envs(opensloth_config: OpenSlothConfig, training_config: TrainingArguments):
     os.environ["HYPERSLOTH_WORLD_SIZE"] = str(len(opensloth_config.devices))
     os.environ["HYPERSLOTH_FORWARD_BZ"] = str(
         training_config.per_device_train_batch_size

@@ -111,7 +111,10 @@ class Flag:
 
 
 def patch_log(T: type) -> type:
-    support_keys = ["loss", "grad_norm", "num_non_padding_tokens", "num_total_tokens"]
+    support_keys = [
+        "loss",
+        "grad_norm",
+    ]
     LOG_MMAP: Dict[str, np.memmap] = {}
     LOG_LOCKS: Dict[str, BaseFileLock] = {}
 

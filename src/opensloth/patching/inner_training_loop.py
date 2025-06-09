@@ -140,10 +140,10 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
         self.state.train_batch_size = self._train_batch_size
 
         # Initialize cumulative token counters for tracking token metrics
-        if not hasattr(self.state, "cumulative_num_non_padding_tokens"):
-            self.state.cumulative_num_non_padding_tokens = 0
-        if not hasattr(self.state, "cumulative_num_total_tokens"):
-            self.state.cumulative_num_total_tokens = 0
+        if not hasattr(self.state, "num_non_padding_tokens"):
+            self.state.num_non_padding_tokens = 0
+        if not hasattr(self.state, "num_total_tokens"):
+            self.state.num_total_tokens = 0
 
         # Compute absolute values for logging, eval, and save if given as ratio
         self.state.compute_steps(args, max_steps)
@@ -378,12 +378,10 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                     token_metrics = _compute_tokens(inputs["attention_mask"])
 
                     # Accumulate the new token metrics to the trainer state
-                    self.state.cumulative_num_non_padding_tokens += token_metrics[
+                    self.state.num_non_padding_tokens += token_metrics[
                         "num_non_padding_tokens"
                     ]
-                    self.state.cumulative_num_total_tokens += token_metrics[
-                        "num_total_tokens"
-                    ]
+                    self.state.num_total_tokens += token_metrics["num_total_tokens"]
                     # <<< OpenSloth Customization <<<#
 
                     # Since we perform prefetching, we need to manually set sync_gradients

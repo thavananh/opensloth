@@ -38,7 +38,7 @@ for n_gpu in [2]:
     )
 
     # Training arguments using Pydantic model
-    training_config = TrainingArgsConfig(
+    training_config = TrainingArguments(
         output_dir=f"outputs/experiment/Qwen3-8B-openthought5k-{n_gpu}gpu/",
         per_device_train_batch_size=4,
         gradient_accumulation_steps=8 // n_gpu,  # Adjust based on n_gpu

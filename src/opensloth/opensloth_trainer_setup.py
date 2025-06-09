@@ -11,7 +11,7 @@ from opensloth.init_modules import (
     init_model_and_tokenizer,
 )
 
-from .opensloth_config import OpenSlothConfig, TrainingArgsConfig
+from .opensloth_config import OpenSlothConfig, TrainingArguments
 
 # from loguru import logger
 
@@ -31,7 +31,7 @@ def _change_compiler_location() -> None:
 
 def setup_model_and_training(
     opensloth_config: OpenSlothConfig,
-    hf_train_args: TrainingArgsConfig,
+    hf_train_args: TrainingArguments,
 ):
     """
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.

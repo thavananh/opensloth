@@ -13,7 +13,7 @@ from opensloth.dataset_utils import get_tokenized_dataset
 
 from .opensloth_config import (
     OpenSlothConfig,
-    TrainingArgsConfig,
+    TrainingArguments,
 )
 
 from .logging_config import get_opensloth_logger
@@ -80,7 +80,7 @@ def create_trainer(
     model,
     tokenizer,
     opensloth_config: OpenSlothConfig,
-    hf_train_args: TrainingArgsConfig,
+    hf_train_args: TrainingArguments,
 ):
     """Load or prepare the dataset and create the SFTTrainer."""
 
@@ -102,6 +102,7 @@ def create_trainer(
     logger.start_timing("training_loop_patch")
     from opensloth.patching.inner_training_loop import patch_inner_training_loop
     from opensloth.patching.patch_sampler import patch_sampler
+
     from opensloth.patching.patch_log import patch_log
 
     patch_log(type(trainer))
@@ -128,7 +129,7 @@ def _get_trainer(
     model,
     tokenizer,
     opensloth_config: OpenSlothConfig,
-    hf_train_args: TrainingArgsConfig,
+    hf_train_args: TrainingArguments,
 ):
     """
     Returns an SFTTrainer instance with a tokenized dataset.

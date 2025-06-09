@@ -192,7 +192,7 @@ class OpenSlothConfig(BaseModel):
         extra = "allow"
 
 
-class TrainingArgsConfig(BaseModel):
+class TrainingArguments(BaseModel):
     """Configuration for Hugging Face TrainingArguments."""
 
     output_dir: str = "saves/loras/"
