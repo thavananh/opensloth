@@ -2,10 +2,19 @@ from fastcore.all import patch
 from transformers.trainer import *
 from ..opensloth_config import OpenSlothConfig
 
-# from opensloth.patching.patch_log import patch_log
-# from ..logging_config import get_opensloth_logger
 
-# DISABLE_PACKING = True
+def _compute_tokens(attention_mask: torch.Tensor) -> int:
+    """
+    Compute the number of tokens in a batch based on the attention mask.
+    This is used to calculate the number of tokens processed during training.
+    """
+    # num of non-padding tokens in the batch
+    num_non_padding_tokens = attention_mask.sum().item()
+    num_total_tokens = attention_mask.numel()
+    return {
+        "num_non_padding_tokens": num_non_padding_tokens,
+        "num_total_tokens": num_total_tokens,
+    }
 
 
 def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
@@ -129,6 +138,12 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
         )
         self.state.is_hyper_param_search = trial is not None
         self.state.train_batch_size = self._train_batch_size
+
+        # Initialize cumulative token counters for tracking token metrics
+        if not hasattr(self.state, "cumulative_num_non_padding_tokens"):
+            self.state.cumulative_num_non_padding_tokens = 0
+        if not hasattr(self.state, "cumulative_num_total_tokens"):
+            self.state.cumulative_num_total_tokens = 0
 
         # Compute absolute values for logging, eval, and save if given as ratio
         self.state.compute_steps(args, max_steps)
@@ -346,10 +361,11 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches, args.device
                 )
-                num_tokens, trained_tokens = 0, 0
+                # num_tokens, trained_tokens = 0, 0
                 for i, inputs in enumerate(batch_samples):
                     step += 1
 
+                    # === OpenSloth Customization ===#
                     if DISABLE_PACKING:
                         do_sync_step = (
                             step + 1
@@ -357,14 +373,18 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                             step + 1
                         ) == steps_in_epoch
                     else:
-                        # we overwrite the GA so this new rule applies
                         do_sync_step = i == len(batch_samples) - 1
-                        num_tokens += inputs["input_ids"].numel()
-                        trained_tokens += inputs["attention_mask"].sum().item()
-                        logger.info(
-                            f"Step {step} - do_sync_step: {do_sync_step}, "
-                            f"i: {i}, len(batch_samples): {len(batch_samples)}|num tokens: {num_tokens}|num trained tokens: {trained_tokens}"
-                        )
+                    # track tokens
+                    token_metrics = _compute_tokens(inputs["attention_mask"])
+
+                    # Accumulate the new token metrics to the trainer state
+                    self.state.cumulative_num_non_padding_tokens += token_metrics[
+                        "num_non_padding_tokens"
+                    ]
+                    self.state.cumulative_num_total_tokens += token_metrics[
+                        "num_total_tokens"
+                    ]
+                    # <<< OpenSloth Customization <<<#
 
                     # Since we perform prefetching, we need to manually set sync_gradients
                     self.accelerator.gradient_state._set_sync_gradients(do_sync_step)
