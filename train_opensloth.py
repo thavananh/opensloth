@@ -54,8 +54,8 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
     # # Training arguments using Pydantic model
     training_config = TrainingArguments(
         output_dir=f"outputs/exps/qwen3-0.6b-FineTome-{n}gpus-no-packing/",
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=8 // n,  # Adjust based on n_gpu
+        per_device_train_batch_size=8 // n,
+        gradient_accumulation_steps=1,  # Adjust based on n_gpu
         learning_rate=1e-5,
         logging_steps=1,
         num_train_epochs=1,
@@ -73,7 +73,7 @@ def get_configs(n) -> tuple[OpenSlothConfig, TrainingArguments]:
 
 if __name__ == "__main__":
     try:
-        for n in [4]:
+        for n in [2, 4]:
             opensloth_config, training_config = get_configs(n)
             run_mp_training(opensloth_config.devices, opensloth_config, training_config)
 

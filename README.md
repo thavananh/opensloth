@@ -4,11 +4,8 @@
 
 # OpenSloth
 
-A high-performance framework for fine-tuning large language models.
+A multi-gpu unsloth-based training framework that optimizes multi-GPU training with adaptive batching strategies, built on top of the [Unsloth](https://github.com/unslothai/unsloth) library.
 
-## Overview
-
-**Built on top of [Unsloth](https://github.com/unslothai/unsloth)** - opensloth extends Unsloth's excellent foundation with multi-GPU support and optimized batching strategies.
 
 **What opensloth adds:**
 - **Multi-GPU training via NCCL**: Scale your Unsloth workflows across multiple GPUs

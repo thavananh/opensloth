@@ -3,7 +3,6 @@
 
 import os
 
-# from opensloth.patching.patch_sampler import patch_sampler
 from opensloth.patching.patch_sampler import patch_sampler
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
