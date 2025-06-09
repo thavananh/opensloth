@@ -50,7 +50,7 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
         R.shuffle(ids)
 
         self.logger.info(
-            f"🎲 Sampler epoch {self.epoch}: emitting {dataset_size} indices\nFirst ids: {ids[:10]}\n...Last ids: {ids[-10:]}"
+            f"🎲 Sampler epoch {self.epoch}: emitting {dataset_size} indices\nFirst ids dataset samples: {ids[:10]}\n...Last ids: {ids[-10:]}"
         )
         yield_ids = []
         for idx in ids:
@@ -68,7 +68,7 @@ class RandomSamplerSeededByEpoch(SequentialSampler):
 from ..opensloth_config import OpenSlothConfig
 
 
-def apply_patch_sampler(opensloth_config: OpenSlothConfig):
+def patch_sampler():
 
     print("🔧 Patching Trainer to use RandomSamplerSeededByEpoch")
 

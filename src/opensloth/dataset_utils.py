@@ -181,7 +181,7 @@ def _get_cached_dataset(
     lock_path = output_path.with_suffix(".lock")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger = get_opensloth_logger(log_level="INFO")
+    logger = get_opensloth_logger(log_level="INFO", allow_unknown_gpu=False)
     max_retries = 30
     retry_delay = 3
 
@@ -304,17 +304,18 @@ def get_text_dataset(config: DatasetConfig) -> datasets.Dataset:
 def get_tokenized_dataset(
     config: DatasetConfig,
     do_tokenize: bool = True,
-    response_only: bool = True,
 ) -> datasets.Dataset:
     """Get tokenized dataset with optional response-only labeling."""
     # Validate config
+    response_only = config.response_only
+
     if not hasattr(config, "max_seq_length"):
         raise ValueError("Config must have max_seq_length attribute")
 
     if config.max_seq_length <= 0:
         raise ValueError("max_seq_length must be positive")
     ignore_keys = ["nproc"]
-    _config = config.model_dump()
+    _config = config.model_dump() if hasattr(config, "model_dump") else config.copy()
     for key in ignore_keys:
         if key in _config:
             del _config[key]

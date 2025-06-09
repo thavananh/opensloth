@@ -1,5 +1,5 @@
 from opensloth.opensloth_config import *
-from opensloth.scripts.hp_trainer import run_mp_training, setup_envs
+from opensloth.scripts.opensloth_trainer import run_mp_training, setup_envs
 
 for n_gpu in [2]:
     # Main configuration using Pydantic models
@@ -13,10 +13,7 @@ for n_gpu in [2]:
             response_part="<|im_start|>assistant\n",
             chat_template="chatml",
         ),
-        training=TrainingConfig(
-            gpus=[0, 1, 2, 3][:n_gpu],  # Adjust based on n_gpu
-            loss_type="response_only",
-        ),
+        devices=[0, 1, 2, 3][:n_gpu],  # Adjust based on n_gpu
         fast_model_args=FastModelArgs(
             model_name="model_store/unsloth/Qwen3-8B-Base-bnb-4bit",
             max_seq_length=32_000,
@@ -60,7 +57,7 @@ for n_gpu in [2]:
     setup_envs(opensloth_config, training_config)
     if n_gpu == 1:
         # For single GPU, we can run the training directly
-        from opensloth.scripts.hp_trainer import train_on_single_gpu
+        from opensloth.scripts.opensloth_trainer import train_on_single_gpu
 
         train_on_single_gpu(
             gpu=0,
@@ -68,6 +65,4 @@ for n_gpu in [2]:
             hf_train_args=training_config,
         )
     else:
-        run_mp_training(
-            opensloth_config.training.gpus, opensloth_config, training_config
-        )
+        run_mp_training(opensloth_config.devices, opensloth_config, training_config)

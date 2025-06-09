@@ -4,7 +4,7 @@
 import os
 
 # from opensloth.patching.patch_sampler import patch_sampler
-from opensloth.patching.patch_sampler import apply_patch_sampler
+from opensloth.patching.patch_sampler import patch_sampler
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -96,7 +96,7 @@ def train_qwen3_model():
 
     # from ._patch_sampler import patch_sampler
 
-    trainer = apply_patch_sampler(trainer)
+    trainer = patch_sampler()
     trainer_stats = trainer.train()
 
     # Show final memory and time stats

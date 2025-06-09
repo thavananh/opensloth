@@ -15,26 +15,7 @@ def pack(
     labels_list: List[torch.Tensor],
     attention_mask_list: List[torch.Tensor],
 ) -> Dict[str, torch.Tensor]:
-    """
-    Pack multiple sequences into a single batched tensor with proper attention
-    masking and position IDs for efficient training.
-
-    The generated attention mask is 2D (จริง ๆ แล้ว 3D with batch dim: 1, T, T),
-    preventing attention across different sequences in the pack.
-    Position IDs are reset for each sequence.
-
-    Args:
-        input_ids_list: List of input_ids tensors (each shape [seq_len]).
-                        Assumed to be on the same device.
-        labels_list: List of labels tensors (each shape [seq_len]).
-        attention_mask_list: List of 1D attention_mask tensors
-                             (each shape [seq_len]), where 1 indicates
-                             a real token and 0 indicates padding.
-
-    Returns:
-        Dict with keys: "input_ids", "labels", "attention_mask", "position_ids".
-        "attention_mask" will have shape (1, total_len, total_len).
-    """
+    """Pack multiple sequences into a single batch with proper attention masking."""
 
     if not input_ids_list:
         raise ValueError("Cannot pack empty sequence list.")
@@ -92,20 +73,6 @@ def pack(
     # Shape: (1, total_len, total_len)
     final_packed_attention_mask = correct_attention_mask_2d.unsqueeze(0)
 
-    # --- Create position IDs that reset for each sequence ---
-    # Shape: (total_len,)
-    # pos_ids_1d = torch.zeros(total_len, device=device, dtype=torch.long)
-    # current_pos = 0
-    # for seq_len in sequence_lengths:
-    #     pos_ids_1d[current_pos : current_pos + seq_len] = torch.arange(
-    #         seq_len, device=device
-    #     )
-    #     current_pos += seq_len
-
-    # Add batch dimension
-    # Shape: (1, total_len)
-    # packed_position_ids = pos_ids_1d.unsqueeze(0)
-
     return {
         "input_ids": packed_input_ids,
         "labels": packed_labels,
@@ -154,7 +121,7 @@ def patch_get_batch_samples(opensloth_config: OpenSlothConfig):
 
         # Apply GPU-specific optimizations if multi-GPU
         if hp_world_size > 1:
-            max_seq_len = self.args.max_seq_length
+            max_seq_len = opensloth_config.fast_model_args.max_seq_length
 
             all_items = []
             for accumulated_batch in batch_samples:

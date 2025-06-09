@@ -57,6 +57,10 @@ class DatasetConfigBase(BaseModel):
         default="<|im_start|>user\n",
         description="Part of the input that contains the instruction",
     )
+    response_only: Optional[bool] = Field(
+        default=True,
+        description="If True, only the response part is used for training",
+    )
     response_part: Optional[str] = Field(
         default="<|im_start|>assistant\n",
         description="Part of the input that contains the response",
@@ -100,25 +104,6 @@ class PathDatasetConfig(DatasetConfigBase):
 
 
 DatasetConfig = Union[HFDatasetConfig, PathDatasetConfig]
-
-
-class TrainingConfig(BaseModel):
-    """Configuration for training setup and parameters."""
-
-    gpus: List[int] = Field(default=[0], description="List of GPU indices to use")
-    loss_type: Literal["all", "response_only"] = Field(
-        default="response_only",
-        description="Loss calculation type: 'all' or 'response_only'",
-    )
-    chat_template: Optional[Union[str, List[str]]] = Field(
-        default=None,
-        description="Chat template for formatting input data",
-    )
-
-    class Config:
-        """Pydantic configuration for DataConfig."""
-
-        extra = "allow"
 
 
 class FastModelArgs(BaseModel):
@@ -180,7 +165,7 @@ class OpenSlothConfig(BaseModel):
         default_factory=HFDatasetConfig,
         description="Dataset configuration for training",
     )
-    training: TrainingConfig = Field(default_factory=TrainingConfig)
+    devices: List[int] = Field(default=[0], description="List of GPU indices to use")
     fast_model_args: FastModelArgs = Field(default_factory=FastModelArgs)
     lora_args: Optional[LoraArgs] = Field(default_factory=LoraArgs)
     pretrained_lora: Optional[str] = Field(

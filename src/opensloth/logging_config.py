@@ -37,11 +37,11 @@ class StepTimer:
         return self.end_time - self.start_time
 
 
-class openslothLogger:
+class OpenslothLogger:
     """Enhanced logger for opensloth with better formatting and GPU-aware logging."""
 
     def __init__(self, allow_unknown_gpu: bool = False):
-        """Initialize the openslothLogger with specified log level and GPU awareness."""
+        """Initialize the OpenslothLogger with specified log level and GPU awareness."""
         self.allow_unknown_gpu = (
             allow_unknown_gpu  # allow to run without setting HYPERSLOTH_LOCAL_RANK
         )
@@ -69,6 +69,22 @@ class openslothLogger:
             )
         return id
 
+    def _should_log_to_stderr(self) -> bool:
+        """Determine if stderr logging should be enabled based on tmux mode and rank."""
+        # Check if we're in tmux mode
+        use_tmux = os.environ.get("USE_TMUX")
+        is_tmux_mode = use_tmux == "1"
+        
+        # Get local rank for distributed training
+        local_rank = int(os.environ.get("HYPERSLOTH_LOCAL_RANK", "0"))
+        
+        # In tmux mode, all ranks log to stderr
+        if is_tmux_mode:
+            return True
+            
+        # In non-tmux mode, only rank 0 logs to stderr
+        return local_rank == 0
+
     def _setup_logger(self) -> None:
         """Setup loguru logger with enhanced formatting."""
         from loguru import logger as base_logger
@@ -86,13 +102,18 @@ class openslothLogger:
             "<cyan>{file}:{line}</cyan> | "
             "<level>{message}</level>"
         )
-        self.logger.add(
-            sys.stderr,
-            format=log_format,
-            level=self.log_level,
-            colorize=True,
-            enqueue=True,
-        )
+        
+        # Check if we should add stderr handler based on tmux mode and rank
+        should_log_to_stderr = self._should_log_to_stderr()
+        
+        if should_log_to_stderr:
+            self.logger.add(
+                sys.stderr,
+                format=log_format,
+                level=self.log_level,
+                colorize=True,
+                enqueue=True,
+            )
 
         # File handler for individual GPU logs (always add these)
         try:
@@ -276,14 +297,14 @@ class openslothLogger:
 VALID_LOGGER = None
 
 
-def get_opensloth_logger(log_level=None, allow_unknown_gpu=False) -> openslothLogger:
+def get_opensloth_logger(log_level=None, allow_unknown_gpu=False) -> OpenslothLogger:
     # log level is now overridden by environment variable HYPERSLOTH_LOG_LEVEL
     """Setup and return enhanced logger instance."""
     global VALID_LOGGER
     if VALID_LOGGER is not None:
         return VALID_LOGGER
 
-    logger = openslothLogger(allow_unknown_gpu=allow_unknown_gpu)
+    logger = OpenslothLogger(allow_unknown_gpu=allow_unknown_gpu)
     if not allow_unknown_gpu:
         VALID_LOGGER = logger
     return logger

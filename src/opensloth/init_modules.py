@@ -42,7 +42,7 @@ def init_model_and_tokenizer(opensloth_config: OpenSlothConfig):
     logger.start_timing("nccl_setup")
     setup_nccl_for_opensloth(
         gpu=int(os.environ["HYPERSLOTH_LOCAL_RANK"]),
-        gpus=opensloth_config.training.gpus,
+        gpus=opensloth_config.devices,
     )
     logger.finish_timing("nccl_setup")
 
@@ -63,16 +63,15 @@ def init_model_and_tokenizer(opensloth_config: OpenSlothConfig):
 
     # Allow custom chat templates
     if (
-        hasattr(opensloth_config.training, "chat_template")
-        and opensloth_config.training.chat_template is not None
+        hasattr(opensloth_config.data, "chat_template")
+        and opensloth_config.data.chat_template is not None
     ):
-        from transformers import AutoTokenizer  # type: ignore
+        from unsloth.chat_templates import get_chat_template
 
-        new_template = AutoTokenizer.from_pretrained(
-            opensloth_config.training.chat_template
-        ).chat_template
-        tokenizer.chat_template = new_template
-        logger.warning(f"Using chat template of {new_template}")
+        tokenizer = get_chat_template(
+            tokenizer, chat_template=opensloth_config.data.chat_template
+        )
+        logger.info(f"Applied chat template: {opensloth_config.data.chat_template}")
 
     return model, tokenizer
 
@@ -102,7 +101,7 @@ def create_trainer(
 
     logger.start_timing("training_loop_patch")
     from opensloth.patching.inner_training_loop import patch_inner_training_loop
-    from opensloth.patching.patch_sampler import apply_patch_sampler
+    from opensloth.patching.patch_sampler import patch_sampler
     from opensloth.patching.patch_log import patch_log
 
     patch_log(type(trainer))
@@ -113,7 +112,7 @@ def create_trainer(
     patch_get_batch_samples(opensloth_config)
 
     # ====
-    apply_patch_sampler(opensloth_config)
+    patch_sampler()
     logger.finish_timing("training_loop_patch")
 
     # ===

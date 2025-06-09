@@ -1,4 +1,4 @@
-# opensloth Performance Benchmarks
+# OpenSloth Performance Benchmarks
 
 ## Training Time Comparison (4x RTX 4090)
 
@@ -10,13 +10,13 @@
 
 ## Loss Curves Analysis
 
-The loss scale between Hyper-Sloth and LlamaFactory looks comparable, indicating similar training quality with significantly improved training speed.
+The loss scale between OpenSloth and LlamaFactory looks comparable, indicating similar training quality with significantly improved training speed.
 
-| ![Hyper-Sloth Tensorboard](../images/hyper-sloth-tb.png){ width=150 } | ![LlamaFactory Tensorboard](../images/llama-factory-tb.png){ width=150 } |
+| ![OpenSloth Tensorboard](../images/opensloth-tb.png){ width=150 } | ![LlamaFactory Tensorboard](../images/llama-factory-tb.png){ width=150 } |
 | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| Hyper-Sloth Tensorboard[^1]                                        | LlamaFactory Tensorboard[^2]                                          |
+| OpenSloth Tensorboard[^1]                                        | LlamaFactory Tensorboard[^2]                                          |
 
-[^1]: Hyper-Sloth Tensorboard.
+[^1]: OpenSloth Tensorboard.
 [^2]: LlamaFactory Tensorboard.
 
 ## Additional Performance Notes
