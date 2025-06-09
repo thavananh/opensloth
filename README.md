@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="images/hpsloth.webp" alt="opensloth Logo" width="200" />
+    <img src="images/opensloth.png" alt="opensloth Logo" width="200" />
 </p>
 
 # OpenSloth
