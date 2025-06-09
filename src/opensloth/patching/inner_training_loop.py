@@ -9,7 +9,7 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
     This approach patches specific methods instead of duplicating the entire training loop.
     """
     # Get environment variables
-    packing = opensloth_config.sequence_packing
+    sequence_packing = opensloth_config.sequence_packing
 
     @patch
     def _inner_training_loop(
@@ -346,7 +346,7 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                     step += 1
 
                     # === OpenSloth Customization ===#
-                    if packing:
+                    if sequence_packing:
                         do_sync_step = i == len(batch_samples) - 1
                     else:
                         do_sync_step = (
@@ -397,7 +397,7 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                     elif steps_trained_progress_bar is not None:
                         steps_trained_progress_bar.close()
                         steps_trained_progress_bar = None
-                    if packing:
+                    if sequence_packing:
                         if i == 0:
                             self.control = self.callback_handler.on_step_begin(
                                 args, self.state, self.control
@@ -496,7 +496,7 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
 
                         model.zero_grad()
                         self.state.global_step += 1
-                        if packing:
+                        if sequence_packing:
                             # When packing is enabled, use the original calculation
                             self.state.epoch = (
                                 epoch + (step + 1 + steps_skipped) / steps_in_epoch
