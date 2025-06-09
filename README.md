@@ -2,7 +2,7 @@
     <img src="images/hpsloth.webp" alt="opensloth Logo" width="200" />
 </p>
 
-# Hyper-Sloth
+# OpenSloth
 
 A high-performance framework for fine-tuning large language models.
 
