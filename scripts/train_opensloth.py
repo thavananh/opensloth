@@ -79,7 +79,7 @@ if __name__ == "__main__":
             ),
             devices=exp["devices"],
             fast_model_args=FastModelArgs(
-                model_name="model_store/unsloth/Qwen3-0.6B-bnb-4bit",
+                model_name="model_store/unsloth/Qwen3-14B-bnb-4bit",
                 max_seq_length=16000,
                 load_in_4bit=True,
             ),
