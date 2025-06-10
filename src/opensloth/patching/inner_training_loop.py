@@ -3,10 +3,11 @@ from transformers.trainer import *
 from ..opensloth_config import OpenSlothConfig
 
 
-def calculate_token_metrics(labels: torch.Tensor) -> tuple[int, int]:
-    use_full_tokens = labels.ne(-100).sum().item()  # Count non-padded tokens
-    total_tokens = labels.numel()
-    return total_tokens, use_full_tokens
+def calculate_token_metrics(input_ids, pad_token_id):
+    total_tokens = input_ids.numel()
+    num_padding_tokens = (input_ids == pad_token_id).sum().item()
+    effective_tokens = total_tokens - num_padding_tokens
+    return total_tokens, effective_tokens
 
 
 def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
@@ -351,6 +352,7 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                 )
 
                 for i, inputs in enumerate(batch_samples):
+                    # print(f"Processing batch {i + 1}/{len(batch_samples)}, ")
                     step += 1
 
                     # === OpenSloth Customization ===#
@@ -366,20 +368,22 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
 
                     # -- log the number of tokens seen in the current batch
                     _total_tokens, _effective_tokens = calculate_token_metrics(
-                        inputs["labels"]
+                        inputs["input_ids"],
+                        pad_token_id=self.processing_class.pad_token_id,
                     )
                     total_tokens.append(_total_tokens)
                     effective_token_count.append(_effective_tokens)
-                    token_metrics = {
-                        "total_tokens": sum(total_tokens) / 1e6,
-                        "effective_tokens": sum(effective_token_count) / 1e6,
-                    }
-                    print(
-                        f"[Update step: {update_step}]{i}/{len(batch_samples) - 1} - "
-                        f"Total tokens seen: {token_metrics['total_tokens']:.2f}M, "
-                        f"Effective tokens: {token_metrics['effective_tokens']:.2f}M"
-                        f" - Sequence length: {inputs['input_ids'].shape[1] if 'input_ids' in inputs else 'N/A'}"
-                    )
+
+                    # # every 10 steps or at the last step, log the token metrics
+                    if update_step % 10 == 0 and i == len(batch_samples) - 1:
+                        token_metrics = {
+                            "total_tokens": sum(total_tokens) / 1e6,
+                            "effective_tokens": sum(effective_token_count) / 1e6,
+                        }
+
+                        print(
+                            f"[Step {update_step}] Effective Tokens: {token_metrics['effective_tokens']:.1f}M/{token_metrics['total_tokens']:.1f}M"
+                        )
 
                     # <<< OpenSloth Customization <<<#
 
