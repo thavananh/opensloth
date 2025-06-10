@@ -5,7 +5,7 @@ from typing import Optional, Union, List, Tuple, Callable, Any
 import datasets
 from speedy_utils import identify, load_by_ext
 
-from opensloth import HYPERSLOTH_DATA_DIR
+from opensloth import OPENSLOTH_DATA_DIR
 from opensloth.logging_config import get_opensloth_logger
 from opensloth.opensloth_config import HFDatasetConfig, PathDatasetConfig
 
@@ -177,7 +177,7 @@ def _get_cached_dataset(
     if not cache_id or not cache_id.strip():
         raise ValueError("Cache ID must be provided and non-empty")
 
-    output_path = HYPERSLOTH_DATA_DIR / "datasets" / cache_id
+    output_path = OPENSLOTH_DATA_DIR / "datasets" / cache_id
     lock_path = output_path.with_suffix(".lock")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -21,7 +21,7 @@ def _change_compiler_location() -> None:
     from unsloth_zoo import compiler
 
     # ====== Patching the compiler location to avoid race conditions as it is shared between GPUs
-    gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
+    gpu_ith = int(os.environ["OPENSLOTH_LOCAL_RANK"])
 
     compiler.UNSLOTH_COMPILE_LOCATION = ".cache/{}_{}".format(
         compiler.UNSLOTH_COMPILE_LOCATION, gpu_ith
@@ -37,8 +37,8 @@ def setup_model_and_training(
     Setup the model, tokenizer, dataset, and trainer for multi-GPU training.
     """
 
-    gpu_ith = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-    num_gpus = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
+    gpu_ith = int(os.environ["OPENSLOTH_LOCAL_RANK"])
+    num_gpus = int(os.environ["OPENSLOTH_WORLD_SIZE"])
 
     # Get enhanced logger for timing
     from .logging_config import get_opensloth_logger

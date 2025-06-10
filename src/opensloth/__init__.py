@@ -1,4 +1,4 @@
 import pathlib
 
 
-HYPERSLOTH_DATA_DIR = pathlib.Path("~/.cache/opensloth").expanduser().resolve()
+OPENSLOTH_DATA_DIR = pathlib.Path("~/.cache/opensloth").expanduser().resolve()

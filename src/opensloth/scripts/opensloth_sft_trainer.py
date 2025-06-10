@@ -34,7 +34,7 @@ def train_on_single_gpu(
 ):
     from opensloth.opensloth_trainer_setup import setup_model_and_training
 
-    os.environ["HYPERSLOTH_LOCAL_RANK"] = str(opensloth_config.devices.index(gpu))
+    os.environ["OPENSLOTH_LOCAL_RANK"] = str(opensloth_config.devices.index(gpu))
     # Setup enhanced logger
     logger = OpenslothLogger()
 
@@ -232,18 +232,71 @@ def run_mp_training(
 
     # Wait for processes; if one errors, kill them all
     while processes:
-        for proc in processes:
+        for i, proc in enumerate(processes):
             if not proc.is_alive():
                 if proc.exitcode != 0:
                     for p in processes:
                         p.terminate()
-                    print("Error in training, terminating all processes")
-                    raise Exception("Error in training")
+                    if i == 0:
+                        raise Exception("Error in training")
                 else:
                     processes.remove(proc)
                     break
         time.sleep(1)
     print("All processes finished")
+
+
+def initialize_training_config(config_file):
+    # global USE_TMUX
+    # USE_TMUX = USE_TMUX or use_tmux
+    """Train entry-point. If rank/world_size are provided, we assume this is
+    a child process that trains on a single GPU. Otherwise,
+    we spawn multi-gpu runs either by generating a tmux script or by multi-process.
+    """
+
+    config_file = os.path.abspath(config_file)
+    assert os.path.exists(config_file), f"Config file {config_file} not found"
+
+    opensloth_config, training_config = load_config_from_path(config_file)
+    print(
+        f"Overriding max_seq_len to {opensloth_config.fast_model_args.max_seq_length}"
+    )
+    # training_config.max_seq_len = opensloth_config.fast_model_args.max_seq_length
+    opensloth_config.data.max_seq_length = (
+        opensloth_config.fast_model_args.max_seq_length
+    )
+    opensloth_config.data.tokenizer_name = (
+        opensloth_config.data.tokenizer_name
+        or opensloth_config.fast_model_args.model_name
+    )
+
+    setup_envs(opensloth_config, training_config)
+    return opensloth_config, training_config
+
+
+def setup_envs(opensloth_config: OpenSlothConfig, training_config: TrainingArguments):
+    os.environ["OPENSLOTH_WORLD_SIZE"] = str(len(opensloth_config.devices))
+    os.environ["OPENSLOTH_FORWARD_BZ"] = str(
+        training_config.per_device_train_batch_size
+        # * training_config.gradient_accumulation_steps
+        * len(opensloth_config.devices)
+    )
+    os.environ["OPENSLOTH_GLOBAL_BZ"] = str(
+        training_config.per_device_train_batch_size
+        * training_config.gradient_accumulation_steps
+        * len(opensloth_config.devices)
+    )
+
+    print(f"Global batch size: {os.environ['OPENSLOTH_GLOBAL_BZ']}")
+    os.environ["OPENSLOTH_ACCUMULATION_STEPS"] = str(
+        training_config.gradient_accumulation_steps
+    )
+    os.environ["OPENSLOTH_PER_DEVICE_TRAIN_BZ"] = str(
+        training_config.per_device_train_batch_size
+    )
+    # output dir
+    os.environ["OPENSLOTH_OUTPUT_DIR"] = training_config.output_dir
+    os.environ["OPENSLOTH_LOG_LEVEL"] = opensloth_config.log_level
 
 
 @call_parse
@@ -293,56 +346,3 @@ def train(
             opensloth_config=opensloth_config,
             hf_train_args=training_config,
         )
-
-
-def initialize_training_config(config_file):
-    # global USE_TMUX
-    # USE_TMUX = USE_TMUX or use_tmux
-    """Train entry-point. If rank/world_size are provided, we assume this is
-    a child process that trains on a single GPU. Otherwise,
-    we spawn multi-gpu runs either by generating a tmux script or by multi-process.
-    """
-
-    config_file = os.path.abspath(config_file)
-    assert os.path.exists(config_file), f"Config file {config_file} not found"
-
-    opensloth_config, training_config = load_config_from_path(config_file)
-    print(
-        f"Overriding max_seq_len to {opensloth_config.fast_model_args.max_seq_length}"
-    )
-    # training_config.max_seq_len = opensloth_config.fast_model_args.max_seq_length
-    opensloth_config.data.max_seq_length = (
-        opensloth_config.fast_model_args.max_seq_length
-    )
-    opensloth_config.data.tokenizer_name = (
-        opensloth_config.data.tokenizer_name
-        or opensloth_config.fast_model_args.model_name
-    )
-
-    setup_envs(opensloth_config, training_config)
-    return opensloth_config, training_config
-
-
-def setup_envs(opensloth_config: OpenSlothConfig, training_config: TrainingArguments):
-    os.environ["HYPERSLOTH_WORLD_SIZE"] = str(len(opensloth_config.devices))
-    os.environ["HYPERSLOTH_FORWARD_BZ"] = str(
-        training_config.per_device_train_batch_size
-        # * training_config.gradient_accumulation_steps
-        * len(opensloth_config.devices)
-    )
-    os.environ["HYPERSLOTH_GLOBAL_BZ"] = str(
-        training_config.per_device_train_batch_size
-        * training_config.gradient_accumulation_steps
-        * len(opensloth_config.devices)
-    )
-
-    print(f"Global batch size: {os.environ['HYPERSLOTH_GLOBAL_BZ']}")
-    os.environ["HYPERSLOTH_ACCUMULATION_STEPS"] = str(
-        training_config.gradient_accumulation_steps
-    )
-    os.environ["HYPERSLOTH_PER_DEVICE_TRAIN_BZ"] = str(
-        training_config.per_device_train_batch_size
-    )
-    # output dir
-    os.environ["HYPERSLOTH_OUTPUT_DIR"] = training_config.output_dir
-    os.environ["HYPERSLOTH_LOG_LEVEL"] = opensloth_config.log_level

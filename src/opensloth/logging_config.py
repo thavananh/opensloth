@@ -43,9 +43,9 @@ class OpenslothLogger:
     def __init__(self, allow_unknown_gpu: bool = False):
         """Initialize the OpenslothLogger with specified log level and GPU awareness."""
         self.allow_unknown_gpu = (
-            allow_unknown_gpu  # allow to run without setting HYPERSLOTH_LOCAL_RANK
+            allow_unknown_gpu  # allow to run without setting OPENSLOTH_LOCAL_RANK
         )
-        self.log_level = os.environ.get("HYPERSLOTH_LOG_LEVEL", "INFO").upper()
+        self.log_level = os.environ.get("OPENSLOTH_LOG_LEVEL", "INFO").upper()
         if self.log_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
             raise ValueError(
                 f"Invalid log level: {self.log_level}. Must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL."
@@ -61,10 +61,10 @@ class OpenslothLogger:
 
     @property
     def gpu_id(self) -> str:
-        id = os.environ.get("HYPERSLOTH_LOCAL_RANK", "UNSET")
+        id = os.environ.get("OPENSLOTH_LOCAL_RANK", "UNSET")
         if id == "UNSET" and not self.allow_unknown_gpu:
             raise ValueError(
-                'Both "HYPERSLOTH_LOCAL_RANK" is not set and "allow_unknown_gpu" is False. '
+                'Both "OPENSLOTH_LOCAL_RANK" is not set and "allow_unknown_gpu" is False. '
                 "Please set the environment variable or allow unknown GPU."
             )
         return id
@@ -76,7 +76,7 @@ class OpenslothLogger:
         is_tmux_mode = use_tmux == "1"
 
         # Get local rank for distributed training
-        local_rank = int(os.environ.get("HYPERSLOTH_LOCAL_RANK", "0"))
+        local_rank = int(os.environ.get("OPENSLOTH_LOCAL_RANK", "0"))
 
         # In tmux mode, all ranks log to stderr
         if is_tmux_mode:
@@ -117,7 +117,7 @@ class OpenslothLogger:
 
         # File handler for individual GPU logs (always add these)
         try:
-            log_file = os.path.join(os.environ["HYPERSLOTH_OUTPUT_DIR"], "training.log")
+            log_file = os.path.join(os.environ["OPENSLOTH_OUTPUT_DIR"], "training.log")
 
             self.logger.add(
                 log_file,
@@ -298,7 +298,7 @@ VALID_LOGGER = None
 
 
 def get_opensloth_logger(log_level=None, allow_unknown_gpu=False) -> OpenslothLogger:
-    # log level is now overridden by environment variable HYPERSLOTH_LOG_LEVEL
+    # log level is now overridden by environment variable OPENSLOTH_LOG_LEVEL
     """Setup and return enhanced logger instance."""
     global VALID_LOGGER
     if VALID_LOGGER is not None:

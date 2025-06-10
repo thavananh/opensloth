@@ -3,6 +3,12 @@ from transformers.trainer import *
 from ..opensloth_config import OpenSlothConfig
 
 
+def calculate_token_metrics(labels: torch.Tensor) -> tuple[int, int]:
+    use_full_tokens = labels.ne(-100).sum().item()  # Count non-padded tokens
+    total_tokens = labels.numel()
+    return total_tokens, use_full_tokens
+
+
 def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
     """
     Ultra-minimal patch that only adds essential opensloth customizations.
@@ -122,7 +128,7 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                 if isinstance(cb, ExportableState)
             ]
         )
-        self.state.is_hyper_param_search = trial is not None
+        self.state.is_open_param_search = trial is not None
         self.state.train_batch_size = self._train_batch_size
 
         # Compute absolute values for logging, eval, and save if given as ratio
@@ -331,6 +337,8 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
             total_updates = steps_in_epoch // args.gradient_accumulation_steps + int(
                 remainder < args.gradient_accumulation_steps
             )
+            total_tokens = []
+            effective_token_count = []
             for _ in range(total_updates):
                 update_step += 1
                 num_batches = (
@@ -341,11 +349,12 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                 batch_samples, num_items_in_batch = self.get_batch_samples(
                     epoch_iterator, num_batches, args.device
                 )
-                # num_tokens, trained_tokens = 0, 0
+
                 for i, inputs in enumerate(batch_samples):
                     step += 1
 
                     # === OpenSloth Customization ===#
+                    # when useing sequence packing, we need to handle the last step differently
                     if sequence_packing:
                         do_sync_step = i == len(batch_samples) - 1
                     else:
@@ -354,10 +363,23 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                         ) % args.gradient_accumulation_steps == 0 or (
                             step + 1
                         ) == steps_in_epoch
-                    # track tokens
-                    # token_metrics = _compute_tokens(inputs["attention_mask"])
 
-                    # Accumulate the new token metrics to the trainer state
+                    # -- log the number of tokens seen in the current batch
+                    _total_tokens, _effective_tokens = calculate_token_metrics(
+                        inputs["labels"]
+                    )
+                    total_tokens.append(_total_tokens)
+                    effective_token_count.append(_effective_tokens)
+                    token_metrics = {
+                        "total_tokens": sum(total_tokens) / 1e6,
+                        "effective_tokens": sum(effective_token_count) / 1e6,
+                    }
+                    print(
+                        f"[Update step: {update_step}]{i}/{len(batch_samples) - 1} - "
+                        f"Total tokens seen: {token_metrics['total_tokens']:.2f}M, "
+                        f"Effective tokens: {token_metrics['effective_tokens']:.2f}M"
+                        f" - Sequence length: {inputs['input_ids'].shape[1] if 'input_ids' in inputs else 'N/A'}"
+                    )
 
                     # <<< OpenSloth Customization <<<#
 
@@ -498,13 +520,13 @@ def patch_inner_training_loop(opensloth_config: OpenSlothConfig):
                         self.state.global_step += 1
                         if sequence_packing:
                             # When packing is enabled, use the original calculation
+                            self.state.epoch = epoch + (update_step + 1) / total_updates
+                        else:
                             self.state.epoch = (
                                 epoch + (step + 1 + steps_skipped) / steps_in_epoch
                             )
-                        else:
                             # When packing is disabled, use update_step for epoch calculation
                             # since each update_step represents one gradient accumulation cycle
-                            self.state.epoch = epoch + (update_step + 1) / total_updates
                         self.control = self.callback_handler.on_step_end(
                             args, self.state, self.control
                         )

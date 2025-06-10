@@ -119,9 +119,9 @@ def patch_log(T: type) -> type:
     LOG_LOCKS: Dict[str, BaseFileLock] = {}
 
     try:
-        LOCAL_RANK = int(os.environ["HYPERSLOTH_LOCAL_RANK"])
-        WORLD_SIZE = int(os.environ["HYPERSLOTH_WORLD_SIZE"])
-        LOG_CACHE_DIR = os.environ["HYPERSLOTH_OUTPUT_DIR"]
+        LOCAL_RANK = int(os.environ["OPENSLOTH_LOCAL_RANK"])
+        WORLD_SIZE = int(os.environ["OPENSLOTH_WORLD_SIZE"])
+        LOG_CACHE_DIR = os.environ["OPENSLOTH_OUTPUT_DIR"]
         is_main = LOCAL_RANK == 0
 
         print(f"[{LOCAL_RANK=}] Patching log. Dir: {LOG_CACHE_DIR}, GPUs: {WORLD_SIZE}")

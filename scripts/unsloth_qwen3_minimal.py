@@ -6,7 +6,7 @@ import os
 from opensloth.patching.patch_sampler import patch_sampler
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["HYPERSLOTH_LOCAL_RANK"] = "0"
+os.environ["OPENSLOTH_LOCAL_RANK"] = "0"
 
 
 def train_qwen3_model():

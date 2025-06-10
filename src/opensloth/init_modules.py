@@ -41,7 +41,7 @@ def init_model_and_tokenizer(opensloth_config: OpenSlothConfig):
 
     logger.start_timing("nccl_setup")
     setup_nccl_for_opensloth(
-        rank=int(os.environ["HYPERSLOTH_LOCAL_RANK"]),
+        rank=int(os.environ["OPENSLOTH_LOCAL_RANK"]),
         gpus=opensloth_config.devices,
     )
     logger.finish_timing("nccl_setup")
