@@ -72,7 +72,7 @@ if __name__ == "__main__":
                 response_part="<|im_start|>assistant\n",
                 num_samples=exp["num_samples"],
                 nproc=52,
-                max_seq_length=4096,
+                max_seq_length=16000,
                 source_type="hf",
                 dataset_name="mlabonne/FineTome-100k",
                 split="train",
@@ -80,7 +80,7 @@ if __name__ == "__main__":
             devices=exp["devices"],
             fast_model_args=FastModelArgs(
                 model_name="model_store/unsloth/Qwen3-0.6B-bnb-4bit",
-                max_seq_length=4096,
+                max_seq_length=16000,
                 load_in_4bit=True,
             ),
             lora_args=LoraArgs(
