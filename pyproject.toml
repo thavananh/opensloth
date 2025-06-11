@@ -1,6 +1,6 @@
 [project]
 name = "opensloth"
-version = "0.1.4"
+version = "0.1.5"
 description = "A high-performance framework for fine-tuning large language models with multi-GPU support"
 authors = [{ name = "anhvth", email = "anhvth.226@gmail.com" }]
 readme = "README.md"
@@ -57,7 +57,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "opensloth"
-version = "0.1.4"
+version = "0.1.5"
 packages = [{ include = "opensloth", from = "src" }]
 
 [tool.poetry.scripts]

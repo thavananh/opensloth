@@ -12,7 +12,7 @@ NEW_VERSION=$(poetry version -s)
 echo "New version: $NEW_VERSION"
 
 # Update version in pyproject.toml [project] section as well
-sed -i "s/version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
+sed -i '' "s/version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
 
 echo "Version bumped from $CURRENT_VERSION to $NEW_VERSION"
 
