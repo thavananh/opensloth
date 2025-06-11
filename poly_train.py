@@ -63,7 +63,6 @@ training_config = TrainingArguments(
 )
 
 if __name__ == "__main__":
-    # Setup wandb with proper naming
     model_name = opensloth_config.fast_model_args.model_name.split("/")[-1]
     exp_name = f"poly_{model_name}_{todaytime}"
     os.environ["WANDB_PROJECT"] = "poly"
