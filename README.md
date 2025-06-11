@@ -8,7 +8,7 @@ A multi-GPU training framework that combines [Unsloth](https://github.com/unslot
 
 **Core Components:**
 - **Unsloth**: 2x faster training with 75% VRAM savings
-- **Multi-GPU**: NCCL-based distributed training across multiple GPUs  
+- **Multi-GPU**: Distributed training across multiple GPUs  
 - **Sequence Packing**: Smart batching that reduces padding waste by up to 40%
 
 **The Result:** Unsloth's efficiency × GPU count × sequence packing optimizations = speedups that often exceed theoretical maximums.
@@ -56,7 +56,7 @@ Controlled comparison with identical configurations:
 
 OpenSloth achieves **2.3x speedup** through three optimizations:
 - ✅ **Sequence packing**: Smart batching reduces padding waste ([learn more](https://huggingface.co/blog/sirluk/llm-sequence-packing))
-- ✅ **Multi-GPU scaling**: NCCL-based distributed training
+- ✅ **Multi-GPU scaling**: Distributed training across GPUs
 - ✅ **Load balancing**: Even workload distribution across GPUs
 
 **Scaling Expectations:**
@@ -75,7 +75,7 @@ OpenSloth combines three proven techniques:
 
 ### 2. Multi-GPU Distribution
 - **PyTorch DDP**: Standard distributed data parallel training
-- **NCCL backend**: Efficient gradient synchronization
+- **Efficient gradients**: Optimized gradient synchronization
 - **Process spawning**: One process per GPU for optimal scaling
 
 ### 3. Sequence Packing
