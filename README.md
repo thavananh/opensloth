@@ -64,28 +64,9 @@ OpenSloth achieves **2.3x speedup** through three optimizations:
 - **4 GPUs**: ~4.6x faster than single GPU
 - **8 GPUs**: ~9.2x faster than single GPU
 
-## 🏗 How It Works
-
-OpenSloth combines three proven techniques:
-
-### 1. Unsloth Foundation
-- 2x faster training through optimized kernels
-- 75% VRAM savings through memory efficiency
-- Quality preservation with performance gains
-
-### 2. Multi-GPU Distribution
-- **PyTorch DDP**: Standard distributed data parallel training
-- **Efficient gradients**: Optimized gradient synchronization
-- **Process spawning**: One process per GPU for optimal scaling
-
-### 3. Sequence Packing
-Based on the [Hugging Face sequence packing approach](https://huggingface.co/blog/sirluk/llm-sequence-packing):
-- **Length sorting**: Groups sequences by similar lengths
-- **Smart batching**: Minimizes padding tokens within batches
-- **Round-robin distribution**: Balances workload across GPUs
-- **Up to 40% token savings**: Reduces computational waste
 
 ## 🔧 Quick Tips
+- Enable packing, set bz=1, long sequence length (8k, 16k, etc.) with larger gradient accumulation steps (64, 128). Unsloth's will automatically handle sequence packing on global batch to optimize gpu utilization.
 
 **For faster iteration:**
 - Start with smaller models: `unsloth/Qwen3-0.6b-bnb-4bit`
