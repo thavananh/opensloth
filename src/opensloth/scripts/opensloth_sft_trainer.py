@@ -259,7 +259,7 @@ def initialize_training_config(config_file):
 
     opensloth_config, training_config = load_config_from_path(config_file)
     print(
-        f"Overriding max_seq_len to {opensloth_config.fast_model_args.max_seq_length}"
+        f"Overriding max_seq_len to {opensloth_config.fast_model_args.max_seq_length} for data processing"
     )
     # training_config.max_seq_len = opensloth_config.fast_model_args.max_seq_length
     opensloth_config.data.max_seq_length = (

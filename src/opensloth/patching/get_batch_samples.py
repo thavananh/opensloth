@@ -8,65 +8,65 @@ from opensloth.patching.patch_log import patch_log
 from ..logging_config import get_opensloth_logger
 
 
-def _to_batch(items, pad_values):
-    """Convert a list of items to a batch with padding."""
-    max_len = max(item["input_ids"].shape[1] for item in items)
-    batch = {
-        "input_ids": torch.cat(
-            [
-                torch.cat(
-                    [
-                        item["input_ids"],
-                        torch.full(
-                            (
-                                item["input_ids"].shape[0],
-                                max_len - item["input_ids"].shape[1],
-                                item["input_ids"].shape[2],
-                            ),
-                            pad_values["input_ids"],
-                        ),
-                    ],
-                    dim=1,
-                )
-                for item in items
-            ]
-        ),
-        "labels": torch.cat(
-            [
-                torch.cat(
-                    [
-                        item["labels"],
-                        torch.full(
-                            (
-                                item["labels"].shape[0],
-                                max_len - item["labels"].shape[1],
-                            ),
-                            pad_values["labels"],
-                        ),
-                    ],
-                    dim=1,
-                )
-                for item in items
-            ]
-        ),
-        "attention_mask": torch.cat(
-            [
-                torch.cat(
-                    [
-                        item["attention_mask"],
-                        torch.zeros(
-                            item["attention_mask"].shape[0],
-                            max_len - item["attention_mask"].shape[1],
-                            dtype=torch.bool,
-                        ),
-                    ],
-                    dim=1,
-                )
-                for item in items
-            ]
-        ),
-    }
-    return batch
+# def _to_batch(items, pad_values):
+#     """Convert a list of items to a batch with padding."""
+#     max_len = max(item["input_ids"].shape[1] for item in items)
+#     batch = {
+#         "input_ids": torch.cat(
+#             [
+#                 torch.cat(
+#                     [
+#                         item["input_ids"],
+#                         torch.full(
+#                             (
+#                                 item["input_ids"].shape[0],
+#                                 max_len - item["input_ids"].shape[1],
+#                                 item["input_ids"].shape[2],
+#                             ),
+#                             pad_values["input_ids"],
+#                         ),
+#                     ],
+#                     dim=1,
+#                 )
+#                 for item in items
+#             ]
+#         ),
+#         "labels": torch.cat(
+#             [
+#                 torch.cat(
+#                     [
+#                         item["labels"],
+#                         torch.full(
+#                             (
+#                                 item["labels"].shape[0],
+#                                 max_len - item["labels"].shape[1],
+#                             ),
+#                             pad_values["labels"],
+#                         ),
+#                     ],
+#                     dim=1,
+#                 )
+#                 for item in items
+#             ]
+#         ),
+#         "attention_mask": torch.cat(
+#             [
+#                 torch.cat(
+#                     [
+#                         item["attention_mask"],
+#                         torch.zeros(
+#                             item["attention_mask"].shape[0],
+#                             max_len - item["attention_mask"].shape[1],
+#                             dtype=torch.bool,
+#                         ),
+#                     ],
+#                     dim=1,
+#                 )
+#                 for item in items
+#             ]
+#         ),
+#     }
+#     return batch
 
 
 def pack(
@@ -251,27 +251,27 @@ def patch_get_batch_samples(opensloth_config: OpenSlothConfig):
         # Use packed items as batch_samples
         batch_samples = packed_items
 
-        if len(batch_samples) > origin_batch_size:
-            # we can batch them currently is just a list of single items
+        # if len(batch_samples) > origin_batch_size:
+        #     # we can batch them currently is just a list of single items
 
-            # sort by length again to ensure proper packing
-            batch_samples = sorted(batch_samples, key=lambda x: x["input_ids"].shape[1])
-            final_batches = []
-            pending_batch = []
-            pad_tokens = {
-                "input_ids": self.processing_class.pad_token_type_id,
-                "labels": -100,  # -100 is the default ignore index for labels
-                "attention_mask": 0,
-            }
-            while batch_samples:
-                item = batch_samples.pop(0)
-                pending_batch.append(item)
-                if len(pending_batch) >= origin_batch_size:
-                    final_batches.append(_to_batch(pending_batch, pad_tokens))
-                    pending_batch = []
-            if pending_batch:
-                final_batches.append(_to_batch(pending_batch, pad_tokens))
-            # Return final batches
-            batch_samples = final_batches
+        #     # sort by length again to ensure proper packing
+        #     batch_samples = sorted(batch_samples, key=lambda x: x["input_ids"].shape[1])
+        #     final_batches = []
+        #     pending_batch = []
+        #     pad_tokens = {
+        #         "input_ids": self.processing_class.pad_token_type_id,
+        #         "labels": -100,  # -100 is the default ignore index for labels
+        #         "attention_mask": 0,
+        #     }
+        #     while batch_samples:
+        #         item = batch_samples.pop(0)
+        #         pending_batch.append(item)
+        #         if len(pending_batch) >= origin_batch_size:
+        #             final_batches.append(_to_batch(pending_batch, pad_tokens))
+        #             pending_batch = []
+        #     if pending_batch:
+        #         final_batches.append(_to_batch(pending_batch, pad_tokens))
+        #     # Return final batches
+        #     batch_samples = final_batches
 
         return batch_samples, num_items_in_batch

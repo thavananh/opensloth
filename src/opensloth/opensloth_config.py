@@ -72,7 +72,7 @@ class DatasetConfigBase(BaseModel):
     )
 
     max_seq_length: Optional[int] = Field(
-        default=32_000,
+        default=None,
         description="Maximum sequence length for tokenization",
     )
 
