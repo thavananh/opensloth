@@ -51,6 +51,19 @@ def init_model_and_tokenizer(opensloth_config: OpenSlothConfig):
         f"Model loaded on device {model_device}, tokenizer: {tokenizer.__class__.__name__}"
     )
 
+    # Monkey-patch pad for any ProcessorMixin tokenizer lacking it
+    if not hasattr(tokenizer, "pad"):
+        import types
+        underlying = getattr(tokenizer, "tokenizer", None) or getattr(tokenizer, "hf_tokenizer", None)
+        if underlying and hasattr(underlying, "pad"):
+            def _pad(self, *args, **kwargs):
+                return underlying.pad(*args, **kwargs)
+
+            tokenizer.pad = types.MethodType(_pad, tokenizer)
+            logger.info(f"Patched pad method for {tokenizer.__class__.__name__}")
+        else:
+            logger.warning(f"Could not patch pad method for {tokenizer.__class__.__name__}: underlying tokenizer has no pad")
+
     if (
         not opensloth_config.fast_model_args.full_finetuning
         and not opensloth_config.pretrained_lora
